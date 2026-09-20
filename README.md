@@ -19,12 +19,12 @@ reported at session start and skipped.
 ## Entry points
 
 ```
-/spine intent "<what you want>"
-/spine adopt <spec.md | tickets.json | issue#>
-/spine implement <run-id | T-3>
-/spine review <pr# | branch | --diff>
-/spine status
-/spine resume <run-id>
+/spine:spine intent "<what you want>"
+/spine:spine adopt <spec.md | tickets.json | issue#>
+/spine:spine implement <run-id | T-3>
+/spine:spine review <pr# | branch | --diff>
+/spine:spine status
+/spine:spine resume <run-id>
 ```
 
 ## How a run works

@@ -27,7 +27,7 @@ words joined by dashes. You are the only writer of:
   - `awaiting` is `null`, `human`, `G1`, `G2`, or `G3`. Set it to the gate
     name in the same turn you ask that gate's question, and only then. Set
     it to `human` whenever a turn ends on a question to the human that is
-    not a gate question, or on `/spine status`. Clear it back to `null` on
+    not a gate question, or on `/spine:spine status`. Clear it back to `null` on
     the next turn. The Stop hook lets a turn end only when the stage
     artifact is valid and boundary-checked, or when `awaiting` is set.
     Never set `awaiting` to dodge a gate.
@@ -49,11 +49,15 @@ There are three groups.
 - Starting: `intent`, `adopt`, `review`. The FIRST actions of the turn,
   before reading any diff, classifying, or selecting providers, are: create
   the run directory, write `state.json` (stage set to the entry stage,
-  status `active`, awaiting `null`), write `active.json`.
+  status `active`, awaiting `null`), write `active.json`. If `active.json`
+  already points at a different run whose `status` is `active`, say in one
+  line which run is being superseded and that it can be reopened with
+  `/spine:spine resume <id>`, then bootstrap the new run. Never delete the
+  old run directory.
 - Continuing: `implement`, `status`. The FIRST action of the turn is reading
   `active.json` and `state.json`. If no active run exists, stop and tell the
-  human to run `/spine adopt <plan>`, `/spine intent`, or
-  `/spine resume <id>`. Do not create anything.
+  human to run `/spine:spine adopt <plan>`, `/spine:spine intent`, or
+  `/spine:spine resume <id>`. Do not create anything.
 - Resuming: `resume <id>`. The FIRST action of the turn is checking that
   `<artifacts_dir>/<id>/state.json` exists. If it does, write `active.json`
   with that id and continue at the recorded stage. If it does not, stop and
@@ -196,7 +200,9 @@ downstream artifact and re-run. The Stop hook enforces this.
 
 ## Entry points
 
-Parse the first word of the arguments.
+Invoked as `/spine:spine <entry> ...`, for example
+`/spine:spine review <pr|branch|--diff>`. Parse the first word of the
+arguments.
 
 - `intent "<text>"`: start at `intent` with the text as the problem statement.
 - `adopt <path|issue#>`: bootstrap writes `state.json` with `stage: "intent"`
