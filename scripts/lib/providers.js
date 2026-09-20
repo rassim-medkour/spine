@@ -6,7 +6,8 @@ const path = require('node:path');
 const COUNT_BY_SIZE = { S: 1, M: 2, L: 3 };
 
 function loadRegistry() {
-  return JSON.parse(fs.readFileSync(path.join(__dirname, '..', '..', 'providers.json'), 'utf8'));
+  const registryPath = process.env.SPINE_REGISTRY_PATH || path.join(__dirname, '..', '..', 'providers.json');
+  return JSON.parse(fs.readFileSync(registryPath, 'utf8'));
 }
 
 function pluginOf(id) {

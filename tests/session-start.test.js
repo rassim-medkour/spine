@@ -39,6 +39,23 @@ test('warns about missing plugins', () => {
   assert.match(out.hookSpecificOutput.additionalContext, /missing plugins: .*mattpocock-skills/);
 });
 
+test('exits 0 with no stdout when the registry cannot be read', () => {
+  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'spine-'));
+  const badRegistry = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'spine-reg-')), 'does-not-exist.json');
+  const r = spawnSync(process.execPath, [SCRIPT], {
+    input: JSON.stringify({ cwd, hook_event_name: 'SessionStart' }),
+    encoding: 'utf8',
+    env: {
+      ...process.env,
+      SPINE_CLAUDE_HOME: fakeClaudeHome(FULL),
+      SPINE_HOME: fs.mkdtempSync(path.join(os.tmpdir(), 'spine-home-')),
+      SPINE_REGISTRY_PATH: badRegistry,
+    },
+  });
+  assert.equal(r.status, 0);
+  assert.equal(r.stdout, '');
+});
+
 test('mentions the active run', () => {
   const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'spine-'));
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'spine-home-'));

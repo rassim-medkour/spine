@@ -11,16 +11,20 @@ function missingPlugins() {
 }
 
 function main() {
-  const input = readHookInput(readStdinSync());
-  const cwd = input.cwd || process.cwd();
-  const lines = [];
-  const missing = missingPlugins();
-  if (missing.length) lines.push(`spine: missing plugins: ${missing.join(', ')}. Affected providers will be skipped.`);
-  const run = findActiveRun(cwd, loadConfig(cwd));
-  if (run) {
-    lines.push(`spine: active run ${run.id} at stage ${run.state.stage}, awaiting ${run.state.awaiting || 'none'}. Run /spine status to resume.`);
+  try {
+    const input = readHookInput(readStdinSync());
+    const cwd = input.cwd || process.cwd();
+    const lines = [];
+    const missing = missingPlugins();
+    if (missing.length) lines.push(`spine: missing plugins: ${missing.join(', ')}. Affected providers will be skipped.`);
+    const run = findActiveRun(cwd, loadConfig(cwd));
+    if (run) {
+      lines.push(`spine: active run ${run.id} at stage ${run.state.stage}, awaiting ${run.state.awaiting || 'none'}. Run /spine status to resume.`);
+    }
+    if (lines.length) process.stdout.write(emitContext('SessionStart', lines.join('\n')));
+  } catch (err) {
+    process.stderr.write(`spine: session-start hook failed: ${err && err.message ? err.message : err}\n`);
   }
-  if (lines.length) process.stdout.write(emitContext('SessionStart', lines.join('\n')));
 }
 
 main();
