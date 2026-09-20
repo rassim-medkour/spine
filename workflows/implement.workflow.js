@@ -66,8 +66,8 @@ function skillInstruction(p, howToUse) {
 function implementPrompt(t) {
   return `${skillInstruction(implementProvider, ' and follow its method')}You are implementing ticket ${t.id}: ${t.title} (spec section ${t.spec_section}).
 Work test-first: write the failing test named in the acceptance list, run it, implement the minimum, run again, refactor, commit with a conventional message that mentions ${t.id}.
-Acceptance criteria: ${JSON.stringify(t.acceptance)}
-Files expected to change: ${t.files.join(', ')}
+Acceptance criteria: ${JSON.stringify(t.acceptance || [])}
+Files expected to change: ${(t.files || []).join(', ')}
 Do not touch files outside that list without saying why in blockers.
 Return implemented=false with blockers if anything in the spec is ambiguous; do not guess.
 
@@ -83,7 +83,7 @@ function specReviewPrompt(t, r) {
 Implementer summary: ${r.summary}
 Commits: ${r.commits.join(', ')}
 Tests run: ${r.tests_run}
-Acceptance: ${JSON.stringify(t.acceptance)}
+Acceptance: ${JSON.stringify(t.acceptance || [])}
 
 SPEC:
 ${args.specText}`;
