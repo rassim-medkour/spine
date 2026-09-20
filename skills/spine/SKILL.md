@@ -40,10 +40,16 @@ words joined by dashes. You are the only writer of:
 
 ## Bootstrap comes first
 
-For every entry point except `status` and `resume`, the FIRST actions of the
-turn, before reading any diff, classifying, or selecting providers, are:
-create the run directory, write `state.json` (stage set to the entry stage,
-status `active`, awaiting `null`), write `active.json`.
+This keys on whether the entry point starts a new run, not on its name.
+
+- Starting entry points: `intent`, `adopt`, `review`. The FIRST actions of
+  the turn, before reading any diff, classifying, or selecting providers,
+  are: create the run directory, write `state.json` (stage set to the entry
+  stage, status `active`, awaiting `null`), write `active.json`.
+- Continuing entry points: `implement`, `status`, `resume`. The FIRST action
+  of the turn is reading `active.json` and `state.json`. If no active run
+  exists, stop and tell the human to run `/spine adopt <plan>` or
+  `/spine intent` first. Do not create anything.
 
 ## Records
 
@@ -189,7 +195,8 @@ Parse the first word of the arguments.
   at that stage's gate.
 - `implement <id|ticket>`: load the run, require stage `implement` or an
   approved plan, continue at `implement`. A bare ticket id limits the run to
-  that ticket.
+  that ticket. Never bootstrap here; if `active.json` is missing, stop and
+  ask for `adopt` or `intent`.
 - `review <pr|branch|--diff>`: create a run whose intent is "review <target>",
   stage `review`, no upstream artifacts. Spec axis providers get the linked
   issue body if the PR or branch names one; otherwise standards axis only.
@@ -221,8 +228,10 @@ add prose before NEXT.
 
 ## Rules
 
-- Bootstrap before analysis. No classification, provider selection, or agent
-  dispatch happens until `state.json` and `active.json` exist for this run.
+- Bootstrap before analysis on `intent`, `adopt`, and `review`. Load, never
+  create, on `implement`, `status`, and `resume`. No classification, provider
+  selection, or agent dispatch happens until `state.json` and `active.json`
+  exist for this run.
 - Never call a workflow across a gate. Workflows run between gates only.
 - Never verify a finding with the provider that raised it.
 - Never write a record without evidence. `unverified` is allowed, but caps
