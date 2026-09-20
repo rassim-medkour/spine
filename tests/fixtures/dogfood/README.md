@@ -71,9 +71,49 @@ with `review.json` removed and `state.json`'s `awaiting` set to `null`,
 `node scripts/stop-gate.js` exited 2 with a one-line block reason; with
 `review.json` restored, the same command exited 0 — matches section 10.
 
+## Run 3 (at commit `3370422`, after the final-review fix wave) — size M
+
+Same launch command as before, with `Workflow` added to `--allowedTools`,
+against an uncommitted whitespace change to five files under `scripts/` so
+the classifier returns size M. Bootstrap, classification, the M-sized
+workflow, records, and the G3 gate all worked:
+
+- Class M (5 files, blast radius normal).
+- `review.workflow.js` ran both `ecc:code-review` and
+  `mattpocock-skills:code-review`: six findings (three INFO, three LOW),
+  none CRITICAL/HIGH, so verify and the devil's-advocate gate did not fire.
+- R-0007 is the synthesis record (no formal dissent); R-0008 is the
+  standalone boundary-checker PASS (no upstream).
+- `review.json` verdict `PASS_WITH_ADVISORIES`, `state.json` ended
+  `awaiting: "G3"`, summary block rendered before stopping for approval.
+
+`hooks.log` recorded one real in-session Stop-gate block that was then
+satisfied, three subagent allows, and PostToolUse around each write:
+
+```
+2026-09-20T07:39:26.248Z PostToolUse ok
+2026-09-20T07:40:17.198Z Stop block
+2026-09-20T07:41:45.312Z SubagentStop allow
+2026-09-20T07:45:01.037Z SubagentStop allow
+2026-09-20T07:45:45.658Z PostToolUse ok
+2026-09-20T07:45:48.529Z PostToolUse ok
+2026-09-20T07:45:51.379Z PostToolUse ok
+2026-09-20T07:45:54.636Z PostToolUse ok
+2026-09-20T07:46:00.103Z PostToolUse ok
+2026-09-20T07:46:06.360Z PostToolUse ok
+2026-09-20T07:48:09.862Z SubagentStop allow
+2026-09-20T07:48:28.144Z PostToolUse ok
+2026-09-20T07:48:29.945Z PostToolUse ok
+2026-09-20T07:48:43.466Z PostToolUse ok
+2026-09-20T07:48:48.517Z PostToolUse ok
+```
+
 ## Not verified
 
-- `SessionStart` hook output — `-p --output-format text` doesn't surface
-  hook stderr/stdout, so the missing-dependency warning went unobserved.
-- M/L classification and the multi-provider cross-review workflow they
-  trigger — both runs classified as size S.
+- `SessionStart` hook output — still not directly observed: `-p
+  --output-format text` doesn't surface hook stderr/stdout, and run 3's
+  `hooks.log` has no `SessionStart` line either, since that hook fires
+  before a run exists and the log only starts once one does.
+- The L classification path, `spec.workflow.js`, `implement.workflow.js`,
+  and the devil's-advocate gate — unexercised; runs 1-3 only reached sizes
+  S and M in the review stage.
