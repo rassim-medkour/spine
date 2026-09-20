@@ -266,15 +266,15 @@ background and cannot pause for approval, so no workflow ever spans a gate.
 
 ### 7.2 Entry points
 
-- `/spine intent "<text>"`: full chain from scratch.
-- `/spine adopt <path|issue#|url>`: normalize an existing spec, ticket set, or
+- `/spine:spine intent "<text>"`: full chain from scratch.
+- `/spine:spine adopt <path|issue#|url>`: normalize an existing spec, ticket set, or
   plan into artifact shape, run the gap check, then continue from that stage.
-- `/spine implement <id|ticket>`: start at G2 with an adopted or produced plan.
-- `/spine review <pr|branch|--diff>`: standalone review. Standards axis always;
+- `/spine:spine implement <id|ticket>`: start at G2 with an adopted or produced plan.
+- `/spine:spine review <pr|branch|--diff>`: standalone review. Standards axis always;
   spec axis only when a spec artifact or a linked issue exists. Devil's
   advocate gate still applies.
-- `/spine status`: render current state for the active run.
-- `/spine resume <id>`: reload state and continue at the recorded stage.
+- `/spine:spine status`: render current state for the active run.
+- `/spine:spine resume <id>`: reload state and continue at the recorded stage.
 
 ### 7.3 Boundary checker
 
@@ -435,7 +435,7 @@ an Artifact page using the `artifact-diagramming` guidance.
   `tests/fixtures/`.
 - Hook contract tests: feed sample hook input JSON on stdin, assert exit code
   and stderr text.
-- Integration dry run: run `/spine review --diff` and `/spine intent` on a
+- Integration dry run: run `/spine:spine review --diff` and `/spine:spine intent` on a
   small change in an existing repo, confirm hooks fire (logged to
   `<artifacts_dir>/<id>/hooks.log`), confirm the stop gate blocks when
   `review.json` is missing and releases when it is present.

@@ -1,13 +1,14 @@
 # Dogfood dry run notes
 
-Two headless runs of `/spine review --diff` against this repo, with an
-uncommitted trailing-blank-line change to `README.md`. Both were launched
-the same way:
+Two headless runs against this repo, invoking the un-namespaced
+`spine review --diff` form (before the `/spine:spine` prefix requirement was
+discovered — see Runs 4 to 6 below), with an uncommitted trailing-blank-line
+change to `README.md`. Both were launched the same way:
 
 ```
 claude -p --plugin-dir C:/Users/rassi/spine --permission-mode acceptEdits \
   --allowedTools "Bash,Read,Write,Edit,Glob,Grep,Skill,Agent" \
-  --output-format text "/spine review --diff"
+  --output-format text "spine review --diff"
 ```
 
 ## Run 1 (at commit `0f89855`) — found defects
@@ -120,16 +121,18 @@ satisfied, three subagent allows, and PostToolUse around each write:
 
 ## Runs 4 to 6 (PR #1 review)
 
-Three more headless runs, this time against `/spine review 1` (PR #1).
+Three more headless runs, this time targeting PR #1 via the review entry
+point.
 
 - **Run 4** — launched without `MSYS_NO_PATHCONV=1`. Git Bash rewrote the
-  `/spine review 1` argument into a filesystem path before Claude saw it, so
-  the process picked up the still-active run from Run 3 instead and answered
-  about that stale review rather than PR #1.
+  leading-slash argument — `/spine`, followed by `review 1` — into a
+  filesystem path before Claude saw it, so the process picked up the
+  still-active run from Run 3 instead and answered about that stale review
+  rather than PR #1.
 - **Run 5** — launched with `MSYS_NO_PATHCONV=1` set, avoiding the path
   rewrite. Claude answered `Unknown command: /spine`, which is what exposed
   that plugin slash commands are namespaced by plugin: the real command is
-  `/spine:spine review 1`, not `/spine review 1`.
+  `/spine:spine review 1`, not the un-prefixed `spine review 1`.
 - **Run 6** — launched `/spine:spine review 1`. Classified PR #1 as size L
   (61 files, devils advocate on), bootstrapped run `20260920-review-pr-1`,
   and launched the review workflow with three providers. Hit the 600 second
