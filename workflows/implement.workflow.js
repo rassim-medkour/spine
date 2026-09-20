@@ -7,10 +7,15 @@ export const meta = {
   ]
 };
 
-// args: { tickets, specText, planText, runId, providers, parallel }
+// args: { tickets, specText, planText, runId, implementProviders, reviewProviders, providers, parallel }
 if (!args || !Array.isArray(args.tickets) || !args.tickets.length) throw new Error('spine-implement: args.tickets is required');
 if (typeof args.specText !== 'string' || !args.specText.trim()) throw new Error('spine-implement: args.specText is required');
 if (typeof args.planText !== 'string' || !args.planText.trim()) throw new Error('spine-implement: args.planText is required');
+
+const implementProviders = Array.isArray(args.implementProviders)
+  ? args.implementProviders
+  : (Array.isArray(args.providers) ? args.providers : []);
+const reviewProviders = Array.isArray(args.reviewProviders) ? args.reviewProviders : [];
 
 const RESULT = {
   type: 'object',
@@ -44,13 +49,22 @@ const VERDICT = {
   required: ['pass', 'issues']
 };
 
-const reviewers = (args.providers || []).filter((p) => p.kind === 'agent');
-const specReviewer = reviewers[0] ? reviewers[0].id : 'general-purpose';
-const qualityProvider = reviewers.find((p) => reviewers[0] && p.author !== reviewers[0].author);
-const qualityReviewer = qualityProvider ? qualityProvider.id : 'general-purpose';
+const implementProvider = implementProviders[0] || null;
+const specReviewerProvider = reviewProviders[0] || null;
+const qualityReviewerProvider = reviewProviders.find((p) => specReviewerProvider && p.author !== specReviewerProvider.author) || null;
+
+function agentTypeFor(p) {
+  return p && p.kind === 'agent' ? p.id : 'general-purpose';
+}
+const specReviewer = agentTypeFor(specReviewerProvider);
+const qualityReviewer = agentTypeFor(qualityReviewerProvider);
+
+function skillInstruction(p, howToUse) {
+  return p && p.kind === 'skill' ? `Invoke the skill ${p.id} with the Skill tool${howToUse}. ` : '';
+}
 
 function implementPrompt(t) {
-  return `You are implementing ticket ${t.id}: ${t.title} (spec section ${t.spec_section}).
+  return `${skillInstruction(implementProvider, ' and follow its method')}You are implementing ticket ${t.id}: ${t.title} (spec section ${t.spec_section}).
 Work test-first: write the failing test named in the acceptance list, run it, implement the minimum, run again, refactor, commit with a conventional message that mentions ${t.id}.
 Acceptance criteria: ${JSON.stringify(t.acceptance)}
 Files expected to change: ${t.files.join(', ')}
@@ -65,7 +79,7 @@ ${args.planText}`;
 }
 
 function specReviewPrompt(t, r) {
-  return `Spec compliance review for ticket ${t.id}. Compare the implementation described here against spec section ${t.spec_section} and the acceptance criteria. Report only deviations from the spec, each as a claim with path:line evidence. Pass only if every acceptance criterion is met by a named, passing test.
+  return `${skillInstruction(specReviewerProvider, '')}Spec compliance review for ticket ${t.id}. Compare the implementation described here against spec section ${t.spec_section} and the acceptance criteria. Report only deviations from the spec, each as a claim with path:line evidence. Pass only if every acceptance criterion is met by a named, passing test.
 Implementer summary: ${r.summary}
 Commits: ${r.commits.join(', ')}
 Tests run: ${r.tests_run}
@@ -76,7 +90,7 @@ ${args.specText}`;
 }
 
 function qualityReviewPrompt(t, r) {
-  return `Code quality review for ticket ${t.id}. Run git show on these commits: ${r.commits.join(', ')}. Report bugs, missing error handling, silent failures, and test gaps as claims with path:line evidence. Do not report style. Pass when no CRITICAL or HIGH issue exists.`;
+  return `${skillInstruction(qualityReviewerProvider, '')}Code quality review for ticket ${t.id}. Run git show on these commits: ${r.commits.join(', ')}. Report bugs, missing error handling, silent failures, and test gaps as claims with path:line evidence. Do not report style. Pass when no CRITICAL or HIGH issue exists.`;
 }
 
 function issuesToRecords(ticket, spec, quality) {
@@ -111,7 +125,7 @@ const results = await pipeline(
     label: `implement:${t.id}`,
     phase: 'Implement',
     schema: RESULT,
-    agentType: 'general-purpose',
+    agentType: agentTypeFor(implementProvider),
     ...(args.parallel ? { isolation: 'worktree' } : {})
   }).then((r) => ({ ticket: t, result: r })),
   ({ ticket, result }) => {

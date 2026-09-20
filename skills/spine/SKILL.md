@@ -156,7 +156,9 @@ downstream artifact and re-run. The Stop hook enforces this.
   selected provider.
 - Size M or L: call the Workflow tool with
   `scriptPath: "<root>/workflows/implement.workflow.js"` and
-  `args: { tickets, specText, planText, runId, providers, parallel: false }`.
+  `args: { tickets, specText, planText, runId, implementProviders, reviewProviders, parallel: false }`,
+  where `implementProviders` comes from `select-providers.js implement <size>`
+  and `reviewProviders` comes from `select-providers.js review <size>`.
   Write returned records. Mark each ticket `done` in `tickets.json` when
   `implemented` is true and both reviews pass; otherwise `blocked` with the
   blockers listed in the ticket.

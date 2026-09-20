@@ -20,6 +20,13 @@ test('review.workflow.js verifies with a different-author provider and notes whe
   assert.ok(text.includes('verifier_note'));
 });
 
+test('implement.workflow.js draws reviewers from reviewProviders and uses implementProviders', () => {
+  const file = path.join(__dirname, '..', 'workflows', 'implement.workflow.js');
+  const text = fs.readFileSync(file, 'utf8');
+  assert.ok(text.includes('reviewProviders'));
+  assert.ok(text.includes('implementProviders'));
+});
+
 for (const name of WF) {
   test(`${name}.workflow.js passes lint and declares its phases`, () => {
     const file = path.join(__dirname, '..', 'workflows', `${name}.workflow.js`);
