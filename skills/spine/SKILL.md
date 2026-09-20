@@ -41,15 +41,22 @@ words joined by dashes. You are the only writer of:
 ## Bootstrap comes first
 
 This keys on whether the entry point starts a new run, not on its name.
+There are three groups.
 
-- Starting entry points: `intent`, `adopt`, `review`. The FIRST actions of
-  the turn, before reading any diff, classifying, or selecting providers,
-  are: create the run directory, write `state.json` (stage set to the entry
-  stage, status `active`, awaiting `null`), write `active.json`.
-- Continuing entry points: `implement`, `status`, `resume`. The FIRST action
-  of the turn is reading `active.json` and `state.json`. If no active run
-  exists, stop and tell the human to run `/spine adopt <plan>` or
-  `/spine intent` first. Do not create anything.
+- Starting: `intent`, `adopt`, `review`. The FIRST actions of the turn,
+  before reading any diff, classifying, or selecting providers, are: create
+  the run directory, write `state.json` (stage set to the entry stage,
+  status `active`, awaiting `null`), write `active.json`.
+- Continuing: `implement`, `status`. The FIRST action of the turn is reading
+  `active.json` and `state.json`. If no active run exists, stop and tell the
+  human to run `/spine adopt <plan>`, `/spine intent`, or
+  `/spine resume <id>`. Do not create anything.
+- Resuming: `resume <id>`. The FIRST action of the turn is checking that
+  `<artifacts_dir>/<id>/state.json` exists. If it does, write `active.json`
+  with that id and continue at the recorded stage. If it does not, stop and
+  tell the human the run id is unknown. Never create a run directory here —
+  `resume` points `active.json` at a run that already exists, including
+  right after G3 deletes `active.json`.
 
 ## Records
 
@@ -228,10 +235,11 @@ add prose before NEXT.
 
 ## Rules
 
-- Bootstrap before analysis on `intent`, `adopt`, and `review`. Load, never
-  create, on `implement`, `status`, and `resume`. No classification, provider
-  selection, or agent dispatch happens until `state.json` and `active.json`
-  exist for this run.
+- Bootstrap before analysis on `intent`, `adopt`, and `review`; load without
+  creating on `implement` and `status`; on `resume` only point `active.json`
+  at an existing run's `state.json`, never create one. No classification,
+  provider selection, or agent dispatch happens until `state.json` and
+  `active.json` exist for this run.
 - Never call a workflow across a gate. Workflows run between gates only.
 - Never verify a finding with the provider that raised it.
 - Never write a record without evidence. `unverified` is allowed, but caps
