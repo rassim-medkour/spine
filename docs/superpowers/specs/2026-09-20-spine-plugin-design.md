@@ -119,6 +119,10 @@ Declares the plugin, its `userConfig`, and points at `hooks/hooks.json`.
 | `second_model` | boolean | `false` | Allow `ecc:council-multi-model` on critical-path runs (still prompts for consent) |
 | `render_artifacts` | boolean | `false` | Publish stage summaries as Artifact pages with diagrams |
 
+Ring 1 hook scripts read `~/.spine/config.json` and `<repo>/.spine/config.json`
+instead of `userConfig`, because hook scripts have no documented access to
+plugin user config. The `userConfig` block documents intent only.
+
 ### 4.2 Dependencies
 
 Spine is thin. It calls agents and skills from other plugins by their
@@ -230,8 +234,8 @@ Size heuristics (ring 1, tunable):
 
 Blast radius:
 
-- If the repo has `documentation/impact-matrix.yaml` (or a path configured in
-  the repo's `.spine/config.json`), touched paths are matched against it.
+- If the repo config lists `critical_paths` globs, touched paths are matched
+  against them. Parsing `impact-matrix.yaml` is ring 2.
 - Otherwise fallback to git churn of the touched paths over the last 90 days
   and the count of importers.
 
@@ -372,7 +376,7 @@ for the Workflow tool.
 |---|---|---|---|
 | `SessionStart` | any | `session-start.js` | check dependencies, print one warning line per missing one, exit 0 |
 | `Stop` | any | `stop-gate.js` | if no active run in cwd, exit 0. Otherwise validate current stage artifact against schema and require the last boundary-checker record to be PASS. Exit 2 with a one-line reason in `block` mode, exit 0 with a warning in `warn` mode |
-| `SubagentStop` | any | `subagent-gate.js` | if the subagent was launched by Spine (marker in its prompt), require its output to validate against `record.schema.json` |
+| `SubagentStop` | any | `subagent-gate.js` | if the subagent was launched by Spine (marker in its prompt), require its output to validate against `record.schema.json`. Ring 1 validates only when the payload carries `agent_transcript_path`; otherwise exit 0. |
 | `PostToolUse` | `Edit` or `Write` on `<artifacts_dir>/**` | `validate-artifact.js` | revalidate the touched artifact, print errors, never block |
 
 Safety rules for hooks:
@@ -413,9 +417,9 @@ Mermaid inside artifacts, only where a picture beats text:
 | plan | ticket dependency DAG with the critical path marked |
 | review | dissent map: consensus, devil's advocate position, resolution items |
 
-Diagrams are also written to `.omm/` so `omm-view` can browse them. When
-`render_artifacts` is true, the stage summary is published as an Artifact page
-using the `artifact-diagramming` guidance.
+Writing `.omm/` files for `omm-view` is ring 2; ring 1 keeps Mermaid inside
+artifacts. When `render_artifacts` is true, the stage summary is published as
+an Artifact page using the `artifact-diagramming` guidance.
 
 ## 13. Installation and development
 
