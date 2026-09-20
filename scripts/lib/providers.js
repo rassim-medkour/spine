@@ -45,9 +45,4 @@ function selectProviders(stage, size, installed, registry = loadRegistry(), lens
   return chosen;
 }
 
-function verifierFor(provider, candidates) {
-  const others = candidates.filter((c) => c.author !== provider.author).sort((a, b) => a.rank - b.rank);
-  return others[0] || null;
-}
-
-module.exports = { COUNT_BY_SIZE, loadRegistry, pluginOf, installedPlugins, selectProviders, verifierFor };
+module.exports = { COUNT_BY_SIZE, loadRegistry, pluginOf, installedPlugins, selectProviders };
