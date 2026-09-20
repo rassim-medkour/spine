@@ -1,0 +1,14 @@
+{
+  "kind": "json",
+  "required": ["id", "stage", "agent", "claim", "evidence", "confidence", "severity"],
+  "enums": {
+    "stage": ["intent", "spec", "plan", "implement", "review"],
+    "severity": ["CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"]
+  },
+  "arrays": {
+    "evidence": {
+      "required": ["kind", "ref"],
+      "enums": { "kind": ["file", "test", "command", "doc", "unverified"] }
+    }
+  }
+}

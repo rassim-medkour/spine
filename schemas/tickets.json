@@ -1,0 +1,10 @@
+{
+  "kind": "json",
+  "required": ["id", "upstream_id", "tickets"],
+  "arrays": {
+    "tickets": {
+      "required": ["id", "title", "spec_section", "kind", "status"],
+      "enums": { "kind": ["feature", "fix", "spike", "test", "question"], "status": ["todo", "doing", "done", "blocked"] }
+    }
+  }
+}

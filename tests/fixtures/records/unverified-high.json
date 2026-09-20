@@ -1,0 +1,13 @@
+{
+  "id": "R-0002",
+  "stage": "review",
+  "agent": "ecc:code-reviewer",
+  "provider": "ecc:code-review",
+  "claim": "Probably a race condition somewhere in the queue.",
+  "evidence": [{ "kind": "unverified", "ref": "hunch" }],
+  "confidence": 0.4,
+  "severity": "HIGH",
+  "dissent": null,
+  "resolution": null,
+  "alternatives": []
+}

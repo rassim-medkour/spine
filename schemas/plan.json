@@ -1,0 +1,5 @@
+{
+  "kind": "markdown",
+  "frontmatter": ["id", "stage", "upstream_id", "status"],
+  "headings": ["## Goal", "## Tasks"]
+}
