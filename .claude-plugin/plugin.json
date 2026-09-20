@@ -1,0 +1,16 @@
+{
+  "name": "spine",
+  "version": "0.1.0",
+  "description": "Gated, evidence-first engineering process: classify a task, route it through spec, plan, implement, and cross-provider review with artifact gates.",
+  "author": { "name": "Rassim" },
+  "license": "MIT",
+  "keywords": ["process", "review", "gates", "workflow", "claude-code"],
+  "userConfig": {
+    "strictness": {
+      "type": "string",
+      "title": "Gate strictness",
+      "description": "block or warn. Ring 1 hook scripts read ~/.spine/config.json instead; this field documents the intended setting.",
+      "default": "block"
+    }
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "id": "R-0001",
+  "stage": "review",
+  "agent": "ecc:code-reviewer",
+  "provider": "ecc:code-review",
+  "claim": "Upload handler accepts arbitrary paths.",
+  "evidence": [
+    { "kind": "file", "ref": "services/api/upload.py:42-58" },
+    { "kind": "test", "ref": "pytest tests/test_upload.py::test_traversal", "result": "fail" }
+  ],
+  "confidence": 0.85,
+  "severity": "HIGH",
+  "dissent": null,
+  "resolution": null,
+  "alternatives": ["Sanitize with os.path.realpath"]
+}

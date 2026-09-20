@@ -1,0 +1,5 @@
+{
+  "kind": "json",
+  "required": ["size", "blast_radius", "signals", "lenses", "devils_advocate", "workflows"],
+  "enums": { "size": ["S", "M", "L"], "blast_radius": ["low", "normal", "critical"] }
+}
