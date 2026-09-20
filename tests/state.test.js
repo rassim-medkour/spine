@@ -58,3 +58,10 @@ test('findActiveRun returns null when state.json is missing', () => {
   setActive(cwd, cfg, '20260920-ghost');
   assert.equal(findActiveRun(cwd, cfg), null);
 });
+
+test('findActiveRun returns null when active.id does not match the run id shape', () => {
+  const cwd = tmp();
+  const cfg = loadConfig(cwd, tmp());
+  setActive(cwd, cfg, '../../etc');
+  assert.equal(findActiveRun(cwd, cfg), null);
+});

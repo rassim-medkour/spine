@@ -76,6 +76,10 @@ const STRONG = new Set(['CRITICAL', 'HIGH']);
 function validateRecord(obj) {
   const errors = validateJson(obj, loadSchema('record'));
   if (errors.length) return errors;
+  if (!obj.evidence.length) {
+    errors.push('evidence must have at least one entry');
+    return errors;
+  }
   const hasRealEvidence = obj.evidence.some((e) => e.kind !== 'unverified');
   if (STRONG.has(obj.severity) && !hasRealEvidence) {
     errors.push(`severity ${obj.severity} requires at least one evidence item that is not unverified`);

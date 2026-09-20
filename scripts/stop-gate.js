@@ -18,7 +18,10 @@ const STAGE_ARTIFACTS = {
 function collectErrors(run) {
   const errors = [];
   const stage = run.state.stage;
-  for (const rel of STAGE_ARTIFACTS[stage] || []) {
+  if (!Object.prototype.hasOwnProperty.call(STAGE_ARTIFACTS, stage)) {
+    return [`unknown stage ${stage}`];
+  }
+  for (const rel of STAGE_ARTIFACTS[stage]) {
     const abs = path.join(run.dir, rel);
     if (!fs.existsSync(abs)) {
       errors.push(`${rel} is missing for stage ${stage}`);
@@ -44,7 +47,7 @@ function main() {
   if (run.state.stage === 'done') allow();
   const errors = collectErrors(run);
   if (!errors.length) allow();
-  const reason = `run ${run.id} stage ${run.state.stage} is not gate-clean: ${errors.join('; ')}. Finish the stage artifact and run the boundary checker, or set awaiting to a gate.`;
+  const reason = `run ${run.id} stage ${run.state.stage} is not gate-clean: ${errors.join('; ')}. Finish the stage artifact and run the boundary checker.`;
   if (config.strictness === 'warn') {
     process.stdout.write(emitContext('Stop', reason));
     allow();
@@ -52,4 +55,9 @@ function main() {
   block(reason);
 }
 
-main();
+try {
+  main();
+} catch (e) {
+  process.stderr.write(`spine: stop gate error: ${e && e.message}\n`);
+  process.exit(2);
+}

@@ -65,6 +65,17 @@ intent -> classify -> [spec] -G1-> [plan] -G2-> [implement] -> [review] -G3-> do
 - `npm test` is `node --test "tests/**/*.test.js"` (not `node --test tests/`)
   because a bare directory argument fails on Node 22 on Windows.
 
+## Known limits (ring 1)
+
+The skill writes the state the hooks read, so several things are trust
+points rather than enforced guarantees in ring 1: setting `status: "paused"`
+on a run, a repo config with `strictness: "warn"`, and the self-written
+`spine:boundary-checker` PASS records for stages with no upstream artifact
+(for example `intent`). Nothing stops the skill from writing any of these
+without the condition they claim to be true actually holding. `hooks.log`
+records every hook decision so these trust points are at least auditable
+after the fact.
+
 ## Tests
 
 ```bash

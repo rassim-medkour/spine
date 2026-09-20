@@ -29,6 +29,11 @@ test('validateRecord caps severity when evidence is only unverified', () => {
   assert.deepEqual(errors, ['severity HIGH requires at least one evidence item that is not unverified']);
 });
 
+test('validateRecord errors when evidence is empty', () => {
+  const record = { ...readJson('records/valid.json'), evidence: [] };
+  assert.deepEqual(validateRecord(record), ['evidence must have at least one entry']);
+});
+
 test('validateMarkdown checks frontmatter keys and headings', () => {
   const schema = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'schemas', 'intent.json'), 'utf8'));
   assert.deepEqual(validateMarkdown(read('artifacts/intent-valid.md'), schema), []);

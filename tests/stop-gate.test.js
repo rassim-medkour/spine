@@ -66,6 +66,20 @@ test('blocks when the stage artifact is missing', () => {
   assert.match(r.stderr, /intent\.md/);
 });
 
+test('the block reason does not coach setting awaiting to a gate', () => {
+  const { cwd, home } = repo({ ...base, stage: 'intent' });
+  const r = run({ cwd, stop_hook_active: false }, { SPINE_HOME: home });
+  assert.equal(r.status, 2);
+  assert.doesNotMatch(r.stderr, /set awaiting/);
+});
+
+test('blocks with "unknown stage" for a stage not in STAGE_ARTIFACTS, including prototype names', () => {
+  const { cwd, home } = repo({ ...base, stage: 'constructor' });
+  const r = run({ cwd, stop_hook_active: false }, { SPINE_HOME: home });
+  assert.equal(r.status, 2);
+  assert.match(r.stderr, /unknown stage constructor/);
+});
+
 test('blocks when artifact is valid but boundary checker has not passed', () => {
   const { cwd, home, dir } = repo({ ...base, stage: 'intent' });
   fs.copyFileSync(path.join(FIX, 'artifacts', 'intent-valid.md'), path.join(dir, 'intent.md'));

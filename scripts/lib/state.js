@@ -27,10 +27,12 @@ function loadConfig(cwd, homeDir = process.env.SPINE_HOME || os.homedir()) {
   return { ...DEFAULTS, ...global, ...repo, artifacts_dir: artifactsDir };
 }
 
+const RUN_ID_RE = /^\d{8}-[a-z0-9-]+$/;
+
 function findActiveRun(cwd, config) {
   const base = path.join(cwd, config.artifacts_dir);
   const active = readJson(path.join(base, 'active.json'));
-  if (!active || typeof active.id !== 'string') return null;
+  if (!active || typeof active.id !== 'string' || !RUN_ID_RE.test(active.id)) return null;
   const dir = path.join(base, active.id);
   const state = readJson(path.join(dir, 'state.json'));
   if (!state) return null;
