@@ -15,6 +15,6 @@ test('/spine command delegates to the spine skill with arguments', () => {
 
 test('spine skill documents every entry point, the gates, and the summary block', () => {
   const text = fs.readFileSync(path.join(__dirname, '..', 'skills', 'spine', 'SKILL.md'), 'utf8');
-  const needles = ['intent', 'adopt', 'implement', 'review', 'status', 'resume', 'G1', 'G2', 'G3', 'NEXT:', 'STATE:', 'DONE:', 'WHY:', 'DEBATED:', 'DISSENT:', 'review.workflow.js', 'implement.workflow.js', 'spec.workflow.js', 'classify.js', 'select-providers.js', 'boundary-checker', 'awaiting'];
+  const needles = ['intent', 'adopt', 'implement', 'review', 'status', 'resume', 'G1', 'G2', 'G3', 'NEXT:', 'STATE:', 'DONE:', 'WHY:', 'DEBATED:', 'DISSENT:', 'review.workflow.js', 'implement.workflow.js', 'spec.workflow.js', 'classify.js', 'select-providers.js', 'boundary-checker', 'awaiting', 'Bootstrap'];
   for (const needle of needles) assert.ok(text.includes(needle), `missing ${needle}`);
 });

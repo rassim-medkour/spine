@@ -38,6 +38,13 @@ words joined by dashes. You are the only writer of:
   The PostToolUse hook validates them on every write and tells you what is
   missing.
 
+## Bootstrap comes first
+
+For every entry point except `status` and `resume`, the FIRST actions of the
+turn, before reading any diff, classifying, or selecting providers, are:
+create the run directory, write `state.json` (stage set to the entry stage,
+status `active`, awaiting `null`), write `active.json`.
+
 ## Records
 
 Every agent you dispatch returns findings. Agents run through the Agent tool
@@ -145,22 +152,23 @@ downstream artifact and re-run. The Stop hook enforces this.
 
 ### review
 
-1. Compute the diff: `git diff <base>...HEAD` for a branch, `gh pr diff <n>`
+1. Bootstrap the run (see above).
+2. Compute the diff: `git diff <base>...HEAD` for a branch, `gh pr diff <n>`
    for a PR, `git diff` for `--diff`. List changed files. Re-classify with
    those files.
-2. Select providers for `review`.
-3. Size S: run the one selected provider inline (invoke its skill or agent),
+3. Select providers for `review`.
+4. Size S: run the one selected provider inline (invoke its skill or agent),
    write its records, then dispatch a verifier of a different author for any
    CRITICAL or HIGH.
-4. Size M or L: call the Workflow tool with
+5. Size M or L: call the Workflow tool with
    `scriptPath: "<root>/workflows/review.workflow.js"` and
    `args: { diff, changedFiles, language, providers, devilsAdvocate: class.devils_advocate, runId, stage: "review" }`.
    Write the returned records.
-5. Write `review.json`: `{ "id", "upstream_id", "verdict", "providers": [ids], "findings": [ { "record_id", "severity", "corroboration", "verified" } ], "dissent": [record ids] }`. Verdict is `FAIL` when any verified CRITICAL or HIGH remains, `PASS_WITH_ADVISORIES` when only MEDIUM or lower, `PASS` when none.
-6. Dispatch `spine:synthesis` for the stage. Write its record. Add its dissent
+6. Write `review.json`: `{ "id", "upstream_id", "verdict", "providers": [ids], "findings": [ { "record_id", "severity", "corroboration", "verified" } ], "dissent": [record ids] }`. Verdict is `FAIL` when any verified CRITICAL or HIGH remains, `PASS_WITH_ADVISORIES` when only MEDIUM or lower, `PASS` when none.
+7. Dispatch `spine:synthesis` for the stage. Write its record. Add its dissent
    map as a Mermaid diagram under a `## Dissent map` heading in `review.md`
    (optional companion file, not gated).
-7. Boundary checker `code-vs-plan` if a plan exists; for a standalone review
+8. Boundary checker `code-vs-plan` if a plan exists; for a standalone review
    with no plan, write one record from yourself with agent
    `spine:boundary-checker`, stage `review`, claim `PASS`, note "standalone
    review, no upstream". Gate G3: `awaiting: "G3"`, summary block, and for
@@ -207,12 +215,22 @@ DISSENT: <devil's advocate claim and record id, or "none, gate not triggered">
 If the caveman skill is active, write the block in caveman style. Artifacts
 on disk are always normal prose.
 
+This block is the i-have-adhd shape by construction: next action first,
+numbered work, state restated every time, one next action at the end. Do not
+add prose before NEXT.
+
 ## Rules
 
+- Bootstrap before analysis. No classification, provider selection, or agent
+  dispatch happens until `state.json` and `active.json` exist for this run.
 - Never call a workflow across a gate. Workflows run between gates only.
 - Never verify a finding with the provider that raised it.
 - Never write a record without evidence. `unverified` is allowed, but caps
   severity at MEDIUM.
+- Never offer to skip a stage or a review. Size S is the minimum ceremony; a
+  trivial diff still gets one provider, one record, and `review.json`. If the
+  diff is empty, say so, write `review.json` with verdict `PASS` and zero
+  findings, and proceed to G3.
 - Never set `awaiting` unless you are asking the human a gate question in
   the same turn.
 - When a dependency plugin is missing (the SessionStart hook tells you), use
