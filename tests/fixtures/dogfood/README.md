@@ -117,3 +117,17 @@ satisfied, three subagent allows, and PostToolUse around each write:
 - The L classification path, `spec.workflow.js`, `implement.workflow.js`,
   and the devil's-advocate gate — unexercised; runs 1-3 only reached sizes
   S and M in the review stage.
+
+## Runs 4 to 6 (PR #1 review)
+
+Three more headless runs, this time against `/spine review 1` (PR #1).
+
+- **Run 4** — launched without `MSYS_NO_PATHCONV=1`. Git Bash rewrote the
+  `/spine review 1` argument into a filesystem path before Claude saw it, so
+  the process picked up the still-active run from Run 3 instead and answered
+  about that stale review rather than PR #1.
+- **Run 5** — launched with `MSYS_NO_PATHCONV=1` set, avoiding the path
+  rewrite. Claude answered `Unknown command: /spine`, which is what exposed
+  that plugin slash commands are namespaced by plugin: the real command is
+  `/spine:spine review 1`, not `/spine review 1`.
+- **Run 6** — launched `/spine:spine review 1` (result recorded separately).

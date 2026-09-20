@@ -76,6 +76,17 @@ without the condition they claim to be true actually holding. `hooks.log`
 records every hook decision so these trust points are at least auditable
 after the fact.
 
+## Headless runs
+
+```bash
+MSYS_NO_PATHCONV=1 claude -p --plugin-dir C:/Users/rassi/spine --permission-mode acceptEdits --allowedTools "Bash,Read,Write,Edit,Glob,Grep,Skill,Agent,Workflow" --output-format text "/spine:spine review 1"
+```
+
+`MSYS_NO_PATHCONV=1` is needed because Git Bash (MSYS) rewrites an argument
+starting with `/spine` into a filesystem path (for example
+`C:/Program Files/Git/spine ...`) before Claude ever sees it. Check
+`.spine/<id>/hooks.log` afterwards to confirm the hooks actually fired.
+
 ## Tests
 
 ```bash
