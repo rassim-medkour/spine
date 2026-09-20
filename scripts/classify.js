@@ -10,13 +10,17 @@ const CHURN_CRITICAL = 20;
 const LANG_BY_EXT = { '.py': 'python', '.ts': 'typescript', '.tsx': 'typescript', '.js': 'javascript', '.jsx': 'javascript', '.go': 'go', '.rs': 'rust' };
 
 function globToRegExp(glob) {
-  const escaped = glob
-    .replace(/[.+^${}()|[\]\\]/g, '\\$&')
-    .replace(/\*\*\//g, '(?:.*/)?')
-    .replace(/\*\*/g, '.*')
-    .replace(/\*/g, '[^/]*')
-    .replace(/\?/g, '[^/]');
-  return new RegExp(`^${escaped}$`);
+  const tokens = glob.split(/(\*\*\/|\*\*|\*|\?)/);
+  const pattern = tokens
+    .map((tok) => {
+      if (tok === '**/') return '(?:.*/)?';
+      if (tok === '**') return '.*';
+      if (tok === '*') return '[^/]*';
+      if (tok === '?') return '[^/]';
+      return tok.replace(/[.+^${}()|[\]\\]/g, '\\$&');
+    })
+    .join('');
+  return new RegExp(`^${pattern}$`);
 }
 
 function normalize(file) {

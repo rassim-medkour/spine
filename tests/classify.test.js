@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { classify } = require('../scripts/classify');
+const { classify, globToRegExp } = require('../scripts/classify');
 const { DEFAULTS } = require('../scripts/lib/state');
 const { validateJson, loadSchema } = require('../scripts/lib/validate');
 
@@ -57,4 +57,36 @@ test('auth path adds security lens', () => {
 test('output validates against class schema', () => {
   const r = classify({ files: ['src/a.py'] }, cfg, noChurn);
   assert.deepEqual(validateJson(r, loadSchema('class')), []);
+});
+
+test('globToRegExp: ** matches across directories', () => {
+  const re = globToRegExp('services/main/appointments/**');
+  assert.ok(re.test('services/main/appointments/a/b/c.py'));
+});
+
+test('globToRegExp: **/*.py matches nested and top-level files, not other extensions', () => {
+  const re = globToRegExp('src/**/*.py');
+  assert.ok(re.test('src/c.py'));
+  assert.ok(re.test('src/a/b/c.py'));
+  assert.ok(!re.test('src/c.js'));
+});
+
+test('globToRegExp: a/**/b matches zero or more intervening directories', () => {
+  const re = globToRegExp('a/**/b');
+  assert.ok(re.test('a/b'));
+  assert.ok(re.test('a/x/y/b'));
+});
+
+test('globToRegExp: *.md matches top-level only', () => {
+  const re = globToRegExp('*.md');
+  assert.ok(re.test('README.md'));
+  assert.ok(!re.test('docs/x.md'));
+});
+
+test('globToRegExp: ? matches exactly one non-slash character', () => {
+  const re = globToRegExp('a?c');
+  assert.ok(re.test('abc'));
+  assert.ok(!re.test('ac'));
+  assert.ok(!re.test('a/c'));
+  assert.ok(!re.test('abbc'));
 });
