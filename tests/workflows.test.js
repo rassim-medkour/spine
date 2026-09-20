@@ -14,6 +14,12 @@ test('lintWorkflow rejects a bad meta and forbidden calls', () => {
   assert.ok(errors.some((e) => /Date\\.now/.test(e)));
 });
 
+test('review.workflow.js verifies with a different-author provider and notes when none exists', () => {
+  const file = path.join(__dirname, '..', 'workflows', 'review.workflow.js');
+  const text = fs.readFileSync(file, 'utf8');
+  assert.ok(text.includes('verifier_note'));
+});
+
 for (const name of WF) {
   test(`${name}.workflow.js passes lint and declares its phases`, () => {
     const file = path.join(__dirname, '..', 'workflows', `${name}.workflow.js`);

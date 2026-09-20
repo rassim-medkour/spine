@@ -171,8 +171,9 @@ downstream artifact and re-run. The Stop hook enforces this.
    those files.
 3. Select providers for `review`.
 4. Size S: run the one selected provider inline (invoke its skill or agent),
-   write its records, then dispatch a verifier of a different author for any
-   CRITICAL or HIGH.
+   write its records, then for any CRITICAL or HIGH dispatch a verifier of a
+   different author: run `node <root>/scripts/select-providers.js review M`
+   and take the first entry whose author differs from the finder's.
 5. Size M or L: call the Workflow tool with
    `scriptPath: "<root>/workflows/review.workflow.js"` and
    `args: { diff, changedFiles, language, providers, devilsAdvocate: class.devils_advocate, runId, stage: "review" }`.

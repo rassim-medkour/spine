@@ -101,18 +101,32 @@ log(`spine-review: ${raw.flat().length} raw findings, ${findings.length} unique`
 const strong = findings.filter((f) => f.severity === 'CRITICAL' || f.severity === 'HIGH');
 const advisory = findings.filter((f) => !strong.includes(f));
 
-function verifierTypeFor(f) {
-  const other = args.providers.find((p) => !f.authors.includes(p.author) && p.kind === 'agent');
-  return other ? other.id : 'general-purpose';
+function pickVerifier(f) {
+  const others = args.providers.filter((p) => !f.authors.includes(p.author)).sort((a, b) => a.rank - b.rank);
+  return others[0] || null;
+}
+
+function verifierPromptFor(p, f) {
+  let how;
+  if (p && p.kind === 'skill') how = `Invoke the skill ${p.id} with the Skill tool and use its method to try to REFUTE this finding.`;
+  else if (p && p.kind === 'tool') how = `Use the ${p.id} tool to try to REFUTE this finding.`;
+  else how = 'Try to REFUTE this review finding.';
+  return `${how} Default to refuted=true if you cannot confirm it from the code. Finding: ${f.claim}. Evidence: ${JSON.stringify(f.evidence)}. Read the cited lines and neighbours; run a test if one is cited. ${CONTRACT}\n\nDIFF:\n${args.diff}`;
+}
+
+function verifierAgentTypeFor(p) {
+  return p && p.kind === 'agent' ? p.id : 'general-purpose';
 }
 
 phase('Verify');
-const verified = await pipeline(strong, (f, _item, i) =>
-  agent(
-    `Try to REFUTE this review finding. Default to refuted=true if you cannot confirm it from the code. Finding: ${f.claim}. Evidence: ${JSON.stringify(f.evidence)}. Read the cited lines and neighbours; run a test if one is cited. ${CONTRACT}\n\nDIFF:\n${args.diff}`,
-    { label: `verify:${i}`, phase: 'Verify', schema: VERDICT, agentType: verifierTypeFor(f) }
-  ).then((v) => ({ ...f, verified: v ? !v.refuted : false, verdict: v }))
-);
+const verified = await pipeline(strong, (f, _item, i) => {
+  const verifier = pickVerifier(f);
+  const verifierNote = verifier ? null : 'no independent author available';
+  return agent(
+    verifierPromptFor(verifier, f),
+    { label: `verify:${i}`, phase: 'Verify', schema: VERDICT, agentType: verifierAgentTypeFor(verifier) }
+  ).then((v) => ({ ...f, verified: v ? !v.refuted : false, verdict: v, verifier_note: verifierNote }));
+});
 
 const checked = verified.filter(Boolean);
 const survivors = checked.filter((f) => f.verified);
@@ -145,7 +159,8 @@ function toRecord(f, index, agentName) {
     resolution: null,
     alternatives: f.alternatives || [],
     corroboration: f.corroboration || 1,
-    verified: Boolean(f.verified)
+    verified: Boolean(f.verified),
+    verifier_note: f.verifier_note || null
   };
 }
 
