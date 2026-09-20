@@ -1,7 +1,7 @@
 'use strict';
 const path = require('node:path');
 const { loadConfig } = require('./lib/state');
-const { churn } = require('./lib/churn');
+const { churnCounts } = require('./lib/churn');
 
 const SERVICE_ROOTS = new Set(['services', 'apps', 'packages']);
 const SECURITY_RE = /(auth|login|password|token|secret|upload|payment|billing|crypto)/i;
@@ -95,7 +95,9 @@ function parseArgs(argv) {
 if (require.main === module) {
   const cwd = process.cwd();
   const input = parseArgs(process.argv.slice(2));
-  const result = classify(input, loadConfig(cwd), (f) => churn(f, cwd));
+  const files = (input.files || []).map(normalize);
+  const counts = churnCounts(files, cwd);
+  const result = classify(input, loadConfig(cwd), (f) => counts.get(f) || 0);
   process.stdout.write(JSON.stringify(result, null, 2) + '\n');
 }
 
