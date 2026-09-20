@@ -7,7 +7,7 @@ description: Silence detection for specs, plans, and ticket sets. Asks what is e
 
 Reviewers check what is present. This skill checks what is missing. Run it on
 `intent.md`, `spec.md`, `plan.md`, and `tickets.json`, whether Spine produced
-them or `/spine adopt` imported them.
+them or `/spine:spine adopt` imported them.
 
 ## The six absence questions
 

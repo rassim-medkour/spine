@@ -19,12 +19,12 @@ reported at session start and skipped.
 ## Entry points
 
 ```
-/spine intent "<what you want>"
-/spine adopt <spec.md | tickets.json | issue#>
-/spine implement <run-id | T-3>
-/spine review <pr# | branch | --diff>
-/spine status
-/spine resume <run-id>
+/spine:spine intent "<what you want>"
+/spine:spine adopt <spec.md | tickets.json | issue#>
+/spine:spine implement <run-id | T-3>
+/spine:spine review <pr# | branch | --diff>
+/spine:spine status
+/spine:spine resume <run-id>
 ```
 
 ## How a run works
@@ -75,6 +75,20 @@ on a run, a repo config with `strictness: "warn"`, and the self-written
 without the condition they claim to be true actually holding. `hooks.log`
 records every hook decision so these trust points are at least auditable
 after the fact.
+
+## Headless runs
+
+```bash
+MSYS_NO_PATHCONV=1 CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS=0 claude -p --plugin-dir C:/Users/rassi/spine --permission-mode acceptEdits --allowedTools "Bash,Read,Write,Edit,Glob,Grep,Skill,Agent,Workflow" --output-format text "/spine:spine review 1"
+```
+
+`MSYS_NO_PATHCONV=1` is needed because Git Bash (MSYS) rewrites an argument
+starting with `/spine` into a filesystem path (for example
+`C:/Program Files/Git/spine ...`) before Claude ever sees it. M and L runs
+launch background workflows that outlive the 600 second default ceiling of
+headless mode, so `CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS=0` is required or the
+workflow is terminated and the run stops at `awaiting: human`. Check
+`.spine/<id>/hooks.log` afterwards to confirm the hooks actually fired.
 
 ## Tests
 
