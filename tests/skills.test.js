@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { parseFrontmatter } = require('../scripts/lib/validate');
 
-const SKILLS = ['record-contract', 'gap-check'];
+const SKILLS = ['record-contract', 'gap-check', 'spine'];
 
 for (const name of SKILLS) {
   test(`${name} skill has name and description frontmatter`, () => {
