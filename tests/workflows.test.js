@@ -20,6 +20,13 @@ test('review.workflow.js verifies with a different-author provider and notes whe
   assert.ok(text.includes('verifier_note'));
 });
 
+test('review.workflow.js devils advocate records keep dissent and resolution', () => {
+  const file = path.join(__dirname, '..', 'workflows', 'review.workflow.js');
+  const text = fs.readFileSync(file, 'utf8');
+  assert.ok(text.includes('DA_FINDINGS'));
+  assert.ok(text.includes('resolution: f.resolution'));
+});
+
 test('implement.workflow.js draws reviewers from reviewProviders and uses implementProviders', () => {
   const file = path.join(__dirname, '..', 'workflows', 'implement.workflow.js');
   const text = fs.readFileSync(file, 'utf8');

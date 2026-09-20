@@ -44,6 +44,36 @@ const FINDINGS = {
   required: ['findings']
 };
 
+const DA_FINDINGS = {
+  type: 'object',
+  properties: {
+    findings: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          claim: { type: 'string' },
+          severity: { type: 'string', enum: ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW', 'INFO'] },
+          confidence: { type: 'number' },
+          evidence: { type: 'array', items: EVIDENCE },
+          alternatives: { type: 'array', items: { type: 'string' } },
+          dissent: { type: 'string' },
+          resolution: {
+            type: 'object',
+            properties: {
+              kind: { type: 'string', enum: ['test', 'spike', 'question'] },
+              text: { type: 'string' }
+            },
+            required: ['kind', 'text']
+          }
+        },
+        required: ['claim', 'severity', 'confidence', 'evidence', 'dissent', 'resolution']
+      }
+    }
+  },
+  required: ['findings']
+};
+
 const VERDICT = {
   type: 'object',
   properties: {
@@ -140,7 +170,7 @@ if (gateOpen) {
   phase('Dissent');
   const da = await agent(
     `Consensus findings (all verified by a second author): ${JSON.stringify(survivors.map((f) => ({ claim: f.claim, severity: f.severity, evidence: f.evidence })))}. Build the strongest case against them. ${CONTRACT}\n\nDIFF:\n${args.diff}`,
-    { label: 'devils-advocate', phase: 'Dissent', schema: FINDINGS, agentType: 'spine:devils-advocate' }
+    { label: 'devils-advocate', phase: 'Dissent', schema: DA_FINDINGS, agentType: 'spine:devils-advocate' }
   );
   dissent = da ? da.findings.map((f) => ({ ...f, provider: 'spine:devils-advocate', author: 'spine' })) : [];
 }
@@ -155,8 +185,8 @@ function toRecord(f, index, agentName) {
     evidence: f.evidence,
     confidence: f.confidence,
     severity: f.severity,
-    dissent: f.verdict && f.verdict.refuted ? f.verdict.reason : null,
-    resolution: null,
+    dissent: f.dissent != null ? f.dissent : (f.verdict && f.verdict.refuted ? f.verdict.reason : null),
+    resolution: f.resolution || null,
     alternatives: f.alternatives || [],
     corroboration: f.corroboration || 1,
     verified: Boolean(f.verified),
