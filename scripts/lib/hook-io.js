@@ -1,5 +1,6 @@
 'use strict';
 const fs = require('node:fs');
+const path = require('node:path');
 
 function readHookInput(stdinText) {
   if (!stdinText || !stdinText.trim()) return {};
@@ -34,4 +35,14 @@ function allow() {
   process.exit(0);
 }
 
-module.exports = { readHookInput, readStdinSync, emitContext, block, allow };
+function appendHookLog(run, eventName, outcome) {
+  try {
+    if (!run || !run.dir) return;
+    const line = `${new Date().toISOString()} ${eventName} ${outcome}\n`;
+    fs.appendFileSync(path.join(run.dir, 'hooks.log'), line);
+  } catch {
+    // never throw: logging must not affect hook behavior
+  }
+}
+
+module.exports = { readHookInput, readStdinSync, emitContext, block, allow, appendHookLog };

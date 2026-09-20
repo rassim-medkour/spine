@@ -1,7 +1,7 @@
 'use strict';
 const fs = require('node:fs');
 const path = require('node:path');
-const { readStdinSync, readHookInput, emitContext, block, allow } = require('./lib/hook-io');
+const { readStdinSync, readHookInput, emitContext, block, allow, appendHookLog } = require('./lib/hook-io');
 const { loadConfig, findActiveRun } = require('./lib/state');
 const { validateArtifactFile } = require('./lib/validate');
 const { latestBoundaryPass } = require('./lib/records');
@@ -42,16 +42,30 @@ function main() {
   const config = loadConfig(cwd);
   const run = findActiveRun(cwd, config);
   if (!run) allow();
-  if (run.state.status !== 'active') allow();
-  if (['G1', 'G2', 'G3', 'human'].includes(run.state.awaiting)) allow();
-  if (run.state.stage === 'done') allow();
+  if (run.state.status !== 'active') {
+    appendHookLog(run, 'Stop', 'allow');
+    allow();
+  }
+  if (['G1', 'G2', 'G3', 'human'].includes(run.state.awaiting)) {
+    appendHookLog(run, 'Stop', 'allow');
+    allow();
+  }
+  if (run.state.stage === 'done') {
+    appendHookLog(run, 'Stop', 'allow');
+    allow();
+  }
   const errors = collectErrors(run);
-  if (!errors.length) allow();
+  if (!errors.length) {
+    appendHookLog(run, 'Stop', 'allow');
+    allow();
+  }
   const reason = `run ${run.id} stage ${run.state.stage} is not gate-clean: ${errors.join('; ')}. Finish the stage artifact and run the boundary checker.`;
   if (config.strictness === 'warn') {
+    appendHookLog(run, 'Stop', 'warn');
     process.stdout.write(emitContext('Stop', reason));
     allow();
   }
+  appendHookLog(run, 'Stop', 'block');
   block(reason);
 }
 

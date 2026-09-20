@@ -1,6 +1,6 @@
 'use strict';
 const fs = require('node:fs');
-const { readStdinSync, readHookInput, emitContext, block, allow } = require('./lib/hook-io');
+const { readStdinSync, readHookInput, emitContext, block, allow, appendHookLog } = require('./lib/hook-io');
 const { loadConfig, findActiveRun } = require('./lib/state');
 const { validateRecord } = require('./lib/validate');
 
@@ -34,11 +34,13 @@ function extractRecordBlock(text) {
   return last;
 }
 
-function finish(reason, config) {
+function finish(reason, config, run) {
   if (config.strictness === 'warn') {
+    appendHookLog(run, 'SubagentStop', 'warn');
     process.stdout.write(emitContext('SubagentStop', reason));
     allow();
   }
+  appendHookLog(run, 'SubagentStop', 'block');
   block(reason);
 }
 
@@ -48,18 +50,25 @@ function main() {
   if (!input.agent_transcript_path) allow();
   const cwd = input.cwd || process.cwd();
   const config = loadConfig(cwd);
-  if (!findActiveRun(cwd, config)) allow();
+  const run = findActiveRun(cwd, config);
+  if (!run) allow();
   const blockText = extractRecordBlock(lastAssistantText(input.agent_transcript_path));
-  if (!blockText) allow();
+  if (!blockText) {
+    appendHookLog(run, 'SubagentStop', 'allow');
+    allow();
+  }
   let record;
   try {
     record = JSON.parse(blockText);
   } catch {
-    finish('spine-record block is not valid JSON', config);
+    finish('spine-record block is not valid JSON', config, run);
   }
   const errors = validateRecord(record);
-  if (!errors.length) allow();
-  finish(`spine-record invalid: ${errors.join('; ')}`, config);
+  if (!errors.length) {
+    appendHookLog(run, 'SubagentStop', 'allow');
+    allow();
+  }
+  finish(`spine-record invalid: ${errors.join('; ')}`, config, run);
 }
 
 main();

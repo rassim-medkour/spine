@@ -11,7 +11,7 @@ authors, and renders a fixed six-line summary so you can follow along.
 claude --plugin-dir C:\Users\rassi\spine
 ```
 
-Requires Node 20 or newer on PATH. Dependencies (installed as Claude Code
+Requires Node 22 or newer on PATH. Dependencies (installed as Claude Code
 plugins): `ecc`, `superpowers`, `mattpocock-skills`, `code-review`,
 `coderabbit`, `feature-dev`, `caveman`, `i-have-adhd`. Missing ones are
 reported at session start and skipped.

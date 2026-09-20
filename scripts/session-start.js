@@ -1,5 +1,5 @@
 'use strict';
-const { readStdinSync, readHookInput, emitContext } = require('./lib/hook-io');
+const { readStdinSync, readHookInput, emitContext, appendHookLog } = require('./lib/hook-io');
 const { loadConfig, findActiveRun } = require('./lib/state');
 const { installedPlugins, loadRegistry, pluginOf } = require('./lib/providers');
 
@@ -20,6 +20,7 @@ function main() {
     const run = findActiveRun(cwd, loadConfig(cwd));
     if (run) {
       lines.push(`spine: active run ${run.id} at stage ${run.state.stage}, awaiting ${run.state.awaiting || 'none'}. Run /spine status to resume.`);
+      appendHookLog(run, 'SessionStart', 'active-run');
     }
     if (lines.length) process.stdout.write(emitContext('SessionStart', lines.join('\n')));
   } catch (err) {

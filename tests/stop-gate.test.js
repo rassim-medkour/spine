@@ -80,6 +80,15 @@ test('blocks with "unknown stage" for a stage not in STAGE_ARTIFACTS, including 
   assert.match(r.stderr, /unknown stage constructor/);
 });
 
+test('a blocked run appends to hooks.log', () => {
+  const { cwd, home, dir } = repo({ ...base, stage: 'intent' });
+  const r = run({ cwd, stop_hook_active: false }, { SPINE_HOME: home });
+  assert.equal(r.status, 2);
+  const logPath = path.join(dir, 'hooks.log');
+  assert.ok(fs.existsSync(logPath));
+  assert.match(fs.readFileSync(logPath, 'utf8'), /Stop block/);
+});
+
 test('blocks when artifact is valid but boundary checker has not passed', () => {
   const { cwd, home, dir } = repo({ ...base, stage: 'intent' });
   fs.copyFileSync(path.join(FIX, 'artifacts', 'intent-valid.md'), path.join(dir, 'intent.md'));
