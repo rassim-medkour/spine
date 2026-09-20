@@ -1,0 +1,31 @@
+{
+  "spec": [
+    { "id": "ecc:intent-driven-development", "kind": "skill", "author": "ecc", "rank": 1, "independent_model": false, "strengths": ["acceptance criteria", "testable requirements"] },
+    { "id": "mattpocock-skills:grilling", "kind": "skill", "author": "mattpocock", "rank": 2, "independent_model": false, "strengths": ["adversarial questioning of the plan"] },
+    { "id": "ecc:plan-prd", "kind": "skill", "author": "ecc", "rank": 3, "independent_model": false, "strengths": ["PRD shape", "scope sections"] },
+    { "id": "superpowers:brainstorming", "kind": "skill", "author": "obra", "rank": 4, "independent_model": false, "strengths": ["approach comparison", "YAGNI"] },
+    { "id": "mattpocock-skills:domain-modeling", "kind": "skill", "author": "mattpocock", "rank": 5, "independent_model": false, "strengths": ["ubiquitous language"] },
+    { "id": "ecc:prp-prd", "kind": "skill", "author": "ecc", "rank": 6, "independent_model": false, "strengths": ["PRP style requirements"] }
+  ],
+  "plan": [
+    { "id": "superpowers:writing-plans", "kind": "skill", "author": "obra", "rank": 1, "independent_model": false, "strengths": ["bite-sized TDD tasks"] },
+    { "id": "ecc:planner", "kind": "agent", "author": "ecc", "rank": 2, "independent_model": false, "strengths": ["phases", "risks", "dependencies"] },
+    { "id": "ecc:code-architect", "kind": "agent", "author": "ecc", "rank": 3, "independent_model": false, "strengths": ["codebase pattern extraction", "build order"] },
+    { "id": "ecc:prp-plan", "kind": "skill", "author": "ecc", "rank": 4, "independent_model": false, "strengths": ["validation loops"] },
+    { "id": "mattpocock-skills:codebase-design", "kind": "skill", "author": "mattpocock", "rank": 5, "independent_model": false, "strengths": ["deep modules", "seams"] }
+  ],
+  "implement": [
+    { "id": "superpowers:subagent-driven-development", "kind": "skill", "author": "obra", "rank": 1, "independent_model": false, "strengths": ["fresh context per task", "two-stage review"] },
+    { "id": "ecc:tdd-guide", "kind": "agent", "author": "ecc", "rank": 2, "independent_model": false, "strengths": ["test first", "coverage"] },
+    { "id": "mattpocock-skills:tdd", "kind": "skill", "author": "mattpocock", "rank": 3, "independent_model": false, "strengths": ["red green refactor discipline"] },
+    { "id": "ecc:prp-implement", "kind": "skill", "author": "ecc", "rank": 4, "independent_model": false, "strengths": ["validation loops"] }
+  ],
+  "review": [
+    { "id": "ecc:code-review", "kind": "skill", "author": "ecc", "rank": 1, "independent_model": false, "strengths": ["multi-dimension fan-out", "language reviewers", "security trigger"] },
+    { "id": "mattpocock-skills:code-review", "kind": "skill", "author": "mattpocock", "rank": 2, "independent_model": false, "strengths": ["standards axis", "spec axis"] },
+    { "id": "coderabbit:code-review", "kind": "tool", "author": "coderabbit", "rank": 3, "independent_model": true, "strengths": ["independent model", "external service"] },
+    { "id": "code-review:code-review", "kind": "skill", "author": "anthropic", "rank": 4, "independent_model": false, "strengths": ["confidence filtered", "low noise"] },
+    { "id": "feature-dev:code-reviewer", "kind": "agent", "author": "anthropic", "rank": 5, "independent_model": false, "strengths": ["bugs and logic errors", "convention adherence"] },
+    { "id": "caveman:cavecrew-reviewer", "kind": "agent", "author": "caveman", "rank": 6, "independent_model": false, "strengths": ["terse severity tagged findings"] }
+  ]
+}
