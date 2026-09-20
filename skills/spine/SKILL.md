@@ -24,12 +24,15 @@ words joined by dashes. You are the only writer of:
 - `<run>/state.json`: `{ "id", "stage", "status", "awaiting", "size", "updated" }`
   - `stage` is one of `intent`, `spec`, `plan`, `implement`, `review`, `done`.
   - `status` is `active`, `paused`, or `done`.
-  - `awaiting` is `null`, `G1`, `G2`, or `G3`. Set it to the gate name in the
-    same turn you ask the human for approval. Set it back to `null` in the
-    turn after they approve. The Stop hook lets a turn end only when the
-    stage artifact is valid and boundary-checked, or when `awaiting` is set.
+  - `awaiting` is `null`, `human`, `G1`, `G2`, or `G3`. Set it to the gate
+    name in the same turn you ask that gate's question, and only then. Set
+    it to `human` whenever a turn ends on a question to the human that is
+    not a gate question, or on `/spine status`. Clear it back to `null` on
+    the next turn. The Stop hook lets a turn end only when the stage
+    artifact is valid and boundary-checked, or when `awaiting` is set.
     Never set `awaiting` to dodge a gate.
-  - `updated` is an ISO 8601 timestamp; get it with `date -u +%Y-%m-%dT%H:%M:%SZ`.
+  - `updated` is an ISO 8601 timestamp; get it with `date -u +%Y-%m-%dT%H:%M:%SZ`
+    (Bash) or `Get-Date -AsUTC -Format yyyy-MM-ddTHH:mm:ssZ` (PowerShell).
 - `<run>/class.json`: output of `node <root>/scripts/classify.js`.
 - `<run>/records/R-NNNN.json`: one file per record. Get the next id by
   listing the directory; ids are zero-padded to four digits.
@@ -114,9 +117,9 @@ downstream artifact and re-run. The Stop hook enforces this.
    `ecc:intent-driven-development` to shape the criteria when size is M or L.
 3. Load `gap-check` and apply it. Questions go to the human one per turn.
    Assumptions go under `## Assumptions`.
-4. Classify. Write `class.json`. Dispatch the boundary checker is not needed
-   for intent (no upstream); instead write one record from yourself with
-   agent `spine:boundary-checker`, stage `intent`, claim `PASS`, evidence
+4. Classify. Write `class.json`. No boundary checker runs for intent (no
+   upstream); instead write one record from yourself with agent
+   `spine:boundary-checker`, stage `intent`, claim `PASS`, evidence
    `doc intent.md:1`, note "no upstream". Move stage to `spec`.
 
 ### spec
@@ -196,24 +199,29 @@ downstream artifact and re-run. The Stop hook enforces this.
 Parse the first word of the arguments.
 
 - `intent "<text>"`: start at `intent` with the text as the problem statement.
-- `adopt <path|issue#>`: read the file (or `gh issue view <n> --json title,body`).
-  Decide which stage it is: acceptance criteria only → `intent`; requirements
-  and design → `spec`; tasks or tickets → `plan`. Create the run, normalize the
-  content into that artifact with the required headings, run `gap-check`, run
-  the boundary checker against the upstream artifact you had to synthesize
+- `adopt <path|issue#>`: bootstrap writes `state.json` with `stage: "intent"`
+  provisionally (bootstrap runs before you have read the file, so it cannot
+  yet know the real stage). Then read the file (or
+  `gh issue view <n> --json title,body`). Decide which stage it is: acceptance
+  criteria only → `intent`; requirements and design → `spec`; tasks or
+  tickets → `plan`. Correct `state.json`'s `stage` to that decision, normalize
+  the content into that artifact with the required headings, run `gap-check`,
+  run the boundary checker against the upstream artifact you had to synthesize
   (write that upstream artifact too, marked `status: adopted`), then continue
   at that stage's gate.
 - `implement <id|ticket>`: load the run, require stage `implement` or an
   approved plan, continue at `implement`. A bare ticket id limits the run to
   that ticket. Never bootstrap here; if `active.json` is missing, stop and
-  ask for `adopt` or `intent`.
+  ask for `adopt` or `intent`, or `resume <id>` if a run already exists.
 - `review <pr|branch|--diff>`: create a run whose intent is "review <target>",
   stage `review`, no upstream artifacts. Spec axis providers get the linked
   issue body if the PR or branch names one; otherwise standards axis only.
 - `status`: read `state.json`, `class.json`, `tickets.json`, the latest
-  records; render the summary block; do nothing else.
+  records; render the summary block; set `awaiting: "human"` since the turn
+  ends without progressing the stage; do nothing else.
 - `resume <id>`: set `active.json` to the id, read `state.json`, continue at
-  its stage. If `awaiting` is set, re-ask the gate question.
+  its stage. If `awaiting` is a gate (`G1`, `G2`, `G3`), re-ask that gate's
+  question. If `awaiting` is `human`, clear it and continue the stage.
 
 ## Summary block
 
@@ -251,8 +259,10 @@ add prose before NEXT.
   trivial diff still gets one provider, one record, and `review.json`. If the
   diff is empty, say so, write `review.json` with verdict `PASS` and zero
   findings, and proceed to G3.
-- Never set `awaiting` unless you are asking the human a gate question in
-  the same turn.
+- Never set `awaiting` to a gate name (`G1`, `G2`, `G3`) unless you are
+  asking that gate's question in the same turn. Set it to `human` for any
+  other turn that ends on a question to the human or on `status`, and clear
+  it on the next turn.
 - When a dependency plugin is missing (the SessionStart hook tells you), use
   `general-purpose` with the provider's strengths pasted into the prompt, and
   say so in WHY.

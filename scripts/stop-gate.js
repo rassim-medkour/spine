@@ -40,7 +40,7 @@ function main() {
   const run = findActiveRun(cwd, config);
   if (!run) allow();
   if (run.state.status !== 'active') allow();
-  if (['G1', 'G2', 'G3'].includes(run.state.awaiting)) allow();
+  if (['G1', 'G2', 'G3', 'human'].includes(run.state.awaiting)) allow();
   if (run.state.stage === 'done') allow();
   const errors = collectErrors(run);
   if (!errors.length) allow();

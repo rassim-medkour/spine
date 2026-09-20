@@ -53,6 +53,12 @@ test('exits 0 when awaiting a human gate', () => {
   assert.equal(r.status, 0);
 });
 
+test('exits 0 when awaiting human with a missing artifact', () => {
+  const { cwd, home } = repo({ ...base, stage: 'intent', awaiting: 'human' });
+  const r = run({ cwd, stop_hook_active: false }, { SPINE_HOME: home });
+  assert.equal(r.status, 0);
+});
+
 test('blocks when the stage artifact is missing', () => {
   const { cwd, home } = repo({ ...base, stage: 'intent' });
   const r = run({ cwd, stop_hook_active: false }, { SPINE_HOME: home });
