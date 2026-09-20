@@ -1,0 +1,2 @@
+{"type":"user","message":{"content":"review this"}}
+{"type":"assistant","message":{"content":[{"type":"text","text":"Done.\n\n```json spine-record\n{\"id\":\"R-0003\",\"stage\":\"review\",\"agent\":\"ecc:code-reviewer\",\"claim\":\"ok\",\"evidence\":[{\"kind\":\"file\",\"ref\":\"a.py:1\"}],\"confidence\":0.9,\"severity\":\"LOW\"}\n```"}]}}
