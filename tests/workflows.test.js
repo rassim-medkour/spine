@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { lintWorkflow } = require('../scripts/lib/workflow-lint');
 
-const WF = ['review'];
+const WF = ['review', 'implement'];
 
 test('lintWorkflow rejects a bad meta and forbidden calls', () => {
   assert.deepEqual(lintWorkflow('const x = 1'), ['file must start with export const meta = {']);
