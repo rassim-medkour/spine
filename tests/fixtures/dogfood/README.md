@@ -130,4 +130,11 @@ Three more headless runs, this time against `/spine review 1` (PR #1).
   rewrite. Claude answered `Unknown command: /spine`, which is what exposed
   that plugin slash commands are namespaced by plugin: the real command is
   `/spine:spine review 1`, not `/spine review 1`.
-- **Run 6** — launched `/spine:spine review 1` (result recorded separately).
+- **Run 6** — launched `/spine:spine review 1`. Classified PR #1 as size L
+  (61 files, devils advocate on), bootstrapped run `20260920-review-pr-1`,
+  and launched the review workflow with three providers. Hit the 600 second
+  headless background ceiling (`Background tasks still running after 600s;
+  terminating.`) and exited cleanly with `awaiting: human` and no
+  `review.json` written. `hooks.log` recorded one `Stop block` and two
+  `SubagentStop allow`. Run 7 repeats it with the ceiling disabled (result
+  recorded separately).
