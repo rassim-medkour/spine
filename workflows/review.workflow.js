@@ -107,8 +107,14 @@ function evidenceKey(f) {
 const SEVERITY_ORDER = ['INFO', 'LOW', 'MEDIUM', 'HIGH', 'CRITICAL'];
 
 phase('Find');
+const failedProviders = [];
 const raw = await parallel(args.providers.map((p) => () =>
   agent(finderPrompt(p), { label: `find:${p.id}`, phase: 'Find', schema: FINDINGS, agentType: agentTypeFor(p) })
+    .catch((e) => {
+      failedProviders.push(p.id);
+      log(`find:${p.id} failed: ${e && e.message}`);
+      return null;
+    })
     .then((r) => (r ? r.findings.map((f) => ({ ...f, provider: p.id, author: p.author })) : []))
 ));
 
@@ -126,7 +132,7 @@ for (const f of raw.filter(Boolean).flat()) {
   }
 }
 const findings = [...merged.values()];
-log(`spine-review: ${raw.flat().length} raw findings, ${findings.length} unique`);
+log(`spine-review: ${raw.filter(Boolean).flat().length} raw findings, ${findings.length} unique`);
 
 const strong = findings.filter((f) => f.severity === 'CRITICAL' || f.severity === 'HIGH');
 const advisory = findings.filter((f) => !strong.includes(f));
@@ -155,7 +161,12 @@ const verified = await pipeline(strong, (f, _item, i) => {
   return agent(
     verifierPromptFor(verifier, f),
     { label: `verify:${i}`, phase: 'Verify', schema: VERDICT, agentType: verifierAgentTypeFor(verifier) }
-  ).then((v) => ({ ...f, verified: v ? !v.refuted : false, verdict: v, verifier_note: verifierNote }));
+  )
+    .catch((e) => {
+      log(`verify:${i} failed: ${e && e.message}`);
+      return null;
+    })
+    .then((v) => ({ ...f, verified: v ? !v.refuted : false, verdict: v, verifier_note: verifierNote }));
 });
 
 const checked = verified.filter(Boolean);
@@ -171,7 +182,10 @@ if (gateOpen) {
   const da = await agent(
     `Consensus findings (all verified by a second author): ${JSON.stringify(survivors.map((f) => ({ claim: f.claim, severity: f.severity, evidence: f.evidence })))}. Build the strongest case against them. ${CONTRACT}\n\nDIFF:\n${args.diff}`,
     { label: 'devils-advocate', phase: 'Dissent', schema: DA_FINDINGS, agentType: 'spine:devils-advocate' }
-  );
+  ).catch((e) => {
+    log(`devils-advocate failed: ${e && e.message}`);
+    return null;
+  });
   dissent = da ? da.findings.map((f) => ({ ...f, provider: 'spine:devils-advocate', author: 'spine' })) : [];
 }
 
@@ -200,4 +214,10 @@ const records = [
   ...dissent.map((f, i) => toRecord({ ...f, verified: false }, checked.length + advisory.length + i, 'spine:devils-advocate'))
 ];
 
-return { records, findings: checked.concat(advisory), dissent };
+return {
+  records,
+  findings: checked.concat(advisory),
+  dissent,
+  failed_providers: failedProviders,
+  ...(failedProviders.length ? { verdict_note: `${failedProviders.length} of ${args.providers.length} providers failed` } : {})
+};

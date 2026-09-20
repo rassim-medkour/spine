@@ -105,3 +105,53 @@ test('implement.workflow.js throws on missing required args', async () => {
 test('spec.workflow.js throws on missing required args', async () => {
   await assert.rejects(run('spec', {}), /args\.intentText is required/);
 });
+
+// A stub agent() that throws for any label containing "fail" simulates a
+// provider crashing. Workflows must survive that (finding 8) rather than
+// letting the rejection propagate and fail the whole run.
+async function flakyAgent(_prompt, opts) {
+  if (opts && typeof opts.label === 'string' && opts.label.includes('fail')) {
+    throw new Error('boom');
+  }
+  return stubAgent(_prompt, opts);
+}
+
+function runFlaky(name, args) {
+  const fn = loadWorkflow(name);
+  return fn(flakyAgent, stubParallel, stubPipeline, noop, noop, args);
+}
+
+test('review.workflow.js survives a failing provider and reports it', async () => {
+  const result = await runFlaky('review', {
+    diff: 'x',
+    changedFiles: ['a.py'],
+    providers: [
+      { id: 'ecc:fail-review', kind: 'skill', author: 'ecc', rank: 1, strengths: [] },
+      { id: 'feature-dev:code-reviewer', kind: 'agent', author: 'anthropic', rank: 5, strengths: [] }
+    ],
+    devilsAdvocate: false,
+    runId: 'r',
+    stage: 'review'
+  });
+  assert.ok(Array.isArray(result.records));
+  assert.deepEqual(result.failed_providers, ['ecc:fail-review']);
+});
+
+test('implement.workflow.js survives a failing implementer and reports it', async () => {
+  const result = await runFlaky('implement', {
+    tickets: [{ id: 'T-fail', title: 'Do x', spec_section: '3', kind: 'feature', status: 'todo', files: [], acceptance: [] }],
+    specText: 'spec text',
+    planText: 'plan text',
+    runId: 'r',
+    implementProviders: [],
+    reviewProviders: []
+  });
+  assert.ok(Array.isArray(result.results));
+  assert.deepEqual(result.failed_tickets, ['T-fail']);
+});
+
+test('spec.workflow.js survives a failing lens and reports it', async () => {
+  const result = await runFlaky('spec', { intentText: 'x', lenses: ['domain-fail'], providers: [], runId: 'r' });
+  assert.ok(Array.isArray(result.sections));
+  assert.deepEqual(result.failed_lenses, ['domain-fail']);
+});

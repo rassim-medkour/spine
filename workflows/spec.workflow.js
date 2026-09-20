@@ -74,9 +74,16 @@ INTENT:
 ${args.intentText}`;
 }
 
+const failedLenses = [];
+
 phase('Lenses');
 const sections = await parallel(lenses.map((lens, i) => () =>
   agent(lensPrompt(lens, i), { label: `lens:${lens}`, phase: 'Lenses', schema: SECTION })
+    .catch((e) => {
+      failedLenses.push(lens);
+      log(`lens:${lens} failed: ${e && e.message}`);
+      return null;
+    })
     .then((s) => {
       if (!s) return null;
       const p = providerFor(i);
@@ -96,7 +103,10 @@ ${JSON.stringify(good, null, 2)}
 INTENT:
 ${args.intentText}`,
   { label: 'synthesis', phase: 'Synthesis', schema: MERGE }
-);
+).catch((e) => {
+  log(`synthesis failed: ${e && e.message}`);
+  return null;
+});
 
 const records = good.map((s, i) => ({
   id: `R-${String(i + 1).padStart(4, '0')}`,
@@ -112,4 +122,4 @@ const records = good.map((s, i) => ({
   alternatives: []
 }));
 
-return { sections: good, merged: merged || null, dissent: merged ? merged.dissent : [], records };
+return { sections: good, merged: merged || null, dissent: merged ? merged.dissent : [], records, failed_lenses: failedLenses };

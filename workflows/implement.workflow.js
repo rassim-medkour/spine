@@ -118,6 +118,8 @@ function issuesToRecords(ticket, spec, quality) {
   return records;
 }
 
+const failedTickets = [];
+
 phase('Implement');
 const results = await pipeline(
   args.tickets,
@@ -127,7 +129,13 @@ const results = await pipeline(
     schema: RESULT,
     agentType: agentTypeFor(implementProvider),
     ...(args.parallel ? { isolation: 'worktree' } : {})
-  }).then((r) => ({ ticket: t, result: r })),
+  })
+    .catch((e) => {
+      failedTickets.push(t.id);
+      log(`implement:${t.id} failed: ${e && e.message}`);
+      return null;
+    })
+    .then((r) => ({ ticket: t, result: r })),
   ({ ticket, result }) => {
     if (!result || !result.implemented) {
       return {
@@ -142,8 +150,16 @@ const results = await pipeline(
       };
     }
     return parallel([
-      () => agent(specReviewPrompt(ticket, result), { label: `spec-review:${ticket.id}`, phase: 'Review', schema: VERDICT, agentType: specReviewer }),
+      () => agent(specReviewPrompt(ticket, result), { label: `spec-review:${ticket.id}`, phase: 'Review', schema: VERDICT, agentType: specReviewer })
+        .catch((e) => {
+          log(`spec-review:${ticket.id} failed: ${e && e.message}`);
+          return null;
+        }),
       () => agent(qualityReviewPrompt(ticket, result), { label: `quality-review:${ticket.id}`, phase: 'Review', schema: VERDICT, agentType: qualityReviewer })
+        .catch((e) => {
+          log(`quality-review:${ticket.id} failed: ${e && e.message}`);
+          return null;
+        })
     ]).then(([spec, quality]) => ({
       ticket_id: ticket.id,
       implemented: true,
@@ -159,4 +175,4 @@ const results = await pipeline(
 
 const done = results.filter(Boolean);
 log(`spine-implement: ${done.filter((r) => r.implemented).length}/${args.tickets.length} tickets implemented`);
-return { results: done };
+return { results: done, failed_tickets: failedTickets };
