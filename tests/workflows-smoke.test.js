@@ -155,3 +155,87 @@ test('spec.workflow.js survives a failing lens and reports it', async () => {
   assert.ok(Array.isArray(result.sections));
   assert.deepEqual(result.failed_lenses, ['domain-fail']);
 });
+
+// Finding 2 (cross review must never be verified by its own author) and
+// finding 5 (devils-advocate records must carry dissent + resolution) only
+// got static substring assertions in the original fix wave. This drives the
+// workflow with a stub that plays two distinct providers and the devils
+// advocate, and asserts on the actual returned records instead of on prompt
+// text substrings.
+test('review.workflow.js verifies a HIGH finding with a different-author verifier and records devils-advocate dissent', async () => {
+  const verifyCalls = [];
+
+  async function twoProviderAgent(prompt, opts) {
+    const label = (opts && opts.label) || '';
+    if (label === 'find:ecc:code-review') {
+      return {
+        findings: [{
+          claim: 'SQL built via string concatenation',
+          severity: 'HIGH',
+          confidence: 0.9,
+          evidence: [
+            { kind: 'file', ref: 'a.py:10' },
+            { kind: 'test', ref: 'tests/a_test.py:1' }
+          ],
+          alternatives: []
+        }]
+      };
+    }
+    if (label.startsWith('find:')) return { findings: [] };
+    if (label.startsWith('verify:')) {
+      verifyCalls.push({ agentType: opts.agentType, prompt });
+      return { refuted: false, reason: 'confirmed against the cited lines', evidence: [] };
+    }
+    if (label === 'devils-advocate') {
+      return {
+        findings: [{
+          claim: 'the concatenation is safe because inputs are pre-validated upstream',
+          severity: 'MEDIUM',
+          confidence: 0.5,
+          evidence: [{ kind: 'file', ref: 'a.py:3' }],
+          alternatives: [],
+          dissent: 'validation happens in a different module and could be bypassed',
+          resolution: { kind: 'test', text: 'add a test that calls this path without upstream validation' }
+        }]
+      };
+    }
+    return null;
+  }
+
+  const providers = [
+    { id: 'ecc:code-review', kind: 'skill', author: 'ecc', rank: 1, strengths: [] },
+    { id: 'feature-dev:code-reviewer', kind: 'agent', author: 'anthropic', rank: 5, strengths: [] }
+  ];
+
+  const fn = loadWorkflow('review');
+  const result = await fn(twoProviderAgent, stubParallel, stubPipeline, noop, noop, {
+    diff: 'x',
+    changedFiles: ['a.py'],
+    providers,
+    devilsAdvocate: true,
+    runId: 'r',
+    stage: 'review'
+  });
+
+  assert.equal(verifyCalls.length, 1, 'the HIGH finding must be verified exactly once');
+  assert.equal(
+    verifyCalls[0].agentType,
+    'feature-dev:code-reviewer',
+    'verifier must be the anthropic-author provider, never ecc (the author who raised the finding)'
+  );
+
+  assert.equal(result.dissent.length, 1);
+  assert.equal(result.dissent[0].dissent, 'validation happens in a different module and could be bypassed');
+  assert.deepEqual(result.dissent[0].resolution, {
+    kind: 'test',
+    text: 'add a test that calls this path without upstream validation'
+  });
+
+  const daRecord = result.records.find((r) => r.agent === 'spine:devils-advocate');
+  assert.ok(daRecord, 'expected a record attributed to spine:devils-advocate');
+  assert.equal(daRecord.dissent, 'validation happens in a different module and could be bypassed');
+  assert.deepEqual(daRecord.resolution, {
+    kind: 'test',
+    text: 'add a test that calls this path without upstream validation'
+  });
+});
