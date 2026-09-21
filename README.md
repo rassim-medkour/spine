@@ -94,6 +94,14 @@ headless mode, so `CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS=0` is required or the
 workflow is terminated and the run stops at `awaiting: human`. Check
 `.spine/<id>/hooks.log` afterwards to confirm the hooks actually fired.
 
+L-path reviews are slow (around 30 minutes headlessly on a 60-file diff,
+root-caused to nested-skill fan-out per provider plus serialized
+cross-verification plus the devil's advocate — see issue #3). `review.json`
+now records total `elapsed_seconds` for the review stage so this is at least
+visible; workflow scripts cannot read the wall clock themselves (it would
+break resume), so this is one number for the whole stage, not a per-phase
+breakdown.
+
 ## Tests
 
 ```bash

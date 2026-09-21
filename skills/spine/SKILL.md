@@ -177,7 +177,7 @@ downstream artifact and re-run. The Stop hook enforces this.
 1. Bootstrap the run (see above).
 2. Compute the diff: `git diff <base>...HEAD` for a branch, `gh pr diff <n>`
    for a PR, `git diff` for `--diff`. List changed files. Re-classify with
-   those files.
+   those files. Record the wall-clock start time: `date -u +%s`.
 3. Select providers for `review`.
 4. Size S: run the one selected provider inline (invoke its skill or agent),
    write its records, then for any CRITICAL or HIGH dispatch a verifier of a
@@ -187,7 +187,17 @@ downstream artifact and re-run. The Stop hook enforces this.
    `scriptPath: "<root>/workflows/review.workflow.js"` and
    `args: { diff, changedFiles, language, providers, devilsAdvocate: class.devils_advocate, runId, stage: "review" }`.
    Write the returned records.
-6. Write `review.json`: `{ "id", "upstream_id", "verdict", "providers": [ids], "findings": [ { "record_id", "severity", "corroboration", "verified" } ], "dissent": [record ids] }`. Verdict is `FAIL` when any verified CRITICAL or HIGH remains, `PASS_WITH_ADVISORIES` when only MEDIUM or lower, `PASS` when none.
+6. Record the wall-clock end time the same way (`date -u +%s`) and compute
+   `elapsed_seconds` (end minus start). This is total review-stage time, not
+   a per-phase breakdown — workflow scripts cannot read the clock (it would
+   break resume), so only the orchestrating turn's own wall-clock is
+   available. Write `review.json`: `{ "id", "upstream_id", "verdict",
+   "providers": [ids], "findings": [ { "record_id", "severity",
+   "corroboration", "verified" } ], "dissent": [record ids],
+   "elapsed_seconds" }`. Verdict is `FAIL` when any verified CRITICAL or HIGH
+   remains, `PASS_WITH_ADVISORIES` when only MEDIUM or lower, `PASS` when
+   none. Mention the elapsed time in the STATE line, for example
+   `review took 3m12s`.
 7. Dispatch `spine:synthesis` for the stage. Write its record. Add its dissent
    map as a Mermaid diagram under a `## Dissent map` heading in `review.md`
    (optional companion file, not gated).
