@@ -54,6 +54,27 @@ test('auth path adds security lens', () => {
   assert.ok(r.lenses.includes('security'));
 });
 
+test('lenses are capped at config.lens_budget', () => {
+  const files = [
+    'src/auth/a.py', 'b.ts', 'c.js', 'd.go', 'e.rs', 'f.tsx', 'migrate.sql',
+  ];
+  const uncapped = classify({ files }, { ...cfg, lens_budget: 999 }, noChurn).lenses;
+  assert.ok(uncapped.length > 6, `expected >6 lenses to exercise the cap, got ${uncapped.length}`);
+
+  const capped = classify({ files }, { ...cfg, lens_budget: 6 }, noChurn).lenses;
+  assert.equal(capped.length, 6);
+  assert.deepEqual(capped, uncapped.slice(0, 6));
+
+  const tight = classify({ files }, { ...cfg, lens_budget: 2 }, noChurn).lenses;
+  assert.deepEqual(tight, ['correctness', 'security']);
+});
+
+test('explicit lens_budget of 0 means zero lenses, not the default of 6', () => {
+  const files = ['src/auth/a.py', 'b.ts'];
+  const r = classify({ files }, { ...cfg, lens_budget: 0 }, noChurn);
+  assert.deepEqual(r.lenses, []);
+});
+
 test('output validates against class schema', () => {
   const r = classify({ files: ['src/a.py'] }, cfg, noChurn);
   assert.deepEqual(validateJson(r, loadSchema('class')), []);

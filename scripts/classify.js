@@ -72,11 +72,12 @@ function classify(input, config, churnFn) {
   const services = countServices(files);
   const size = sizeOf(files, services, migration, Boolean(input.new_subsystem));
   const radius = blastRadius(files, config, churnFn);
+  const lensBudget = config.lens_budget ?? 6;
   return {
     size,
     blast_radius: radius,
     signals: { files: files.length, services, migration, new_subsystem: Boolean(input.new_subsystem) },
-    lenses: lensesFor(files, radius),
+    lenses: lensesFor(files, radius).slice(0, lensBudget),
     devils_advocate: size === 'L' || radius === 'critical',
     workflows: { spec: size === 'L', implement: size !== 'S', review: size !== 'S' },
   };

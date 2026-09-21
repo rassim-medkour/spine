@@ -60,6 +60,10 @@ intent -> classify -> [spec] -G1-> [plan] -G2-> [implement] -> [review] -G3-> do
 
 - `artifacts_dir` can only be set in the global `~/.spine/config.json`, not in
   the repo config, because the repo config file lives inside that directory.
+- `lens_budget` caps both the provider count per stage (`select-providers.js`)
+  and the lens fan-out `scripts/classify.js` writes to `class.lenses` (up to
+  9 lenses are possible before the cap — `correctness` and `security` are
+  never dropped, since they are always inserted first).
 - `critical_paths` globs use forward slashes only; Windows-style backslash
   paths never match.
 - `npm test` is `node --test "tests/**/*.test.js"` (not `node --test tests/`)
