@@ -72,7 +72,7 @@ function classify(input, config, churnFn) {
   const services = countServices(files);
   const size = sizeOf(files, services, migration, Boolean(input.new_subsystem));
   const radius = blastRadius(files, config, churnFn);
-  const lensBudget = config.lens_budget || 6;
+  const lensBudget = config.lens_budget ?? 6;
   return {
     size,
     blast_radius: radius,

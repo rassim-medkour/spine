@@ -69,6 +69,12 @@ test('lenses are capped at config.lens_budget', () => {
   assert.deepEqual(tight, ['correctness', 'security']);
 });
 
+test('explicit lens_budget of 0 means zero lenses, not the default of 6', () => {
+  const files = ['src/auth/a.py', 'b.ts'];
+  const r = classify({ files }, { ...cfg, lens_budget: 0 }, noChurn);
+  assert.deepEqual(r.lenses, []);
+});
+
 test('output validates against class schema', () => {
   const r = classify({ files: ['src/a.py'] }, cfg, noChurn);
   assert.deepEqual(validateJson(r, loadSchema('class')), []);
