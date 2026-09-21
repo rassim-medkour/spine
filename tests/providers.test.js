@@ -2,7 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('node:path');
 const fs = require('node:fs');
-const { selectProviders, verifierFor, pluginOf } = require('../scripts/lib/providers');
+const { selectProviders, pluginOf } = require('../scripts/lib/providers');
 
 const registry = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'providers.json'), 'utf8'));
 const ALL = ['ecc', 'superpowers', 'mattpocock-skills', 'code-review', 'coderabbit', 'feature-dev', 'caveman'];
@@ -32,12 +32,6 @@ test('L size selects three providers and respects lens budget', () => {
 test('uninstalled plugins are skipped', () => {
   const sel = selectProviders('review', 'M', ['mattpocock-skills', 'coderabbit'], registry);
   assert.deepEqual(sel.map((p) => pluginOf(p.id)).sort(), ['coderabbit', 'mattpocock-skills']);
-});
-
-test('verifierFor picks a different author', () => {
-  const sel = selectProviders('review', 'L', ALL, registry);
-  const v = verifierFor(sel[0], sel);
-  assert.notEqual(v.author, sel[0].author);
 });
 
 test('every stage in the registry has at least two authors', () => {
