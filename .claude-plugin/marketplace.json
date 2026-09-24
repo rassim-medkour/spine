@@ -1,0 +1,16 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "spine",
+  "description": "Gated, evidence-first engineering process: classify a task, route it through spec, plan, implement, and cross-provider review with artifact gates.",
+  "owner": {
+    "name": "Rassim"
+  },
+  "plugins": [
+    {
+      "name": "spine",
+      "description": "Gated, evidence-first engineering process: classify a task, route it through spec, plan, implement, and cross-provider review with artifact gates.",
+      "source": "./",
+      "category": "workflow"
+    }
+  ]
+}

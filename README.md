@@ -5,11 +5,26 @@ decides which of your installed process skills run for a task, forces artifact
 boundaries between stages, cross-reviews with providers from different
 authors, and renders a fixed six-line summary so you can follow along.
 
-## Install (development)
+## Install
+
+**Per-session (no local registration needed):**
 
 ```bash
 claude --plugin-dir C:\Users\rassi\spine
 ```
+
+**Permanent (loads every session, no flag):**
+
+```bash
+claude plugin marketplace add C:\Users\rassi\spine
+claude plugin install spine@spine
+```
+
+Reads `.claude-plugin/marketplace.json` at the repo root, which declares this
+same repo (`source: "./"`) as its one plugin — spine is its own marketplace.
+Re-run `claude plugin marketplace update spine` after pulling changes so the
+installed copy picks them up. `claude plugin uninstall spine` /
+`claude plugin marketplace remove spine` reverse it.
 
 Requires Node 22 or newer on PATH. Dependencies (installed as Claude Code
 plugins): `ecc`, `superpowers`, `mattpocock-skills`, `code-review`,
