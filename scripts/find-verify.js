@@ -51,20 +51,20 @@ function findVerifySkills(changedFiles, repoRoot) {
     if (!file) continue;
     const skillDir = nearestSkill(file, repoRoot, cache);
     if (!skillDir) continue;
-    if (!groups.has(skillDir)) groups.set(skillDir, []);
-    groups.get(skillDir).push(file);
+    if (!groups.has(skillDir)) groups.set(skillDir, new Set());
+    groups.get(skillDir).add(file);
   }
   return [...groups.entries()].map(([skillDir, covers]) => ({
     skillDir,
     skillFile: `${skillDir}/SKILL.md`,
-    covers,
+    covers: [...covers],
     features: featuresOf(path.join(repoRoot, skillDir)),
   }));
 }
 
 if (require.main === module) {
   const i = process.argv.indexOf('--files');
-  const files = i >= 0 ? (process.argv[i + 1] || '').split(',').filter(Boolean) : [];
+  const files = i >= 0 ? (process.argv[i + 1] || '').split(',').map((f) => f.trim()).filter(Boolean) : [];
   const skills = findVerifySkills(files, process.cwd());
   process.stdout.write(JSON.stringify({ found: skills.length > 0, skills }, null, 2) + '\n');
 }

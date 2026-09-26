@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+const { spawnSync } = require('node:child_process');
 const { findVerifySkills } = require('../scripts/find-verify');
 
 function tmp() {
@@ -59,7 +60,27 @@ test('a skill whose frontmatter name is not verify is ignored', () => {
 test('backslash paths are normalized and paths escaping the repo are ignored', () => {
   const root = tmp();
   writeSkill(root, '.');
-  const skills = findVerifySkills(['src\\a.py', '../outside.py', '/etc/passwd'], root);
+  const skills = findVerifySkills(['src\\a.py', '../outside.py', '/etc/passwd', 'C:/Windows/x.py', 'd:\\x.py'], root);
   assert.equal(skills.length, 1);
   assert.deepEqual(skills[0].covers, ['src/a.py']);
+});
+
+test('duplicate changed files are covered once', () => {
+  const root = tmp();
+  writeSkill(root, '.');
+  const skills = findVerifySkills(['src/a.py', './src/a.py', 'src\\a.py'], root);
+  assert.deepEqual(skills[0].covers, ['src/a.py']);
+});
+
+test('the CLI trims comma-separated files and prints found + skills', () => {
+  const root = tmp();
+  writeSkill(root, 'services/intake', { features: ['sign-in'] });
+  const cli = path.join(__dirname, '..', 'scripts', 'find-verify.js');
+  const r = spawnSync(process.execPath, [cli, '--files', ' services/intake/a.py , services/main/b.py ,'], { cwd: root, encoding: 'utf8' });
+  assert.equal(r.status, 0, r.stderr);
+  const out = JSON.parse(r.stdout);
+  assert.equal(out.found, true);
+  assert.equal(out.skills.length, 1);
+  assert.deepEqual(out.skills[0].covers, ['services/intake/a.py']);
+  assert.deepEqual(out.skills[0].features, ['sign-in']);
 });

@@ -10,6 +10,8 @@ You are running the Spine process. Read this whole file before acting.
 Plugin root: the directory two levels above this file. Scripts live in
 `<root>/scripts/`, workflows in `<root>/workflows/`. Own agents are addressed
 as `spine:boundary-checker`, `spine:devils-advocate`, `spine:synthesis`.
+`spine:live-verify` is not an agent: it is the `agent` label on records you
+write yourself while running [live verification](#live-verification).
 
 Load the `record-contract` skill once per session before dispatching any
 agent. Load `gap-check` when the instructions below say so.
@@ -193,15 +195,17 @@ downstream artifact and re-run. The Stop hook enforces this.
    the working tree: a branch that is checked out, or `--diff`. A PR reviewed
    through `gh pr diff` is not on disk; write one `INFO` record instead, claim
    "live verification skipped: PR not checked out", evidence
-   `command gh pr diff <n>`.
+   `command gh pr diff <n>`. Take `date -u +%s` before and after it and keep
+   the difference as `live_verify_seconds` (0 when skipped).
 7. Record the wall-clock end time the same way (`date -u +%s`) and compute
-   `elapsed_seconds` (end minus start). This is total review-stage time, not
+   `elapsed_seconds` (end minus start, so it includes `live_verify_seconds`).
+   This is total review-stage time, not
    a per-phase breakdown — workflow scripts cannot read the clock (it would
    break resume), so only the orchestrating turn's own wall-clock is
    available. Write `review.json`: `{ "id", "upstream_id", "verdict",
    "providers": [ids], "findings": [ { "record_id", "severity",
    "corroboration", "verified" } ], "dissent": [record ids],
-   "elapsed_seconds" }`. Verdict is `FAIL` when any verified CRITICAL or HIGH
+   "elapsed_seconds", "live_verify_seconds" }`. Verdict is `FAIL` when any verified CRITICAL or HIGH
    remains, `PASS_WITH_ADVISORIES` when only MEDIUM or lower, `PASS` when
    none. Mention the elapsed time in the STATE line, for example
    `review took 3m12s`.
@@ -228,16 +232,20 @@ repairs that skill.
    It prints `{ found, skills: [ { skillDir, skillFile, covers, features } ] }`,
    pairing each changed file with its nearest verify skill.
 2. `found` false: write one `INFO` record, claim "no project verify skill
-   covers the changed files", evidence `command node <root>/scripts/find-verify.js`,
-   resolution `question`: "create one with /pstack:create-verification-skill?".
+   covers the changed files", evidence `command` with the exact
+   `node <root>/scripts/find-verify.js --files <...>` line you ran, resolution
+   `{ "kind": "question", "text": "Create one with /pstack:create-verification-skill?" }`.
    Never generate one yourself; it needs the app running and the human's setup.
 3. For each skill: read its `SKILL.md` and `features/README.md`. Pick the
-   features whose entry points the covered files touch (at least one). Follow
+   features whose entry points the covered files touch. If none clearly
+   matches, run the skill's doctor and drive one mapped feature as a smoke
+   check, and say "smoke check, no feature matched" in the claim. Follow
    the skill's own Launch, Doctor, Drive, Evidence, and Cleanup sections; its
    rules win over anything here, including what it says about processes it
    must not kill.
 4. Write one record per feature driven, agent `spine:live-verify`, provider
-   `project:verify`. Evidence: the skill's evidence files as `file` entries and
+   `project:verify`, `stage` set to the stage running it (`implement` or
+   `review`). Evidence: the skill's evidence files as `file` entries and
    its doctor command as `command`. A feature that works is `INFO`. A feature
    that is broken by this change is `HIGH` or `CRITICAL` (real evidence
    exists, so the unverified-evidence cap does not apply). A feature the skill
