@@ -58,6 +58,13 @@ intent -> classify -> [spec] -G1-> [plan] -G2-> [implement] -> [review] -G3-> do
   advocate runs only when reviewers agree, the blast radius is high, and at
   least two kinds of evidence exist.
 - Unresolved disagreements become tickets of kind spike, test, or question.
+- Live verification: at implement, and at review of a checked-out branch or
+  `--diff`, spine looks for the repo's own `.claude/skills/verify/` skill
+  nearest the changed files (`scripts/find-verify.js`), runs it to drive the
+  touched features in the real app, and records the evidence. No verify skill
+  means one `INFO` record suggesting `/pstack:create-verification-skill`;
+  spine never generates or edits that skill. PR reviews via `gh pr diff` skip
+  it, since the code is not on disk.
 
 ## Configuration
 
