@@ -118,3 +118,13 @@ test('exits 0 when stage is done', () => {
   const r = run({ cwd, stop_hook_active: false }, { SPINE_HOME: home });
   assert.equal(r.status, 0);
 });
+
+test('fails open with a spine: message when config is malformed', () => {
+  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'spine-'));
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'spine-home-'));
+  fs.mkdirSync(path.join(home, '.spine'));
+  fs.writeFileSync(path.join(home, '.spine', 'config.json'), JSON.stringify({ artifacts_dir: 5 }));
+  const r = run({ cwd, stop_hook_active: false }, { SPINE_HOME: home });
+  assert.equal(r.status, 0);
+  assert.match(r.stderr, /^spine: stop gate error: /m);
+});

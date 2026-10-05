@@ -71,4 +71,10 @@ function main() {
   finish(`spine-record invalid: ${errors.join('; ')}`, config, run);
 }
 
-main();
+try {
+  main();
+} catch (e) {
+  // Fail open: a bug in spine must never trap the user in a turn.
+  process.stderr.write(`spine: subagent gate error: ${e && e.message}\n`);
+  allow();
+}
