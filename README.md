@@ -52,6 +52,8 @@ Optional (not checked at session start):
 | `i-have-adhd` | `claude plugin marketplace add ayghri/i-have-adhd` then `claude plugin install i-have-adhd@i-have-adhd` | the summary block follows its shape; spine works without it |
 <!-- deps:optional:end -->
 
+Rows with only an `install` command come from `claude-plugins-official`, the
+marketplace Claude Code ships with, so they need no `marketplace add`.
 Every `<plugin>@<marketplace>` key above matches a working install on the
 maintainer's machine, and each `marketplace add` source matches that
 machine's marketplace configuration. The rows have not been re-run on a clean
@@ -74,9 +76,9 @@ read from `~/.spine/config.json` and `<repo>/.spine/config.json`.
 Node 22 or newer must be on `PATH`. Without it the hooks fail with exit code
 127 (command not found); this is noisy but does not block your session.
 
-If a gate script itself errors (an internal exception), it lets the stop
-through, exits 0 and prints a `spine:` message to stderr rather than trapping
-you.
+If a hook script itself errors (an internal exception), it exits 0 and prints
+a `spine:` message to stderr; the gates let the stop through rather than
+trapping you.
 
 Escape hatch: set `"strictness": "warn"` in `~/.spine/config.json` or
 `<repo>/.spine/config.json` and the gates warn instead of blocking. To close a
@@ -152,10 +154,10 @@ intent -> classify -> [spec] -G1-> [plan] -G2-> [implement] -> [review] -G3-> do
 - `npm test` is `node --test "tests/**/*.test.js"` (not `node --test tests/`)
   because a bare directory argument fails on Node 22 on Windows.
 
-## Known limits (ring 1)
+## Known limits
 
 The skill writes the state the hooks read, so several things are trust
-points rather than enforced guarantees in ring 1: setting `status: "paused"`
+points rather than enforced guarantees in this release: setting `status: "paused"`
 on a run, a repo config with `strictness: "warn"`, and the self-written
 `spine:boundary-checker` PASS records for stages with no upstream artifact
 (for example `intent`). Nothing stops the skill from writing any of these
