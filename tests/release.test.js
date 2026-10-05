@@ -74,3 +74,76 @@ test('.mailmap collapses all authors to one public identity', () => {
     .filter(Boolean);
   assert.deepEqual([...new Set(authors)], ['Rassim Medkour <23105160+rassim-medkour@users.noreply.github.com>']);
 });
+
+const { loadRegistry, pluginOf } = require('../scripts/lib/providers');
+
+function between(text, start, end) {
+  const i = text.indexOf(start);
+  const j = text.indexOf(end);
+  assert.ok(i >= 0 && j > i, `README is missing ${start} ... ${end}`);
+  return text.slice(i + start.length, j);
+}
+
+function tableRows(block) {
+  return block.split(/\r?\n/).filter((l) => /^\|\s*`[^`]+`\s*\|/.test(l));
+}
+
+test('README is labelled alpha 0.1.0 near the top', () => {
+  const head = read('README.md').split(/\r?\n/).slice(0, 30).join('\n');
+  assert.match(head, /alpha/i);
+  assert.match(head, /0\.1\.0/);
+});
+
+test('README install uses the GitHub marketplace', () => {
+  const text = read('README.md');
+  assert.match(text, /claude plugin marketplace add rassim-medkour\/spine/);
+  assert.match(text, /claude plugin install spine@spine/);
+  assert.match(text, /claude plugin uninstall spine@spine/);
+  assert.match(text, /v0\.1\.0/);
+});
+
+test('README required dependency rows equal providers.json plugins', () => {
+  const rows = tableRows(between(read('README.md'), '<!-- deps:required:start -->', '<!-- deps:required:end -->'));
+  const names = rows.map((r) => r.match(/^\|\s*`([^`]+)`/)[1]).sort();
+  const expected = [...new Set(Object.values(loadRegistry()).flat().map((p) => pluginOf(p.id)))].sort();
+  assert.deepEqual(names, expected);
+  for (const row of rows) {
+    const cells = row.split('|').slice(1, -1).map((c) => c.trim());
+    assert.equal(cells.length, 4, `row needs 4 cells: ${row}`);
+    assert.match(cells[1], /claude plugin install \S+@\S+/);
+    assert.ok(cells[3].length > 0, `missing degradation note: ${row}`);
+  }
+});
+
+test('README lists i-have-adhd as optional, not required', () => {
+  const optional = between(read('README.md'), '<!-- deps:optional:start -->', '<!-- deps:optional:end -->');
+  assert.match(optional, /`i-have-adhd`/);
+});
+
+test('README and SKILL.md agree on the Workflow-tool fallback', () => {
+  assert.match(read('README.md'), /workflow tool unavailable, ran inline/);
+  assert.match(read('skills/spine/SKILL.md'), /workflow tool unavailable, ran inline/);
+});
+
+test('README documents hooks, escape hatch and issue reporting', () => {
+  const text = read('README.md');
+  for (const needle of ['SessionStart', 'SubagentStop', 'PostToolUse', '"strictness": "warn"', 'github.com/rassim-medkour/spine/issues']) {
+    assert.ok(text.includes(needle), `README is missing ${needle}`);
+  }
+  assert.match(text, /itself errors[\s\S]{0,120}spine:/);
+  assert.ok(text.includes('"src/payments/**"'));
+});
+
+test('README documents the Workflow tool, safety and operations sections', () => {
+  const text = read('README.md');
+  for (const needle of ['## What this plugin runs', '## Contributing', 'acceptEdits', '~/.spine/config.json', 'Node 22']) {
+    assert.ok(text.includes(needle), `README is missing ${needle}`);
+  }
+  assert.match(text, /Workflow tool/);
+});
+
+test('CHANGELOG has a 0.1.0 entry with known limitations', () => {
+  const text = read('CHANGELOG.md');
+  assert.match(text, /^## 0\.1\.0/m);
+  assert.match(text, /known limitations/i);
+});

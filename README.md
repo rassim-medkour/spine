@@ -1,35 +1,95 @@
 # spine
 
+> **Status: alpha (0.1.0).** Commands, artifact shapes and gate behaviour may
+> change between minor versions. `master` is the alpha channel; pin `v0.1.0`
+> for a fixed version.
+
 A gated, evidence-first engineering process for Claude Code. One plugin that
 decides which of your installed process skills run for a task, forces artifact
 boundaries between stages, cross-reviews with providers from different
 authors, and renders a fixed six-line summary so you can follow along.
 
+Claude Code only. Requires Node 22 or newer on `PATH`.
+
 ## Install
 
-**Per-session (no local registration needed):**
-
 ```bash
-claude --plugin-dir <path-to-spine-clone>
-```
-
-**Permanent (loads every session, no flag):**
-
-```bash
-claude plugin marketplace add <path-to-spine-clone>
+claude plugin marketplace add rassim-medkour/spine
 claude plugin install spine@spine
 ```
 
-Reads `.claude-plugin/marketplace.json` at the repo root, which declares this
-same repo (`source: "./"`) as its one plugin — spine is its own marketplace.
-Re-run `claude plugin marketplace update spine` after pulling changes so the
-installed copy picks them up. `claude plugin uninstall spine` /
-`claude plugin marketplace remove spine` reverse it.
+Update with `claude plugin marketplace update spine`. Pin a version with
+`claude plugin marketplace add rassim-medkour/spine@v0.1.0`. Remove with
+`claude plugin uninstall spine@spine` and
+`claude plugin marketplace remove spine`.
 
-Requires Node 22 or newer on PATH. Dependencies (installed as Claude Code
-plugins): `ecc`, `superpowers`, `mattpocock-skills`, `code-review`,
-`coderabbit`, `feature-dev`, `caveman`, `i-have-adhd`. Missing ones are
-reported at session start and skipped.
+## Companion plugins
+
+spine routes work to other plugins. Install the ones you want; any that are
+missing are reported at session start (`spine: missing plugins: ...`) and
+skipped. When a provider is missing, spine picks the next-ranked provider
+from a different author; when a stage has no provider left, spine drafts
+that stage inline. spine runs with none of them installed, with less
+cross-review.
+
+<!-- deps:required:start -->
+| Plugin | Install | Used for | Without it |
+|---|---|---|---|
+| `ecc` | `claude plugin marketplace add affaan-m/ECC` then `claude plugin install ecc@ecc` | spec, plan, implement, review providers | top-ranked provider at every stage is skipped |
+| `superpowers` | `claude plugin install superpowers@claude-plugins-official` | spec brainstorming, plan writing, subagent implement | plan stage falls back to ecc planners or inline |
+| `mattpocock-skills` | `claude plugin install mattpocock-skills@claude-plugins-official` | spec grilling, domain modeling, TDD, standards/spec review | second-author spec and review provider is lost |
+| `code-review` | `claude plugin install code-review@claude-plugins-official` | low-noise review provider | one fewer review provider |
+| `coderabbit` | `claude plugin install coderabbit@claude-plugins-official` | independent-model review | no independent-model reviewer |
+| `feature-dev` | `claude plugin install feature-dev@claude-plugins-official` | bug and logic review agent | one fewer review provider |
+| `caveman` | `claude plugin marketplace add JuliusBrussee/caveman` then `claude plugin install caveman@caveman` | terse severity-tagged review agent | lowest-ranked review provider is lost |
+<!-- deps:required:end -->
+
+Optional (not checked at session start):
+
+<!-- deps:optional:start -->
+| Plugin | Install | Why |
+|---|---|---|
+| `i-have-adhd` | `claude plugin marketplace add ayghri/i-have-adhd` then `claude plugin install i-have-adhd@i-have-adhd` | the summary block follows its shape; spine works without it |
+<!-- deps:optional:end -->
+
+These install commands were taken from the maintainer's own marketplace
+configuration. They have not all been re-run on a clean machine for this
+alpha; if one fails, please report it (see Reporting issues).
+
+## What this plugin runs
+
+Four hooks, all local Node scripts. They make no network calls.
+
+| Hook | Script | Purpose |
+|---|---|---|
+| `SessionStart` | `scripts/session-start.js` | reports missing companion plugins |
+| `Stop` | `scripts/stop-gate.js` | blocks the turn until the stage boundary check passes |
+| `SubagentStop` | `scripts/subagent-gate.js` | same check for subagents |
+| `PostToolUse` | `scripts/validate-artifact.js` | validates artifacts after Edit, Write and MultiEdit |
+
+State is written to `.spine/` in your repo (runs, artifacts, `hooks.log`) and
+read from `~/.spine/config.json` and `<repo>/.spine/config.json`.
+
+Node 22 or newer must be on `PATH`. Without it the hooks fail with exit code
+127 (command not found); this is noisy but does not block your session.
+
+If a gate script itself errors (an internal exception), it lets the stop
+through, exits 0 and prints a `spine:` message to stderr rather than trapping
+you.
+
+Escape hatch: set `"strictness": "warn"` in `~/.spine/config.json` or
+`<repo>/.spine/config.json` and the gates warn instead of blocking. To close a
+run, set `status` to `"paused"` in `.spine/<run-id>/state.json`; the Stop hook
+only gates runs whose status is `active`.
+
+## Workflow tool
+
+Size L specs, and implement and review at sizes M and L, use Claude Code's
+Workflow tool. You can tell it is unavailable when the tool is not in the
+tool list, or a call to it is refused or errors before any agent runs. spine
+then does not stop: it runs that stage on the size S inline path (one provider
+inline, findings verified by a different author), writes an INFO record with
+the claim `workflow tool unavailable, ran inline`, and keeps the gate chain.
 
 ## Entry points
 
@@ -102,11 +162,39 @@ without the condition they claim to be true actually holding. `hooks.log`
 records every hook decision so these trust points are at least auditable
 after the fact.
 
-## Headless runs
+## Reporting issues
+
+Open an issue at https://github.com/rassim-medkour/spine/issues. Please attach:
+
+- spine version (`0.1.0`), Claude Code version, OS and `node --version`
+- the command you ran and the size (S, M or L) of the run
+- `.spine/<run-id>/hooks.log` and the failing artifact, with secrets removed
+- any `spine:` lines from stderr or session start
+
+## Contributing
+
+Load a local clone for one session, or register it permanently:
+
+```bash
+claude --plugin-dir .
+claude plugin marketplace add .
+claude plugin install spine@spine
+```
+
+Run `claude plugin marketplace update spine` after pulling changes so the
+installed copy picks them up. Run the tests with `npm test`. Release notes are
+in [CHANGELOG.md](CHANGELOG.md).
+
+### Headless runs
 
 ```bash
 MSYS_NO_PATHCONV=1 CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS=0 claude -p --plugin-dir . --permission-mode acceptEdits --allowedTools "Bash,Read,Write,Edit,Glob,Grep,Skill,Agent,Workflow" --output-format text "/spine:spine review 1"
 ```
+
+Safety: `acceptEdits` auto-approves file edits, and allowing `Bash` lets the
+model run any shell command without a prompt. Together they give an unattended
+run write access to the working tree and arbitrary command execution. Run this
+only in a repository and environment you trust.
 
 `MSYS_NO_PATHCONV=1` is needed because Git Bash (MSYS) rewrites an argument
 starting with `/spine` into a filesystem path (for example
@@ -118,14 +206,7 @@ workflow is terminated and the run stops at `awaiting: human`. Check
 
 L-path reviews are slow (around 30 minutes headlessly on a 60-file diff,
 root-caused to nested-skill fan-out per provider plus serialized
-cross-verification plus the devil's advocate — see issue #3). `review.json`
-now records total `elapsed_seconds` for the review stage so this is at least
-visible; workflow scripts cannot read the wall clock themselves (it would
-break resume), so this is one number for the whole stage, not a per-phase
-breakdown.
-
-## Tests
-
-```bash
-npm test
-```
+cross-verification plus the devil's advocate). `review.json` records total
+`elapsed_seconds` for the review stage so this is at least visible; workflow
+scripts cannot read the wall clock themselves (it would break resume), so this
+is one number for the whole stage, not a per-phase breakdown.
