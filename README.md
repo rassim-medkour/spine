@@ -19,7 +19,7 @@ claude plugin install spine@spine
 ```
 
 Update with `claude plugin marketplace update spine`. Pin a version with
-`claude plugin marketplace add rassim-medkour/spine@v0.1.0`. Remove with
+`claude plugin marketplace add https://github.com/rassim-medkour/spine.git#v0.1.0`. Remove with
 `claude plugin uninstall spine@spine` and
 `claude plugin marketplace remove spine`.
 
@@ -52,9 +52,10 @@ Optional (not checked at session start):
 | `i-have-adhd` | `claude plugin marketplace add ayghri/i-have-adhd` then `claude plugin install i-have-adhd@i-have-adhd` | the summary block follows its shape; spine works without it |
 <!-- deps:optional:end -->
 
-These install commands were taken from the maintainer's own marketplace
-configuration. They have not all been re-run on a clean machine for this
-alpha; if one fails, please report it (see Reporting issues).
+Every `<plugin>@<marketplace>` key above matches a working install on the
+maintainer's machine, and each `marketplace add` source matches that
+machine's marketplace configuration. The rows have not been re-run on a clean
+machine for this alpha; if one fails, please report it (see Reporting issues).
 
 ## What this plugin runs
 
