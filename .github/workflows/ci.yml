@@ -32,7 +32,7 @@ jobs:
         shell: bash
         run: |
           npm test 2>&1 | tee test-output.txt
-          count=$(grep -E '^# tests [0-9]+' test-output.txt | awk '{print $3}')
+          count=$(grep -oE '^(# |ℹ )tests [0-9]+' test-output.txt | grep -oE '[0-9]+$' | tail -1)
           echo "tests run: ${count:-0}"
           if [ "${count:-0}" -lt "$MIN_TESTS" ]; then
             echo "expected at least $MIN_TESTS tests, got ${count:-0}" >&2
