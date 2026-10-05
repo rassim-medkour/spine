@@ -109,14 +109,7 @@ the claim `workflow tool unavailable, ran inline`, and keeps the gate chain.
 A run moves a change through five stages. Each stage leaves a file under
 `.spine/<run-id>/`, and a person approves at three gates.
 
-```mermaid
-flowchart LR
-  intent["intent<br/><small>gap-check, classify.js</small>"] --> spec["spec<br/><small>spine-spec workflow</small>"]
-  spec -- "G1: you approve" --> plan["plan<br/><small>writing-plans, tickets.json</small>"]
-  plan -- "G2: you approve" --> implement["implement<br/><small>TDD per ticket</small>"]
-  implement --> review["review<br/><small>spine-review workflow</small>"]
-  review -- "G3: you approve" --> done
-```
+![A run moves through intent, spec, plan, implement and review. You approve at gates G1, G2 and G3. Hooks watch every turn.](docs/images/spine-run.svg)
 
 - Every stage file has a required shape (`schemas/`). The PostToolUse hook
   validates it on every write.
@@ -137,21 +130,7 @@ Start one with `/spine:spine review <pr# | branch | --diff>`. Several AI
 reviewers check the change separately, every claim needs proof, and they check
 each other before anything reaches you.
 
-```mermaid
-flowchart LR
-  diff["Diff + size"] --> r1["ecc:code-review"]
-  diff --> r2["mattpocock-skills:code-review"]
-  diff --> r3["superpowers:requesting-code-review"]
-  r1 --> merge["Merge<br/><small>same file:line = 1 finding</small>"]
-  r2 --> merge
-  r3 --> merge
-  merge -- "CRITICAL / HIGH" --> verify["Verify<br/><small>other author tries to refute</small>"]
-  merge -- "MEDIUM and lower" --> adv["Advisories"]
-  verify -- survivors --> da["Devil's advocate<br/><small>argues against the consensus</small>"]
-  da -- "+ objections" --> verdict["review.json<br/><small>PASS / ADVISORIES / FAIL</small>"]
-  adv --> verdict
-  verdict --> g3(["G3: you decide"])
-```
+![The diff goes to three reviewers in parallel. Findings merge by file and line. CRITICAL and HIGH findings are re-checked by a reviewer from a different author, then a devil's advocate argues against them. Everything lands in review.json, and you decide at G3.](docs/images/spine-review.svg)
 
 1. **Size the change.** `classify.js` rates the diff S, M or L, which sets how
    many reviewers run.

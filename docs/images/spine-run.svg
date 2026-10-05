@@ -1,0 +1,65 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 980 232" width="980" height="232" role="img" aria-label="A spine run moves from intent to spec, plan, implement, review and done. A person approves at gate G1 after spec, G2 after plan, and G3 after review. Hooks watch every turn.">
+  <style>
+    .bg { fill: #ffffff; }
+    .ln { stroke: #1b2230; fill: none; }
+    .fg { fill: #1b2230; }
+    .mu { fill: #5b6577; }
+    .ac { fill: #0f6b5c; }
+    .t { font-family: "Segoe UI", system-ui, -apple-system, sans-serif; }
+    .m { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; }
+    @media (prefers-color-scheme: dark) {
+      .bg { fill: #0d1117; }
+      .ln { stroke: #e4e8ef; }
+      .fg { fill: #e4e8ef; }
+      .mu { fill: #9aa4b5; }
+      .ac { fill: #4cc3a8; }
+    }
+  </style>
+  <defs>
+    <marker id="a1" viewBox="0 0 8 8" refX="8" refY="4" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto"><path class="fg" d="M0,0 L8,4 L0,8 z"/></marker>
+  </defs>
+  <rect class="bg" x="0" y="0" width="980" height="232" rx="8"/>
+  <g class="ln" stroke-width="1.5">
+    <rect x="10" y="40" width="118" height="56" rx="6"/>
+    <rect x="168" y="40" width="118" height="56" rx="6"/>
+    <rect x="326" y="40" width="118" height="56" rx="6"/>
+    <rect x="484" y="40" width="118" height="56" rx="6"/>
+    <rect x="642" y="40" width="118" height="56" rx="6"/>
+    <rect x="852" y="40" width="118" height="56" rx="6"/>
+    <line x1="128" y1="68" x2="166" y2="68" marker-end="url(#a1)"/>
+    <line x1="286" y1="68" x2="324" y2="68" marker-end="url(#a1)"/>
+    <line x1="444" y1="68" x2="482" y2="68" marker-end="url(#a1)"/>
+    <line x1="602" y1="68" x2="640" y2="68" marker-end="url(#a1)"/>
+    <line x1="760" y1="68" x2="850" y2="68" marker-end="url(#a1)"/>
+  </g>
+  <path class="ac" d="M306,59 L315,68 L306,77 L297,68 z"/>
+  <path class="ac" d="M464,59 L473,68 L464,77 L455,68 z"/>
+  <path class="ac" d="M806,59 L815,68 L806,77 L797,68 z"/>
+  <g class="ac m" font-size="12" font-weight="600" text-anchor="middle">
+    <text x="306" y="50">G1</text>
+    <text x="464" y="50">G2</text>
+    <text x="806" y="50">G3</text>
+    <text x="806" y="96" font-weight="400" font-size="10.5">you approve</text>
+  </g>
+  <g class="fg t" font-size="15" font-weight="700" text-anchor="middle">
+    <text x="69" y="73">intent</text>
+    <text x="227" y="73">spec</text>
+    <text x="385" y="73">plan</text>
+    <text x="543" y="73">implement</text>
+    <text x="701" y="73">review</text>
+    <text x="911" y="73">done</text>
+  </g>
+  <g class="mu m" font-size="11" text-anchor="middle">
+    <text x="69" y="118">gap-check</text><text x="69" y="133">classify.js</text>
+    <text x="227" y="118">spine-spec</text><text x="227" y="133">lenses → spec.md</text>
+    <text x="385" y="118">writing-plans</text><text x="385" y="133">tickets.json</text>
+    <text x="543" y="118">spine-implement</text><text x="543" y="133">TDD per ticket</text>
+    <text x="701" y="118">spine-review</text><text x="701" y="133">review.json</text>
+    <text x="911" y="118">run closed</text>
+  </g>
+  <rect class="ln" x="10" y="160" width="960" height="58" rx="6" stroke-dasharray="5 4" stroke-width="1.2"/>
+  <g class="fg t" font-size="13">
+    <text x="26" y="184"><tspan font-weight="600">Hooks on every turn:</tspan> Stop blocks the turn until the stage file is valid and boundary-checked (or a gate is waiting).</text>
+    <text x="26" y="204">PostToolUse validates each .spine file as it is written · SubagentStop checks each agent's evidence record.</text>
+  </g>
+</svg>
