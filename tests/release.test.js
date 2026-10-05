@@ -34,7 +34,7 @@ test('no stackdump is tracked', () => {
 // Patterns are built from fragments so this file never matches itself.
 const USER = ['ras', 'si'].join('');
 const PERSONAL_PATH = new RegExp(
-  [`[A-Za-z]:[\\\\/]Users[\\\\/]${USER}`, `/c/Users/${USER}`, `/Users/${USER}`, `/home/${USER}`].join('|'),
+  [`[A-Za-z]:[\\\\/]Users[\\\\/]${USER}`, '/c/Users/', `/Users/${USER}`, `/home/${USER}`].join('|'),
   'i',
 );
 const WORK_TRACE = new RegExp([['allo', 'sylvia'].join(''), ['services', 'main'].join('/'), ['appoint', 'ments'].join('')].join('|'), 'i');
@@ -67,8 +67,10 @@ test('design spec kept under docs/design, ring-1 plan removed', () => {
   assert.deepEqual(files.filter((f) => f.startsWith('docs/superpowers/')), []);
 });
 
-test('.mailmap maps old author emails to the public identity', () => {
-  const text = read('.mailmap');
-  assert.match(text, /23105160\+rassim-medkour@users\.noreply\.github\.com/);
-  assert.equal(text.trim().split(/\r?\n/).length, 2);
+test('.mailmap collapses all authors to one public identity', () => {
+  assert.match(read('.mailmap'), /23105160\+rassim-medkour@users\.noreply\.github\.com/);
+  const authors = execFileSync('git', ['log', '--use-mailmap', '--format=%aN <%aE>'], { cwd: ROOT, encoding: 'utf8' })
+    .split(/\r?\n/)
+    .filter(Boolean);
+  assert.deepEqual([...new Set(authors)], ['Rassim Medkour <23105160+rassim-medkour@users.noreply.github.com>']);
 });
