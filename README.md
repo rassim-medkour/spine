@@ -106,27 +106,134 @@ the claim `workflow tool unavailable, ran inline`, and keeps the gate chain.
 
 ## How a run works
 
-```
-intent -> classify -> [spec] -G1-> [plan] -G2-> [implement] -> [review] -G3-> done
+A run moves a change through five stages. Each stage leaves a file under
+`.spine/<run-id>/`, and a person approves at three gates.
+
+```mermaid
+flowchart LR
+  intent["intent<br/><small>gap-check, classify.js</small>"] --> spec["spec<br/><small>spine-spec workflow</small>"]
+  spec -- "G1: you approve" --> plan["plan<br/><small>writing-plans, tickets.json</small>"]
+  plan -- "G2: you approve" --> implement["implement<br/><small>TDD per ticket</small>"]
+  implement --> review["review<br/><small>spine-review workflow</small>"]
+  review -- "G3: you approve" --> done
 ```
 
-- Every stage writes an artifact under `.spine/<run-id>/` with a required
-  shape (`schemas/`).
-- A boundary checker compares each artifact to the one before it and must
+- Every stage file has a required shape (`schemas/`). The PostToolUse hook
+  validates it on every write.
+- A boundary checker compares each stage file to the one before it and must
   report PASS before you can move on. The Stop hook blocks the turn otherwise.
-- Size S, M, or L (from `scripts/classify.js`) decides how many providers
-  run: one, two, or three, always from different authors (`providers.json`).
-- CRITICAL and HIGH findings are verified by a different author. The devil's
-  advocate runs only when reviewers agree, the blast radius is high, and at
-  least two kinds of evidence exist.
-- Unresolved disagreements become tickets of kind spike, test, or question.
-- Live verification: at implement, and at review of a checked-out branch or
-  `--diff`, spine looks for the repo's own `.claude/skills/verify/` skill
-  nearest the changed files (`scripts/find-verify.js`), runs it to drive the
-  touched features in the real app, and records the evidence. No verify skill
-  means one `INFO` record suggesting `/pstack:create-verification-skill`;
-  spine never generates or edits that skill. PR reviews via `gh pr diff` skip
-  it, since the code is not on disk.
+- Size S, M or L (from `scripts/classify.js`) decides how many providers run:
+  one, two or three, always from different authors (`providers.json`).
+
+| Size | Reviewers per stage | Fan-out workflows |
+|---|---|---|
+| S | 1 | none, everything inline |
+| M | 2 | implement, review |
+| L | 3 | spec, implement, review, plus devil's advocate |
+
+## How a review works
+
+Start one with `/spine:spine review <pr# | branch | --diff>`. Several AI
+reviewers check the change separately, every claim needs proof, and they check
+each other before anything reaches you.
+
+```mermaid
+flowchart LR
+  diff["Diff + size"] --> r1["ecc:code-review"]
+  diff --> r2["mattpocock-skills:code-review"]
+  diff --> r3["superpowers:requesting-code-review"]
+  r1 --> merge["Merge<br/><small>same file:line = 1 finding</small>"]
+  r2 --> merge
+  r3 --> merge
+  merge -- "CRITICAL / HIGH" --> verify["Verify<br/><small>other author tries to refute</small>"]
+  merge -- "MEDIUM and lower" --> adv["Advisories"]
+  verify -- survivors --> da["Devil's advocate<br/><small>argues against the consensus</small>"]
+  da -- "+ objections" --> verdict["review.json<br/><small>PASS / ADVISORIES / FAIL</small>"]
+  adv --> verdict
+  verdict --> g3(["G3: you decide"])
+```
+
+1. **Size the change.** `classify.js` rates the diff S, M or L, which sets how
+   many reviewers run.
+2. **Pick reviewers.** `select-providers.js` takes the top-ranked installed
+   reviewers, one per author.
+3. **Find, alone.** Each reviewer reads the full diff in parallel without
+   seeing the others. A finding must point to a file and line, a command or a
+   test.
+4. **Merge.** Findings at the same `file:line` become one, with a higher
+   corroboration count. The highest severity wins.
+5. **Verify.** Each CRITICAL or HIGH goes to a reviewer from a different
+   author, told to refute it and to call it refuted when unsure. Only
+   survivors stay serious.
+6. **Push back.** The devil's advocate argues against the surviving findings
+   and names what would settle the disagreement. It runs only when the size
+   allows it, nothing was refuted, and the evidence covers at least two kinds.
+   Its objections sit next to the verdict and are never hidden.
+7. **Verdict and gate.** `review.json` gets the verdict, a synthesis agent maps
+   agreement, disagreement and blind spots, and spine stops at G3.
+
+| Verdict | Meaning |
+|---|---|
+| `PASS` | No findings above INFO. |
+| `PASS_WITH_ADVISORIES` | Only MEDIUM or lower remain. Safe to merge, with notes. |
+| `FAIL` | A verified CRITICAL or HIGH is still open. Fix before merging. |
+
+Unresolved disagreements become tickets of kind spike, test or question.
+
+**Example:** spine reviewed its own 0.1.0 release: 22 files, size L, 17
+findings. One HIGH survived verification by a second author: a test asserted a
+single author across all git history, so any outside contributor's PR would
+fail CI. The devil's advocate argued it was only MEDIUM because the break was
+latent. Both views reached the human, the bug was fixed, and the verdict was
+`PASS_WITH_ADVISORIES`.
+
+### Every finding is a record
+
+Reviewers and agents never answer in free text. They return a record defined
+by the `record-contract` skill:
+
+```json
+{
+  "id": "R-0002",
+  "stage": "review",
+  "agent": "ecc:code-review",
+  "claim": "Mailmap test fails CI for any outside contributor",
+  "evidence": [
+    { "kind": "file", "ref": "tests/release.test.js:70" },
+    { "kind": "command", "ref": "git log --format='%an <%ae>'" }
+  ],
+  "confidence": 0.85,
+  "severity": "HIGH"
+}
+```
+
+Evidence is a file and line, a command, a test or a document. A record whose
+only evidence is `unverified` cannot be rated above MEDIUM, so a guess can
+never block a merge. The SubagentStop hook rejects an agent's answer when its
+record block is malformed.
+
+### Live verification
+
+At implement, and at review of a checked-out branch or `--diff`, spine looks
+for the repo's own `.claude/skills/verify/` skill nearest the changed files
+(`scripts/find-verify.js`), runs it to drive the touched features in the real
+app, and records the evidence. No verify skill means one `INFO` record
+suggesting `/pstack:create-verification-skill`; spine never generates or edits
+that skill. PR reviews via `gh pr diff` skip it, since the code is not on disk.
+
+## Spine's own parts
+
+| Part | Kind | What it does |
+|---|---|---|
+| `/spine:spine` | skill, entry point | Starts or resumes a run, classifies, picks providers, writes each stage file, stops at gates. |
+| `spine-spec` | workflow | Fans the request out to lenses (domain, architecture, security, ops, testability) and merges their requirements, risks and disagreements. |
+| `spine-implement` | workflow | Per ticket: a fresh implementer writes the failing test first, then a spec reviewer and a quality reviewer from a different author check the commit. |
+| `spine-review` | workflow | The find, merge, verify and push-back pipeline above. |
+| `gap-check` | skill | Asks what is missing: acceptance criteria, error paths, migrations with rollback, limits, test anchors, scope edges. |
+| `record-contract` | skill | The record shape every agent must return. |
+| `boundary-checker` | agent | Compares a stage file with the one before it and reports PASS or drift with line numbers. Never fixes. |
+| `devils-advocate` | agent | Builds the strongest case against what reviewers agreed on. |
+| `synthesis` | agent | Merges a stage's records into agreement, disagreement and blind spots. Adds no findings. |
 
 ## Configuration
 
