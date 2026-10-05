@@ -67,12 +67,18 @@ test('design spec kept under docs/design, ring-1 plan removed', () => {
   assert.deepEqual(files.filter((f) => f.startsWith('docs/superpowers/')), []);
 });
 
-test('.mailmap collapses all authors to one public identity', () => {
-  assert.match(read('.mailmap'), /23105160\+rassim-medkour@users\.noreply\.github\.com/);
-  const authors = execFileSync('git', ['log', '--use-mailmap', '--format=%aN <%aE>'], { cwd: ROOT, encoding: 'utf8' })
+// Checks only the maintainer's own addresses listed in .mailmap, so commits by
+// other contributors never fail this test.
+test('.mailmap remaps every listed maintainer address to the public identity', () => {
+  const PUBLIC = 'Rassim Medkour <23105160+rassim-medkour@users.noreply.github.com>';
+  const addresses = read('.mailmap')
     .split(/\r?\n/)
-    .filter(Boolean);
-  assert.deepEqual([...new Set(authors)], ['Rassim Medkour <23105160+rassim-medkour@users.noreply.github.com>']);
+    .flatMap((line) => [...line.matchAll(/<([^>]+)>/g)].map((m) => m[1]));
+  assert.ok(addresses.length >= 3, '.mailmap lists the public and both old addresses');
+  for (const address of new Set(addresses)) {
+    const mapped = execFileSync('git', ['check-mailmap', `<${address}>`], { cwd: ROOT, encoding: 'utf8' }).trim();
+    assert.equal(mapped, PUBLIC, `${address} is not remapped`);
+  }
 });
 
 const { loadRegistry, pluginOf } = require('../scripts/lib/providers');
