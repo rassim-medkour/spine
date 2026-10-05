@@ -147,3 +147,21 @@ test('CHANGELOG has a 0.1.0 entry with known limitations', () => {
   assert.match(text, /^## 0\.1\.0/m);
   assert.match(text, /known limitations/i);
 });
+
+test('CI runs npm test on 3 OSes with Node 22, read-only', () => {
+  const ci = read('.github/workflows/ci.yml');
+  for (const os of ['ubuntu-latest', 'macos-latest', 'windows-latest']) assert.match(ci, new RegExp(os));
+  assert.match(ci, /actions\/checkout@v\d+/);
+  assert.match(ci, /fetch-depth: 0/);
+  assert.match(ci, /actions\/setup-node@v\d+/);
+  assert.match(ci, /node-version: \$\{\{ matrix\.node \}\}/);
+  assert.match(ci, /'22'/);
+  assert.match(ci, /node: '24'/);
+  assert.match(ci, /branches: \[master\]/);
+  assert.match(ci, /^\s*pull_request:/m);
+  assert.match(ci, /permissions:\s*\n\s+contents: read/);
+  assert.match(ci, /MIN_TESTS: \d+/);
+  assert.match(ci, /-lt "\$MIN_TESTS"/);
+  assert.doesNotMatch(ci, /pull_request_target/);
+  assert.doesNotMatch(ci, /secrets\./);
+});
