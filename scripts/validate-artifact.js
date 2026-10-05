@@ -24,4 +24,9 @@ function main() {
   process.stdout.write(emitContext('PostToolUse', text));
 }
 
-main();
+try {
+  main();
+} catch (e) {
+  // Fail open: a bug in spine must never break the user's edit.
+  process.stderr.write(`spine: validate-artifact error: ${e && e.message}\n`);
+}
