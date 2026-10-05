@@ -5,7 +5,7 @@ const fs = require('node:fs');
 const { selectProviders, pluginOf } = require('../scripts/lib/providers');
 
 const registry = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'providers.json'), 'utf8'));
-const ALL = ['ecc', 'superpowers', 'mattpocock-skills', 'code-review', 'coderabbit', 'feature-dev', 'caveman'];
+const ALL = ['ecc', 'superpowers', 'mattpocock-skills', 'code-review', 'feature-dev', 'caveman'];
 
 test('pluginOf strips the provider suffix', () => {
   assert.equal(pluginOf('ecc:code-review'), 'ecc');
@@ -30,8 +30,8 @@ test('L size selects three providers and respects lens budget', () => {
 });
 
 test('uninstalled plugins are skipped', () => {
-  const sel = selectProviders('review', 'M', ['mattpocock-skills', 'coderabbit'], registry);
-  assert.deepEqual(sel.map((p) => pluginOf(p.id)).sort(), ['coderabbit', 'mattpocock-skills']);
+  const sel = selectProviders('review', 'M', ['mattpocock-skills', 'superpowers'], registry);
+  assert.deepEqual(sel.map((p) => pluginOf(p.id)).sort(), ['mattpocock-skills', 'superpowers']);
 });
 
 test('every stage in the registry has at least two authors', () => {
@@ -39,4 +39,10 @@ test('every stage in the registry has at least two authors', () => {
     const authors = new Set(registry[stage].map((p) => p.author));
     assert.ok(authors.size >= 2, `${stage} has ${authors.size} author(s)`);
   }
+});
+
+test('review uses superpowers:requesting-code-review and no external service', () => {
+  const ids = registry.review.map((p) => p.id);
+  assert.ok(ids.includes('superpowers:requesting-code-review'));
+  assert.ok(!ids.some((id) => id.startsWith('coderabbit:')));
 });

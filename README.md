@@ -36,10 +36,9 @@ cross-review.
 | Plugin | Install | Used for | Without it |
 |---|---|---|---|
 | `ecc` | `claude plugin marketplace add affaan-m/ECC` then `claude plugin install ecc@ecc` | spec, plan, implement, review providers | top-ranked provider at every stage is skipped |
-| `superpowers` | `claude plugin install superpowers@claude-plugins-official` | spec brainstorming, plan writing, subagent implement | plan stage falls back to ecc planners or inline |
+| `superpowers` | `claude plugin install superpowers@claude-plugins-official` | spec brainstorming, plan writing, subagent implement, code review | plan stage falls back to ecc planners or inline |
 | `mattpocock-skills` | `claude plugin install mattpocock-skills@claude-plugins-official` | spec grilling, domain modeling, TDD, standards/spec review | second-author spec and review provider is lost |
 | `code-review` | `claude plugin install code-review@claude-plugins-official` | low-noise review provider | one fewer review provider |
-| `coderabbit` | `claude plugin install coderabbit@claude-plugins-official` | independent-model review | no independent-model reviewer |
 | `feature-dev` | `claude plugin install feature-dev@claude-plugins-official` | bug and logic review agent | one fewer review provider |
 | `caveman` | `claude plugin marketplace add JuliusBrussee/caveman` then `claude plugin install caveman@caveman` | terse severity-tagged review agent | lowest-ranked review provider is lost |
 <!-- deps:required:end -->
