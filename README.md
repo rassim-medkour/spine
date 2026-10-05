@@ -10,13 +10,13 @@ authors, and renders a fixed six-line summary so you can follow along.
 **Per-session (no local registration needed):**
 
 ```bash
-claude --plugin-dir C:\Users\rassi\spine
+claude --plugin-dir <path-to-spine-clone>
 ```
 
 **Permanent (loads every session, no flag):**
 
 ```bash
-claude plugin marketplace add C:\Users\rassi\spine
+claude plugin marketplace add <path-to-spine-clone>
 claude plugin install spine@spine
 ```
 
@@ -76,7 +76,7 @@ intent -> classify -> [spec] -G1-> [plan] -G2-> [implement] -> [review] -G3-> do
   "lens_budget": 6,
   "second_model": false,
   "render_artifacts": false,
-  "critical_paths": ["services/main/appointments/**"]
+  "critical_paths": ["src/payments/**"]
 }
 ```
 
@@ -105,7 +105,7 @@ after the fact.
 ## Headless runs
 
 ```bash
-MSYS_NO_PATHCONV=1 CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS=0 claude -p --plugin-dir C:/Users/rassi/spine --permission-mode acceptEdits --allowedTools "Bash,Read,Write,Edit,Glob,Grep,Skill,Agent,Workflow" --output-format text "/spine:spine review 1"
+MSYS_NO_PATHCONV=1 CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS=0 claude -p --plugin-dir . --permission-mode acceptEdits --allowedTools "Bash,Read,Write,Edit,Glob,Grep,Skill,Agent,Workflow" --output-format text "/spine:spine review 1"
 ```
 
 `MSYS_NO_PATHCONV=1` is needed because Git Bash (MSYS) rewrites an argument

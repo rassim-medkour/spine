@@ -30,3 +30,45 @@ test('.gitignore ignores stackdumps and local tool dirs', () => {
 test('no stackdump is tracked', () => {
   assert.deepEqual(trackedFiles().filter((f) => f.endsWith('.stackdump')), []);
 });
+
+// Patterns are built from fragments so this file never matches itself.
+const USER = ['ras', 'si'].join('');
+const PERSONAL_PATH = new RegExp(
+  [`[A-Za-z]:[\\\\/]Users[\\\\/]${USER}`, `/c/Users/${USER}`, `/Users/${USER}`, `/home/${USER}`].join('|'),
+  'i',
+);
+const WORK_TRACE = new RegExp([['allo', 'sylvia'].join(''), ['services', 'main'].join('/'), ['appoint', 'ments'].join('')].join('|'), 'i');
+// .mailmap must name the old author addresses to remap them; they are already public in history.
+const SCAN_ALLOW = new Set(['.mailmap']);
+const BINARY = /\.(png|jpg|jpeg|gif|ico|pdf)$/i;
+
+function scan(pattern) {
+  const hits = [];
+  for (const file of trackedFiles()) {
+    if (SCAN_ALLOW.has(file) || BINARY.test(file) || !fs.existsSync(path.join(ROOT, file))) continue;
+    read(file).split(/\r?\n/).forEach((line, i) => {
+      if (pattern.test(line)) hits.push(`${file}:${i + 1}`);
+    });
+  }
+  return hits;
+}
+
+test('no personal absolute paths in tracked files', () => {
+  assert.deepEqual(scan(PERSONAL_PATH), []);
+});
+
+test('no work-project traces in tracked files', () => {
+  assert.deepEqual(scan(WORK_TRACE), []);
+});
+
+test('design spec kept under docs/design, ring-1 plan removed', () => {
+  const files = trackedFiles();
+  assert.ok(files.includes('docs/design/spine-plugin-design.md'));
+  assert.deepEqual(files.filter((f) => f.startsWith('docs/superpowers/')), []);
+});
+
+test('.mailmap maps old author emails to the public identity', () => {
+  const text = read('.mailmap');
+  assert.match(text, /23105160\+rassim-medkour@users\.noreply\.github\.com/);
+  assert.equal(text.trim().split(/\r?\n/).length, 2);
+});
