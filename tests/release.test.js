@@ -34,7 +34,7 @@ test('no stackdump is tracked', () => {
 // Patterns are built from fragments so this file never matches itself.
 const USER = ['ras', 'si'].join('');
 const PERSONAL_PATH = new RegExp(
-  [`[A-Za-z]:[\\\\/]Users[\\\\/]${USER}`, '/c/Users/', `/Users/${USER}`, `/home/${USER}`].join('|'),
+  [`[A-Za-z]:[\\\\/]Users[\\\\/]${USER}`, ['/c', 'Users', ''].join('/'), `/Users/${USER}`, `/home/${USER}`].join('|'),
   'i',
 );
 const WORK_TRACE = new RegExp([['allo', 'sylvia'].join(''), ['services', 'main'].join('/'), ['appoint', 'ments'].join('')].join('|'), 'i');
