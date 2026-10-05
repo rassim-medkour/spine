@@ -22,3 +22,10 @@ test('gap-check lists the six absence questions', () => {
     assert.match(text, new RegExp(needle));
   }
 });
+
+test('spine skill defines the Workflow-tool fallback', () => {
+  const text = fs.readFileSync(path.join(__dirname, '..', 'skills', 'spine', 'SKILL.md'), 'utf8');
+  assert.match(text, /^### When the Workflow tool is unavailable$/m);
+  assert.match(text, /workflow tool unavailable, ran inline/);
+  assert.match(text, /size S path/);
+});

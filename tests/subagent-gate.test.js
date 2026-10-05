@@ -45,3 +45,19 @@ test('blocks for an invalid record', () => {
   assert.equal(r.status, 2);
   assert.match(r.stderr, /severity CRITICAL requires/);
 });
+
+test('exits 0 when no active run', () => {
+  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'spine-'));
+  const r = run({ cwd, agent_transcript_path: path.join(cwd, 'none.jsonl') }, { SPINE_HOME: fs.mkdtempSync(path.join(os.tmpdir(), 'spine-home-')) });
+  assert.equal(r.status, 0);
+});
+
+test('fails open with a spine: message when config is malformed', () => {
+  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'spine-'));
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'spine-home-'));
+  fs.mkdirSync(path.join(home, '.spine'));
+  fs.writeFileSync(path.join(home, '.spine', 'config.json'), JSON.stringify({ artifacts_dir: 5 }));
+  const r = run({ cwd, agent_transcript_path: path.join(cwd, 'none.jsonl') }, { SPINE_HOME: home });
+  assert.equal(r.status, 0);
+  assert.match(r.stderr, /^spine: subagent gate error: /m);
+});

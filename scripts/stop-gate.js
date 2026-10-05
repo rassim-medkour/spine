@@ -72,6 +72,7 @@ function main() {
 try {
   main();
 } catch (e) {
+  // Fail open: a bug in spine must never trap the user in a turn.
   process.stderr.write(`spine: stop gate error: ${e && e.message}\n`);
-  process.exit(2);
+  allow();
 }

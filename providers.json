@@ -23,7 +23,7 @@
   "review": [
     { "id": "ecc:code-review", "kind": "skill", "author": "ecc", "rank": 1, "independent_model": false, "strengths": ["multi-dimension fan-out", "language reviewers", "security trigger"] },
     { "id": "mattpocock-skills:code-review", "kind": "skill", "author": "mattpocock", "rank": 2, "independent_model": false, "strengths": ["standards axis", "spec axis"] },
-    { "id": "coderabbit:code-review", "kind": "tool", "author": "coderabbit", "rank": 3, "independent_model": true, "strengths": ["independent model", "external service"] },
+    { "id": "superpowers:requesting-code-review", "kind": "skill", "author": "obra", "rank": 3, "independent_model": false, "strengths": ["fresh code-reviewer subagent", "plan-vs-implementation check"] },
     { "id": "code-review:code-review", "kind": "skill", "author": "anthropic", "rank": 4, "independent_model": false, "strengths": ["confidence filtered", "low noise"] },
     { "id": "feature-dev:code-reviewer", "kind": "agent", "author": "anthropic", "rank": 5, "independent_model": false, "strengths": ["bugs and logic errors", "convention adherence"] },
     { "id": "caveman:cavecrew-reviewer", "kind": "agent", "author": "caveman", "rank": 6, "independent_model": false, "strengths": ["terse severity tagged findings"] }

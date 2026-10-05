@@ -2,9 +2,20 @@
   "name": "spine",
   "version": "0.1.0",
   "description": "Gated, evidence-first engineering process: classify a task, route it through spec, plan, implement, and cross-provider review with artifact gates.",
-  "author": { "name": "Rassim" },
+  "author": {
+    "name": "Rassim Medkour"
+  },
   "license": "MIT",
-  "keywords": ["process", "review", "gates", "workflow", "claude-code"],
+  "homepage": "https://github.com/rassim-medkour/spine",
+  "repository": "https://github.com/rassim-medkour/spine",
+  "keywords": [
+    "process",
+    "review",
+    "gates",
+    "workflow",
+    "claude-code",
+    "alpha"
+  ],
   "userConfig": {
     "strictness": {
       "type": "string",

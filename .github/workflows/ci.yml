@@ -1,0 +1,40 @@
+name: ci
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        node: ['22']
+        include:
+          - os: ubuntu-latest
+            node: '24'
+    env:
+      MIN_TESTS: 140
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      - name: npm test
+        shell: bash
+        run: |
+          npm test 2>&1 | tee test-output.txt
+          count=$(grep -oE '^(# |ℹ )tests [0-9]+' test-output.txt | grep -oE '[0-9]+$' | tail -1)
+          echo "tests run: ${count:-0}"
+          if [ "${count:-0}" -lt "$MIN_TESTS" ]; then
+            echo "expected at least $MIN_TESTS tests, got ${count:-0}" >&2
+            exit 1
+          fi

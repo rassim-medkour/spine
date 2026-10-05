@@ -6,7 +6,7 @@ discovered — see Runs 4 to 6 below), with an uncommitted trailing-blank-line
 change to `README.md`. Both were launched the same way:
 
 ```
-claude -p --plugin-dir C:/Users/rassi/spine --permission-mode acceptEdits \
+claude -p --plugin-dir . --permission-mode acceptEdits \
   --allowedTools "Bash,Read,Write,Edit,Glob,Grep,Skill,Agent" \
   --output-format text "spine review --diff"
 ```

@@ -17,7 +17,7 @@ test('three doc files is S and low blast radius', () => {
 });
 
 test('migration forces L and database lens', () => {
-  const r = classify({ files: ['services/main/migrations/0004_x.py'], migration: true }, cfg, noChurn);
+  const r = classify({ files: ['services/core/migrations/0004_x.py'], migration: true }, cfg, noChurn);
   assert.equal(r.size, 'L');
   assert.ok(r.lenses.includes('database'));
   assert.ok(r.lenses.includes('python'));
@@ -26,7 +26,7 @@ test('migration forces L and database lens', () => {
 
 test('two services with nine files is M', () => {
   const files = [
-    'services/main/a.py', 'services/main/b.py', 'services/main/c.py', 'services/main/d.py',
+    'services/core/a.py', 'services/core/b.py', 'services/core/c.py', 'services/core/d.py',
     'services/booking/x.ts', 'services/booking/y.ts', 'services/booking/z.ts', 'services/booking/w.tsx', 'services/booking/v.tsx',
   ];
   const r = classify({ files }, cfg, noChurn);
@@ -38,7 +38,7 @@ test('two services with nine files is M', () => {
 });
 
 test('critical_paths glob marks blast radius critical and adds security', () => {
-  const r = classify({ files: ['services/main/appointments/create.py'] }, { ...cfg, critical_paths: ['services/main/appointments/**'] }, noChurn);
+  const r = classify({ files: ['services/core/payments/create.py'] }, { ...cfg, critical_paths: ['services/core/payments/**'] }, noChurn);
   assert.equal(r.blast_radius, 'critical');
   assert.ok(r.lenses.includes('security'));
   assert.equal(r.devils_advocate, true);
@@ -81,8 +81,8 @@ test('output validates against class schema', () => {
 });
 
 test('globToRegExp: ** matches across directories', () => {
-  const re = globToRegExp('services/main/appointments/**');
-  assert.ok(re.test('services/main/appointments/a/b/c.py'));
+  const re = globToRegExp('services/core/payments/**');
+  assert.ok(re.test('services/core/payments/a/b/c.py'));
 });
 
 test('globToRegExp: **/*.py matches nested and top-level files, not other extensions', () => {

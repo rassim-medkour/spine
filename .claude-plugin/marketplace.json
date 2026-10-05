@@ -3,12 +3,15 @@
   "name": "spine",
   "description": "Gated, evidence-first engineering process: classify a task, route it through spec, plan, implement, and cross-provider review with artifact gates.",
   "owner": {
-    "name": "Rassim"
+    "name": "Rassim Medkour",
+    "email": "rassimmedkour@gmail.com",
+    "url": "https://github.com/rassim-medkour"
   },
   "plugins": [
     {
       "name": "spine",
       "description": "Gated, evidence-first engineering process: classify a task, route it through spec, plan, implement, and cross-provider review with artifact gates.",
+      "version": "0.1.0",
       "source": "./",
       "category": "workflow"
     }

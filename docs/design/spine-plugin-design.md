@@ -216,7 +216,7 @@ written into the artifact under an `Assumptions` heading.
     "files": 9,
     "services": 2,
     "migration": true,
-    "impact_matrix_hits": ["appointments", "communications"]
+    "impact_matrix_hits": ["payments", "notifications"]
   },
   "lenses": ["correctness", "security", "python", "react"],
   "devils_advocate": true,
@@ -423,10 +423,10 @@ an Artifact page using the `artifact-diagramming` guidance.
 
 ## 13. Installation and development
 
-- Development: `claude --plugin-dir C:\Users\rassi\spine`.
+- Development: `claude --plugin-dir <path-to-spine-clone>`.
 - Later: a local marketplace entry so `claude plugin install spine@local`
   works from any repo.
-- The plugin has its own git repo at `C:\Users\rassi\spine`.
+- The plugin has its own git repo (github.com/rassim-medkour/spine).
 
 ## 14. Testing the plugin itself
 

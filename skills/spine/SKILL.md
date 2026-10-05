@@ -102,6 +102,19 @@ node <root>/scripts/select-providers.js <stage> <size>
 Pass the printed list to workflows as `args.providers`, and use it to decide
 which skills or agents to invoke inline for size S.
 
+### When the Workflow tool is unavailable
+
+Size M and L stages call the Workflow tool (spec at L, implement and review
+at M and L). If the Workflow tool is not in your tool list, or a call to it
+is refused or errors before any agent runs, do not stop the run and do not
+skip the stage. Run that stage on the size S path instead: the first
+selected provider inline, and for review, CRITICAL and HIGH findings verified
+by a provider from a different author. Write one record from yourself with
+agent `spine:orchestrator`, the current stage, claim
+`workflow tool unavailable, ran inline`, evidence
+`{ "kind": "unverified", "ref": "workflow-tool" }`, confidence 1, severity
+`INFO`. Gates, boundary checks and the summary block are unchanged.
+
 ## Stages
 
 ```

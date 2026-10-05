@@ -7,7 +7,7 @@ const { spawnSync } = require('node:child_process');
 const { writeState, setActive, loadConfig } = require('../scripts/lib/state');
 
 const SCRIPT = path.join(__dirname, '..', 'scripts', 'session-start.js');
-const FULL = ['ecc', 'superpowers', 'mattpocock-skills', 'code-review', 'coderabbit', 'feature-dev', 'caveman'];
+const FULL = ['ecc', 'superpowers', 'mattpocock-skills', 'code-review', 'feature-dev', 'caveman'];
 
 function fakeClaudeHome(pluginNames) {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'spine-ch-'));
