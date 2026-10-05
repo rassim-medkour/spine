@@ -70,7 +70,7 @@ test('design spec kept under docs/design, ring-1 plan removed', () => {
 // Checks only the maintainer's own addresses listed in .mailmap, so commits by
 // other contributors never fail this test.
 test('.mailmap remaps every listed maintainer address to the public identity', () => {
-  const PUBLIC = 'Rassim Medkour <23105160+rassim-medkour@users.noreply.github.com>';
+  const PUBLIC = 'Rassim Medkour <rassimmedkour@gmail.com>';
   const addresses = read('.mailmap')
     .split(/\r?\n/)
     .flatMap((line) => [...line.matchAll(/<([^>]+)>/g)].map((m) => m[1]));

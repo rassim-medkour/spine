@@ -34,10 +34,10 @@ test('plugin.json links the public repo', () => {
   assert.equal(manifest.repository, REPO_URL);
 });
 
-test('marketplace owner has public url and noreply email only', () => {
+test('marketplace owner has public url and the public gmail address', () => {
   const { owner } = readJson('.claude-plugin/marketplace.json');
   assert.equal(owner.url, 'https://github.com/rassim-medkour');
-  assert.match(owner.email, /@users\.noreply\.github\.com$/);
+  assert.equal(owner.email, 'rassimmedkour@gmail.com');
 });
 
 test('spine@spine install handle resolves', () => {
