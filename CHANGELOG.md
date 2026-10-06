@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.1.1
+
+### Fixed
+
+- Installed copies could not run M and L stages: the skill called the Workflow
+  tool with a `scriptPath` inside the plugin cache, which the tool refuses to
+  read. Workflows are now called by their registered names
+  (`spine:spine-spec`, `spine:spine-implement`, `spine:spine-review`).
+- All three hooks fail open, and the third review provider is
+  `superpowers:requesting-code-review` (CodeRabbit removed).
+
 ## 0.1.0
 
 First public alpha release (Claude Code only). Installable through its own

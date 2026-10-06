@@ -1,7 +1,7 @@
 # spine
 
-> **Status: alpha (0.1.0).** Commands, artifact shapes and gate behaviour may
-> change between minor versions. `master` is the alpha channel; pin `v0.1.0`
+> **Status: alpha (0.1.1).** Commands, artifact shapes and gate behaviour may
+> change between minor versions. `master` is the alpha channel; pin `v0.1.1`
 > for a fixed version.
 
 A gated, evidence-first engineering process for Claude Code. One plugin that
@@ -19,7 +19,7 @@ claude plugin install spine@spine
 ```
 
 Update with `claude plugin marketplace update spine`. Pin a version with
-`claude plugin marketplace add https://github.com/rassim-medkour/spine.git#v0.1.0`. Remove with
+`claude plugin marketplace add https://github.com/rassim-medkour/spine.git#v0.1.1`. Remove with
 `claude plugin uninstall spine@spine` and
 `claude plugin marketplace remove spine`.
 
@@ -254,7 +254,7 @@ after the fact.
 
 Open an issue at https://github.com/rassim-medkour/spine/issues. Please attach:
 
-- spine version (`0.1.0`), Claude Code version, OS and `node --version`
+- spine version (for example `0.1.1`), Claude Code version, OS and `node --version`
 - the command you ran and the size (S, M or L) of the run
 - `.spine/<run-id>/hooks.log` and the failing artifact, with secrets removed
 - any `spine:` lines from stderr or session start

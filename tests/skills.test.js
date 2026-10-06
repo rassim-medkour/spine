@@ -29,3 +29,14 @@ test('spine skill defines the Workflow-tool fallback', () => {
   assert.match(text, /workflow tool unavailable, ran inline/);
   assert.match(text, /size S path/);
 });
+
+test('spine skill calls workflows by registered name, never by a <root> scriptPath', () => {
+  const text = fs.readFileSync(path.join(__dirname, '..', 'skills', 'spine', 'SKILL.md'), 'utf8');
+  assert.doesNotMatch(text, /scriptPath:\s*"<root>/);
+  for (const stage of ['spec', 'implement', 'review']) {
+    const script = fs.readFileSync(path.join(__dirname, '..', 'workflows', `${stage}.workflow.js`), 'utf8');
+    const metaName = script.match(/name:\s*'([^']+)'/)[1];
+    assert.equal(metaName, `spine-${stage}`);
+    assert.ok(text.includes(`name: "spine:${metaName}"`), `SKILL.md must call spine:${metaName} by name`);
+  }
+});

@@ -11,7 +11,7 @@
     {
       "name": "spine",
       "description": "Gated, evidence-first engineering process: classify a task, route it through spec, plan, implement, and cross-provider review with artifact gates.",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "source": "./",
       "category": "workflow"
     }

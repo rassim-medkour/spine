@@ -102,6 +102,18 @@ node <root>/scripts/select-providers.js <stage> <size>
 Pass the printed list to workflows as `args.providers`, and use it to decide
 which skills or agents to invoke inline for size S.
 
+### Calling a workflow
+
+The plugin registers its three workflows by name: `spine:spine-spec`
+(`workflows/spec.workflow.js`), `spine:spine-implement`
+(`workflows/implement.workflow.js`) and `spine:spine-review`
+(`workflows/review.workflow.js`). Always call them by name, for example
+`Workflow({ name: "spine:spine-review", args })`. Never pass a `scriptPath`
+under `<root>`: an installed plugin lives in the plugin cache, which the
+Workflow tool refuses to read. If the named call fails because the name is not
+registered, read the script file and pass its full text as `script`, with
+the same `args`, instead of copying it anywhere.
+
 ### When the Workflow tool is unavailable
 
 Size M and L stages call the Workflow tool (spec at L, implement and review
@@ -148,7 +160,7 @@ downstream artifact and re-run. The Stop hook enforces this.
   `## Test anchors`, `## Assumptions`, `## Out of scope`. For M, invoke the two
   selected spec providers first and fold their output in.
 - Size L: call the Workflow tool with
-  `scriptPath: "<root>/workflows/spec.workflow.js"` and
+  `name: "spine:spine-spec"` and
   `args: { intentText, lenses: class.lenses, providers, runId }`. Write the
   merged sections into `spec.md` and each `dissent` entry under a
   `## Open disagreements` heading with its resolution. Then run `ecc:council`
@@ -177,7 +189,7 @@ downstream artifact and re-run. The Stop hook enforces this.
   `superpowers:subagent-driven-development`; then one reviewer from the
   selected provider.
 - Size M or L: call the Workflow tool with
-  `scriptPath: "<root>/workflows/implement.workflow.js"` and
+  `name: "spine:spine-implement"` and
   `args: { tickets, specText, planText, runId, implementProviders, reviewProviders, parallel: false }`,
   where `implementProviders` comes from `select-providers.js implement <size>`
   and `reviewProviders` comes from `select-providers.js review <size>`.
@@ -201,7 +213,7 @@ downstream artifact and re-run. The Stop hook enforces this.
    different author: run `node <root>/scripts/select-providers.js review M`
    and take the first entry whose author differs from the finder's.
 5. Size M or L: call the Workflow tool with
-   `scriptPath: "<root>/workflows/review.workflow.js"` and
+   `name: "spine:spine-review"` and
    `args: { diff, changedFiles, language, providers, devilsAdvocate: class.devils_advocate, runId, stage: "review" }`.
    Write the returned records.
 6. Run [live verification](#live-verification) when the code under review is

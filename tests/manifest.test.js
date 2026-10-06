@@ -51,7 +51,7 @@ test('spine@spine install handle resolves', () => {
 
 test('versions agree across manifests', () => {
   const v = readJson('.claude-plugin/plugin.json').version;
-  assert.equal(v, '0.1.0');
+  assert.match(v, /^\d+\.\d+\.\d+$/);
   assert.equal(readJson('package.json').version, v);
   assert.equal(readJson('.claude-plugin/marketplace.json').plugins[0].version, v);
 });

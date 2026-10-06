@@ -94,10 +94,12 @@ function tableRows(block) {
   return block.split(/\r?\n/).filter((l) => /^\|\s*`[^`]+`\s*\|/.test(l));
 }
 
-test('README is labelled alpha 0.1.0 near the top', () => {
+const VERSION = JSON.parse(read('.claude-plugin/plugin.json')).version;
+
+test('README is labelled alpha with the current version near the top', () => {
   const head = read('README.md').split(/\r?\n/).slice(0, 30).join('\n');
   assert.match(head, /alpha/i);
-  assert.match(head, /0\.1\.0/);
+  assert.ok(head.includes(VERSION), `README head must mention ${VERSION}`);
 });
 
 test('README install uses the GitHub marketplace', () => {
@@ -105,7 +107,7 @@ test('README install uses the GitHub marketplace', () => {
   assert.match(text, /claude plugin marketplace add rassim-medkour\/spine/);
   assert.match(text, /claude plugin install spine@spine/);
   assert.match(text, /claude plugin uninstall spine@spine/);
-  assert.match(text, /v0\.1\.0/);
+  assert.ok(text.includes(`v${VERSION}`), `README must pin v${VERSION}`);
 });
 
 test('README required dependency rows equal providers.json plugins', () => {
@@ -148,9 +150,9 @@ test('README documents the Workflow tool, safety and operations sections', () =>
   assert.match(text, /Workflow tool/);
 });
 
-test('CHANGELOG has a 0.1.0 entry with known limitations', () => {
+test('CHANGELOG has an entry for the current version and known limitations', () => {
   const text = read('CHANGELOG.md');
-  assert.match(text, /^## 0\.1\.0/m);
+  assert.ok(text.includes(`## ${VERSION}`), `CHANGELOG must have ## ${VERSION}`);
   assert.match(text, /known limitations/i);
 });
 
