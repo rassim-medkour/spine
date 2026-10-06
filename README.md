@@ -18,9 +18,25 @@ claude plugin marketplace add rassim-medkour/spine
 claude plugin install spine@spine
 ```
 
-Update with `claude plugin marketplace update spine`. Pin a version with
-`claude plugin marketplace add https://github.com/rassim-medkour/spine.git#v0.1.1`. Remove with
-`claude plugin uninstall spine@spine` and
+### Updating
+
+spine does not update itself by default. Claude Code turns auto-update on
+only for Anthropic's official marketplace, and spine is a third-party
+marketplace. Pick one:
+
+- **Turn on auto-update (recommended while spine is alpha):** run `/plugin`,
+  open **Marketplaces**, select `spine`, and enable auto-update. New
+  versions then install when Claude Code starts.
+- **Update by hand:** run `claude plugin marketplace update spine`, then
+  restart Claude Code.
+
+Either way, a running session keeps the old version until you restart. Check
+the [releases page](https://github.com/rassim-medkour/spine/releases) for
+what changed.
+
+Pin a version instead with
+`claude plugin marketplace add https://github.com/rassim-medkour/spine.git#v0.1.1`.
+Remove spine with `claude plugin uninstall spine@spine` and
 `claude plugin marketplace remove spine`.
 
 ## Companion plugins

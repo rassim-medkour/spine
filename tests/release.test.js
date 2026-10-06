@@ -173,3 +173,10 @@ test('CI runs npm test on 3 OSes with Node 22, read-only', () => {
   assert.doesNotMatch(ci, /pull_request_target/);
   assert.doesNotMatch(ci, /secrets\./);
 });
+
+test('README tells users how to update, including auto-update', () => {
+  const text = read('README.md');
+  assert.match(text, /^### Updating$/m);
+  assert.match(text, /auto-update/);
+  assert.match(text, /claude plugin marketplace update spine/);
+});
