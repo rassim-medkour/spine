@@ -1,0 +1,4 @@
+{
+  "_provenance": "docs-derived:https://cursor.com/docs/agent/hooks",
+  "conversation_id":"conv-docs-1","generation_id":"gen-docs-1","model":"docs-model","hook_event_name":"sessionStart","cursor_version":"0.0.0-docs","workspace_roots":["/workspace/project"],"user_email":null,"transcript_path":"/workspace/project/.transcripts/conv-docs-1.jsonl","session_id":"conv-docs-1","is_background_agent":false,"composer_mode":"agent"
+}
