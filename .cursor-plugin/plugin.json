@@ -8,6 +8,7 @@
   "repository": "https://github.com/rassim-medkour/spine",
   "license": "MIT",
   "keywords": ["process", "review", "gates", "workflow", "cursor", "alpha"],
+  "skills": "./cursor/skills/",
   "agents": "./agents/",
   "hooks": "./hooks/cursor-hooks.json"
 }
