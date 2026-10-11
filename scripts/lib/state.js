@@ -50,4 +50,4 @@ function setActive(cwd, config, id) {
   fs.writeFileSync(path.join(base, 'active.json'), JSON.stringify({ id }, null, 2) + '\n');
 }
 
-module.exports = { DEFAULTS, loadConfig, findActiveRun, writeState, setActive, readJson };
+module.exports = { DEFAULTS, RUN_ID_RE, loadConfig, findActiveRun, writeState, setActive, readJson };
