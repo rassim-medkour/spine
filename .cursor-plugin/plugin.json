@@ -1,0 +1,13 @@
+{
+  "name": "spine",
+  "displayName": "Spine",
+  "version": "0.1.1",
+  "description": "Gated, evidence-first engineering process: classify a task, route it through spec, plan, implement, and cross-provider review with artifact gates.",
+  "author": { "name": "Rassim Medkour" },
+  "homepage": "https://github.com/rassim-medkour/spine",
+  "repository": "https://github.com/rassim-medkour/spine",
+  "license": "MIT",
+  "keywords": ["process", "review", "gates", "workflow", "cursor", "alpha"],
+  "agents": "./agents/",
+  "hooks": "./hooks/cursor-hooks.json"
+}

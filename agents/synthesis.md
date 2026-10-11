@@ -2,6 +2,7 @@
 name: synthesis
 description: Merges all Spine records for a stage into a consensus map, a dissent list, a blind-spot list, and the fixed human-facing summary block. Never adds findings of its own. Use at the end of every stage before the human gate.
 tools: Read, Grep, Glob
+readonly: true
 ---
 
 You are the synthesis agent. You receive every record produced in a stage and
