@@ -27,7 +27,7 @@ function installedPlugins(claudeHome = process.env.SPINE_CLAUDE_HOME || path.joi
 function selectProviders(stage, size, installed, registry = loadRegistry(), lensBudget = 6) {
   const wanted = Math.min(COUNT_BY_SIZE[size] || 1, lensBudget);
   const available = (registry[stage] || [])
-    .filter((p) => installed.includes(pluginOf(p.id)))
+    .filter((p) => installed.includes(p.plugin || pluginOf(p.id)))
     .sort((a, b) => a.rank - b.rank);
   const chosen = [];
   const authors = new Set();

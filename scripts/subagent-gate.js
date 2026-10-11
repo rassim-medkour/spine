@@ -2,7 +2,7 @@
 const fs = require('node:fs');
 const { readStdinSync, readHookInput, emitContext, block, allow, appendHookLog } = require('./lib/hook-io');
 const { loadConfig, findActiveRun } = require('./lib/state');
-const { validateRecord } = require('./lib/validate');
+const { evaluateSubagentText, subagentReason } = require('./lib/gate');
 
 function lastAssistantText(transcriptPath) {
   let lines;
@@ -26,24 +26,6 @@ function lastAssistantText(transcriptPath) {
   return '';
 }
 
-function extractRecordBlock(text) {
-  const re = /```json spine-record\s*\n([\s\S]*?)\n```/g;
-  let match;
-  let last = null;
-  while ((match = re.exec(text))) last = match[1];
-  return last;
-}
-
-function finish(reason, config, run) {
-  if (config.strictness === 'warn') {
-    appendHookLog(run, 'SubagentStop', 'warn');
-    process.stdout.write(emitContext('SubagentStop', reason));
-    allow();
-  }
-  appendHookLog(run, 'SubagentStop', 'block');
-  block(reason);
-}
-
 function main() {
   const input = readHookInput(readStdinSync());
   if (input.stop_hook_active) allow();
@@ -52,23 +34,19 @@ function main() {
   const config = loadConfig(cwd);
   const run = findActiveRun(cwd, config);
   if (!run) allow();
-  const blockText = extractRecordBlock(lastAssistantText(input.agent_transcript_path));
-  if (!blockText) {
+  const verdict = evaluateSubagentText(lastAssistantText(input.agent_transcript_path), config);
+  if (verdict.decision === 'allow') {
     appendHookLog(run, 'SubagentStop', 'allow');
     allow();
   }
-  let record;
-  try {
-    record = JSON.parse(blockText);
-  } catch {
-    finish('spine-record block is not valid JSON', config, run);
-  }
-  const errors = validateRecord(record);
-  if (!errors.length) {
-    appendHookLog(run, 'SubagentStop', 'allow');
+  const reason = subagentReason(verdict);
+  if (verdict.decision === 'warn') {
+    appendHookLog(run, 'SubagentStop', 'warn');
+    process.stdout.write(emitContext('SubagentStop', reason));
     allow();
   }
-  finish(`spine-record invalid: ${errors.join('; ')}`, config, run);
+  appendHookLog(run, 'SubagentStop', 'block');
+  block(reason);
 }
 
 try {
