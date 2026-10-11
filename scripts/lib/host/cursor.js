@@ -18,6 +18,7 @@ function normalizeCursorInput(payload) {
     workspaceRoots: roots,
     cwd: roots[0] || null,
     transcriptPath: str(src.transcript_path) || str(src.agent_transcript_path),
+    agentTranscriptPath: str(src.agent_transcript_path),
     filePath: str(src.file_path) || str(toolInput.file_path) || str(toolInput.path),
     finalText: str(src.summary) || str(src.result),
     status: str(src.status),
