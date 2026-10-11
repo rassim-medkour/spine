@@ -5,9 +5,13 @@ const path = require('node:path');
 
 const COUNT_BY_SIZE = { S: 1, M: 2, L: 3 };
 
-function loadRegistry() {
-  const registryPath = process.env.SPINE_REGISTRY_PATH || path.join(__dirname, '..', '..', 'providers.json');
-  return JSON.parse(fs.readFileSync(registryPath, 'utf8'));
+function registryPath(host = 'claude') {
+  if (host === 'cursor') return process.env.SPINE_CURSOR_REGISTRY_PATH || path.join(__dirname, '..', '..', 'providers.cursor.json');
+  return process.env.SPINE_REGISTRY_PATH || path.join(__dirname, '..', '..', 'providers.json');
+}
+
+function loadRegistry(host = 'claude') {
+  return JSON.parse(fs.readFileSync(registryPath(host), 'utf8'));
 }
 
 function pluginOf(id) {
