@@ -45,4 +45,15 @@ function appendHookLog(run, eventName, outcome) {
   }
 }
 
-module.exports = { readHookInput, readStdinSync, emitContext, block, allow, appendHookLog };
+const { readHookPayload } = require('./stdin');
+
+// Ignore empty, non-JSON, non-object or oversized stdin: exit 0, one stderr line, no writes.
+function readGuardedInput(hookName, fd = 0) {
+  const { payload, error } = readHookPayload(fd);
+  if (!error) return payload;
+  process.stderr.write(`spine: ${hookName} ignored ${error} stdin
+`);
+  process.exit(0);
+}
+
+module.exports = { readHookInput, readStdinSync, emitContext, block, allow, appendHookLog, readGuardedInput };

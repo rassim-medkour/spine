@@ -1,6 +1,6 @@
 'use strict';
 const fs = require('node:fs');
-const { readStdinSync, readHookInput, emitContext, block, allow, appendHookLog } = require('./lib/hook-io');
+const { readGuardedInput, emitContext, block, allow, appendHookLog } = require('./lib/hook-io');
 const { yieldToCursorCopy } = require('./lib/host/detect');
 const { loadConfig, findActiveRun } = require('./lib/state');
 const { evaluateSubagentText, subagentReason } = require('./lib/gate');
@@ -28,7 +28,7 @@ function lastAssistantText(transcriptPath) {
 }
 
 function main() {
-  const input = readHookInput(readStdinSync());
+  const input = readGuardedInput('subagent gate');
   if (yieldToCursorCopy(process.env, input)) allow();
   if (input.stop_hook_active) allow();
   if (!input.agent_transcript_path) allow();

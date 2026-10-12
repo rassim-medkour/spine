@@ -1,5 +1,5 @@
 'use strict';
-const { readStdinSync, readHookInput, emitContext, appendHookLog } = require('./lib/hook-io');
+const { readGuardedInput, emitContext, appendHookLog } = require('./lib/hook-io');
 const { yieldToCursorCopy } = require('./lib/host/detect');
 const { loadConfig, findActiveRun } = require('./lib/state');
 const { installedPlugins, loadRegistry } = require('./lib/providers');
@@ -7,7 +7,7 @@ const { missingFrom, buildSessionLines } = require('./lib/session');
 
 function main() {
   try {
-    const input = readHookInput(readStdinSync());
+    const input = readGuardedInput('session-start');
     if (yieldToCursorCopy(process.env, input)) return;
     const cwd = input.cwd || process.cwd();
     const missing = missingFrom(loadRegistry(), installedPlugins());
