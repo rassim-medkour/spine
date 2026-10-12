@@ -1,10 +1,12 @@
 'use strict';
 const { readStdinSync, readHookInput, emitContext, block, allow, appendHookLog } = require('./lib/hook-io');
+const { yieldToCursorCopy } = require('./lib/host/detect');
 const { loadConfig, findActiveRun } = require('./lib/state');
 const { evaluateStop, stopReason } = require('./lib/gate');
 
 function main() {
   const input = readHookInput(readStdinSync());
+  if (yieldToCursorCopy(process.env, input)) allow();
   if (input.stop_hook_active) allow();
   const cwd = input.cwd || process.cwd();
   const config = loadConfig(cwd);

@@ -1,11 +1,13 @@
 'use strict';
 const path = require('node:path');
 const { readStdinSync, readHookInput, emitContext, appendHookLog } = require('./lib/hook-io');
+const { yieldToCursorCopy } = require('./lib/host/detect');
 const { loadConfig, findActiveRun } = require('./lib/state');
 const { validateArtifactFile } = require('./lib/validate');
 
 function main() {
   const input = readHookInput(readStdinSync());
+  if (yieldToCursorCopy(process.env, input)) return;
   const cwd = input.cwd || process.cwd();
   const filePath = input.tool_input && input.tool_input.file_path;
   if (!filePath) return;
