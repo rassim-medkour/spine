@@ -9,7 +9,7 @@ decides which of your installed process skills run for a task, forces artifact
 boundaries between stages, cross-reviews with providers from different
 authors, and renders a fixed six-line summary so you can follow along.
 
-Claude Code only. Requires Node 22 or newer on `PATH`.
+Runs in Claude Code and, experimentally, in Cursor. Requires Node 22 or newer on `PATH`.
 
 ## Install
 
@@ -38,6 +38,43 @@ Pin a version instead with
 `claude plugin marketplace add https://github.com/rassim-medkour/spine.git#v0.1.1`.
 Remove spine with `claude plugin uninstall spine@spine` and
 `claude plugin marketplace remove spine`.
+
+## Cursor (experimental)
+
+spine also installs in the Cursor IDE as a plugin from this repository. It
+runs on your normal Cursor plan; there is no API key and no extra billing.
+
+**Status: experimental.** Cursor support is built from Cursor's documentation
+and has NOT yet been tested in a live Cursor agent session. Expect rough
+edges and please report them.
+
+1. In Cursor, open **Customize > Marketplace** and add this repository by
+   pasting `https://github.com/rassim-medkour/spine`. Use only this URL.
+2. Reload the window and check that spine's hooks are listed.
+
+Installing a plugin runs its hook scripts with your user privileges. Read
+`hooks/cursor-hooks.json` and `scripts/cursor/` before installing.
+
+Start a run in Agent chat by asking for the Spine skill with an entry point
+(`intent`, `adopt`, `implement`, `review`, `status` or `resume`). Artifacts and
+the summary block match Claude Code, and a run started in one host can be
+resumed in the other. Drive a run from one host at a time: `state.json`
+records the last host and spine warns when it changes.
+
+Known limits in Cursor:
+
+- The stop gate cannot block a turn. It re-prompts the agent
+  up to 3 times instead of blocking, then shows a warning and writes a `Stop cap-reached`
+  record that `status` reports. It never re-prompts while spine waits for your
+  gate answer.
+- Gates are advisory and approval is honor-system, as in Claude Code: only your
+  own message in chat approves G1, G2 or G3.
+- There is no Workflow-tool fan-out. Spine fans out to parallel subagents by
+  prompt instead.
+- How imported Claude skills are named in Cursor is unverified, so spine falls
+  back to generic subagents when it cannot resolve a provider.
+- To keep the reminders but drop the re-prompts, set `"strictness": "warn"` in
+  `~/.spine/config.json`.
 
 ## Companion plugins
 
