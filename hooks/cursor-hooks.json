@@ -1,10 +1,10 @@
 {
   "version": 1,
   "hooks": {
-    "sessionStart": [{ "command": "node ./scripts/cursor/session-start.js", "timeout": 10 }],
-    "stop": [{ "command": "node ./scripts/cursor/stop.js", "timeout": 10, "loop_limit": 3 }],
-    "subagentStop": [{ "command": "node ./scripts/cursor/subagent-stop.js", "timeout": 10, "loop_limit": 3 }],
-    "afterFileEdit": [{ "command": "node ./scripts/cursor/after-edit.js", "timeout": 10 }],
-    "postToolUse": [{ "command": "node ./scripts/cursor/after-edit.js", "matcher": "Write", "timeout": 10 }]
+    "sessionStart": [{ "command": "node \"${CURSOR_PLUGIN_ROOT}/scripts/cursor/session-start.js\"", "timeout": 10 }],
+    "stop": [{ "command": "node \"${CURSOR_PLUGIN_ROOT}/scripts/cursor/stop.js\"", "timeout": 10, "loop_limit": 3 }],
+    "subagentStop": [{ "command": "node \"${CURSOR_PLUGIN_ROOT}/scripts/cursor/subagent-stop.js\"", "timeout": 10, "loop_limit": 3 }],
+    "afterFileEdit": [{ "command": "node \"${CURSOR_PLUGIN_ROOT}/scripts/cursor/after-edit.js\"", "timeout": 10 }],
+    "postToolUse": [{ "command": "node \"${CURSOR_PLUGIN_ROOT}/scripts/cursor/after-edit.js\"", "matcher": "Write", "timeout": 10 }]
   }
 }

@@ -8,14 +8,14 @@ const { LOOP_LIMIT } = require('../scripts/lib/followup-counter');
 const ROOT = path.join(__dirname, '..');
 const file = JSON.parse(fs.readFileSync(path.join(ROOT, 'hooks', 'cursor-hooks.json'), 'utf8'));
 const EXPECTED = { sessionStart: 'session-start.js', stop: 'stop.js', subagentStop: 'subagent-stop.js', postToolUse: 'after-edit.js', afterFileEdit: 'after-edit.js' };
-const CMD = /^node \.\/scripts\/cursor\/([a-z-]+\.js)$/;
+const CMD = /^node "\$\{CURSOR_PLUGIN_ROOT\}\/scripts\/cursor\/([a-z-]+\.js)"$/;
 
 test('Cursor hooks file is version 1', () => {
   assert.equal(file.version, 1);
 });
 
 for (const [event, script] of Object.entries(EXPECTED)) {
-  test(`${event} is wired to an existing scripts/cursor/${script} with a plugin-root-relative command and numeric timeout`, () => {
+  test(`${event} is wired to an existing scripts/cursor/${script} with a CURSOR_PLUGIN_ROOT-anchored command and numeric timeout`, () => {
     const entries = file.hooks[event];
     assert.ok(Array.isArray(entries) && entries.length === 1, `${event} missing`);
     const m = CMD.exec(entries[0].command);
@@ -44,6 +44,11 @@ test('no Cursor hook entry sets failClosed', () => {
   }
 });
 
-test('Cursor hook commands never use a plugin-root variable', () => {
-  assert.doesNotMatch(JSON.stringify(file), /PLUGIN_ROOT/);
+test('every Cursor hook command uses the ${CURSOR_PLUGIN_ROOT}/scripts/cursor/ prefix, never a cwd-relative or CLAUDE path', () => {
+  for (const [event, entries] of Object.entries(file.hooks)) {
+    for (const e of entries) {
+      assert.ok(e.command.startsWith('node "${CURSOR_PLUGIN_ROOT}/scripts/cursor/'), `${event}: ${e.command}`);
+    }
+  }
+  assert.doesNotMatch(JSON.stringify(file), /CLAUDE_PLUGIN_ROOT|\.\/scripts/);
 });

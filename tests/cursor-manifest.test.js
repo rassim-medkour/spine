@@ -63,10 +63,11 @@ test('Cursor hook commands run from an install path containing spaces and shell 
   for (const f of ['providers.json', 'providers.cursor.json']) fs.copyFileSync(path.join(ROOT, f), path.join(install, f));
   const r = cursorRepo({ ...BASE, stage: 'intent' });
   const { hooks } = json('hooks/cursor-hooks.json');
-  const res = spawnSync(hooks.stop[0].command, {
-    shell: true, encoding: 'utf8', cwd: install,
+  const command = hooks.stop[0].command.replace('${CURSOR_PLUGIN_ROOT}', install);
+  const res = spawnSync(command, {
+    shell: true, encoding: 'utf8', cwd: fs.mkdtempSync(path.join(os.tmpdir(), 'spine-userproj-')),
     input: JSON.stringify({ ...fixture('stop.json'), workspace_roots: [r.root] }),
-    env: cleanEnv({ SPINE_HOME: r.home }),
+    env: cleanEnv({ SPINE_HOME: r.home, CURSOR_PLUGIN_ROOT: install }),
   });
   assert.equal(res.status, 0, res.stderr);
   assert.match(JSON.parse(res.stdout).followup_message, /intent\.md is missing/);
