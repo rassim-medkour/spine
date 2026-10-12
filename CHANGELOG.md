@@ -1,5 +1,40 @@
 # Changelog
 
+## 0.2.0
+
+Cursor support is experimental: it is built from Cursor's documentation and
+has not been tested in a live Cursor agent session.
+The manual Cursor smoke test is pending (checklist in `docs/cursor-smoke-test.md`).
+
+### Added
+
+- [cursor] Cursor plugin: `.cursor-plugin/` manifests, `hooks/cursor-hooks.json`
+  (sessionStart, stop, subagentStop, postToolUse); every hook fails open.
+- [cursor] Stop and subagentStop gates as followup messages, at most 3 per
+  conversation and stage, then a visible warning and a `Stop cap-reached` record.
+- [cursor] Cursor orchestration skill with prompt-driven subagent fan-out, and
+  `write-record.js`, `pick-verifier.js`, `da-gate.js` and `check-cross-author.js`.
+- [cursor] Cursor provider registry and `select-providers.js --host cursor`.
+- [both] `state.json` records the last writer `host`; `run-status.js` reports
+  hooks per host; spine warns when the host changes.
+
+### Changed
+
+- [both] Gate logic moved into `scripts/lib/gate.js` and `scripts/lib/session.js`;
+  Claude hook outputs are byte-identical, pinned by a golden-output test.
+- [claude-code] Hooks ignore empty, non-JSON or oversized (over 1 MB) stdin
+  with one `spine:` line on stderr instead of evaluating the current directory.
+- [claude-code] When Cursor is detected and the Cursor spine copy is installed,
+  the Claude-format hooks do nothing, so each gate fires once.
+
+### Known limitations
+
+- [cursor] Gates are advisory and gate approval is honor-system; the stop gate
+  re-prompts up to 3 times instead of blocking.
+- [cursor] No Workflow-tool fan-out; naming of imported Claude skills is unverified.
+- [cursor] Not yet verified in a live Cursor session (smoke test pending).
+- [both] One host at a time per run is documented, not enforced.
+
 ## 0.1.1
 
 ### Fixed
