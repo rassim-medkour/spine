@@ -1,0 +1,13 @@
+{
+  "name": "spine",
+  "owner": { "name": "Rassim Medkour", "email": "rassimmedkour@gmail.com", "url": "https://github.com/rassim-medkour" },
+  "metadata": { "description": "Gated, evidence-first engineering process for Cursor and Claude Code." },
+  "plugins": [
+    {
+      "name": "spine",
+      "source": "./",
+      "description": "Gated, evidence-first engineering process: classify a task, route it through spec, plan, implement, and cross-provider review with artifact gates.",
+      "version": "0.2.0"
+    }
+  ]
+}

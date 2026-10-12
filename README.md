@@ -1,7 +1,7 @@
 # spine
 
-> **Status: alpha (0.1.1).** Commands, artifact shapes and gate behaviour may
-> change between minor versions. `master` is the alpha channel; pin `v0.1.1`
+> **Status: alpha (0.2.0).** Commands, artifact shapes and gate behaviour may
+> change between minor versions. `master` is the alpha channel; pin `v0.2.0`
 > for a fixed version.
 
 A gated, evidence-first engineering process for Claude Code. One plugin that
@@ -9,7 +9,7 @@ decides which of your installed process skills run for a task, forces artifact
 boundaries between stages, cross-reviews with providers from different
 authors, and renders a fixed six-line summary so you can follow along.
 
-Claude Code only. Requires Node 22 or newer on `PATH`.
+Runs in Claude Code and, experimentally, in Cursor. Requires Node 22 or newer on `PATH`.
 
 ## Install
 
@@ -35,9 +35,50 @@ the [releases page](https://github.com/rassim-medkour/spine/releases) for
 what changed.
 
 Pin a version instead with
-`claude plugin marketplace add https://github.com/rassim-medkour/spine.git#v0.1.1`.
+`claude plugin marketplace add https://github.com/rassim-medkour/spine.git#v0.2.0`.
 Remove spine with `claude plugin uninstall spine@spine` and
 `claude plugin marketplace remove spine`.
+
+## Cursor (experimental)
+
+spine also installs in the Cursor IDE as a plugin from this repository. It
+runs on your normal Cursor plan; there is no API key and no extra billing.
+
+**Status: experimental.** Cursor support is built from Cursor's documentation
+and has NOT yet been tested in a live Cursor agent session. Expect rough
+edges and please report them.
+
+1. In Cursor, open **Customize > Marketplace** and add this repository by
+   pasting `https://github.com/rassim-medkour/spine`. Use only this URL.
+2. Reload the window and check that spine's hooks are listed.
+
+Installing a plugin runs its hook scripts with your user privileges. Read
+`hooks/cursor-hooks.json` and `scripts/cursor/` before installing.
+
+Start a run in Agent chat by asking for the Spine skill with an entry point
+(`intent`, `adopt`, `implement`, `review`, `status` or `resume`). Artifacts and
+the summary block match Claude Code, and a run started in one host can be
+resumed in the other. Drive a run from one host at a time: `state.json`
+records the last host and spine warns when it changes.
+
+Known limits in Cursor:
+
+- The stop gate cannot block a turn. It re-prompts the agent
+  up to 3 times instead of blocking, then shows a warning and writes a `Stop cap-reached`
+  record that `status` reports. It never re-prompts while spine waits for your
+  gate answer.
+- Gates are advisory and approval is honor-system, as in Claude Code: only your
+  own message in chat approves G1, G2 or G3.
+- There is no Workflow-tool fan-out. Spine fans out to parallel subagents by
+  prompt instead.
+- How imported Claude skills are named in Cursor is unverified, so spine falls
+  back to generic subagents when it cannot resolve a provider.
+- Hook behavior was cross-checked against the Cursor 3.23.12 app bundle (a
+  leading byte-order mark on stdin on Windows, and stop and subagentStop running
+  from the workspace folder), but it has still not been tested in a live agent
+  session.
+- To keep the reminders but drop the re-prompts, set `"strictness": "warn"` in
+  `~/.spine/config.json`.
 
 ## Companion plugins
 
@@ -270,7 +311,7 @@ after the fact.
 
 Open an issue at https://github.com/rassim-medkour/spine/issues. Please attach:
 
-- spine version (for example `0.1.1`), Claude Code version, OS and `node --version`
+- spine version (for example `0.2.0`), Claude Code version, OS and `node --version`
 - the command you ran and the size (S, M or L) of the run
 - `.spine/<run-id>/hooks.log` and the failing artifact, with secrets removed
 - any `spine:` lines from stderr or session start

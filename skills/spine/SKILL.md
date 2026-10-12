@@ -23,7 +23,7 @@ All artifacts for a run live in `<repo>/.spine/<id>/` (or the configured
 words joined by dashes. You are the only writer of:
 
 - `.spine/active.json`: `{ "id": "<id>" }`
-- `<run>/state.json`: `{ "id", "stage", "status", "awaiting", "size", "updated" }`
+- `<run>/state.json`: `{ "id", "stage", "status", "awaiting", "size", "updated", "host" }`
   - `stage` is one of `intent`, `spec`, `plan`, `implement`, `review`, `done`.
   - `status` is `active`, `paused`, or `done`.
   - `awaiting` is `null`, `human`, `G1`, `G2`, or `G3`. Set it to the gate
@@ -35,6 +35,10 @@ words joined by dashes. You are the only writer of:
     Never set `awaiting` to dodge a gate.
   - `updated` is an ISO 8601 timestamp; get it with `date -u +%Y-%m-%dT%H:%M:%SZ`
     (Bash) or `Get-Date -AsUTC -Format yyyy-MM-ddTHH:mm:ssZ` (PowerShell).
+  - `host` is `"claude-code"` when you write it from Claude Code. Write it on
+    every state write. If `state.json` already says `"cursor"`, say in one
+    line that the run was last driven from Cursor and that one host should
+    drive a run at a time, then continue.
 - `<run>/class.json`: output of `node <root>/scripts/classify.js`.
 - `<run>/records/R-NNNN.json`: one file per record. Get the next id by
   listing the directory; ids are zero-padded to four digits.
@@ -304,8 +308,10 @@ arguments.
   stage `review`, no upstream artifacts. Spec axis providers get the linked
   issue body if the PR or branch names one; otherwise standards axis only.
 - `status`: read `state.json`, `class.json`, `tickets.json`, the latest
-  records; render the summary block; set `awaiting: "human"` since the turn
-  ends without progressing the stage; do nothing else.
+  records, and the output of `node <root>/scripts/run-status.js <run>`;
+  render the summary block with the last host and the hooks that fired in
+  STATE; set `awaiting: "human"` since the turn ends without progressing the
+  stage; do nothing else.
 - `resume <id>`: set `active.json` to the id, read `state.json`, continue at
   its stage. If `awaiting` is a gate (`G1`, `G2`, `G3`), re-ask that gate's
   question. If `awaiting` is `human`, clear it and continue the stage.

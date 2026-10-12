@@ -1,0 +1,269 @@
+{
+  "spec": [
+    {
+      "id": "ecc:intent-driven-development",
+      "plugin": "everything-claude-code",
+      "kind": "skill",
+      "author": "ecc",
+      "rank": 1,
+      "independent_model": false,
+      "strengths": [
+        "acceptance criteria",
+        "testable requirements"
+      ],
+      "invoke": "/intent-driven-development"
+    },
+    {
+      "id": "mattpocock-skills:grilling",
+      "kind": "skill",
+      "author": "mattpocock",
+      "rank": 2,
+      "independent_model": false,
+      "strengths": [
+        "adversarial questioning of the plan"
+      ],
+      "invoke": "/grilling"
+    },
+    {
+      "id": "ecc:plan-prd",
+      "plugin": "everything-claude-code",
+      "kind": "skill",
+      "author": "ecc",
+      "rank": 3,
+      "independent_model": false,
+      "strengths": [
+        "PRD shape",
+        "scope sections"
+      ],
+      "invoke": "/plan-prd"
+    },
+    {
+      "id": "superpowers:brainstorming",
+      "plugin": "superpowers",
+      "kind": "skill",
+      "author": "obra",
+      "rank": 4,
+      "independent_model": false,
+      "strengths": [
+        "approach comparison",
+        "YAGNI"
+      ],
+      "invoke": "/brainstorming"
+    },
+    {
+      "id": "mattpocock-skills:domain-modeling",
+      "kind": "skill",
+      "author": "mattpocock",
+      "rank": 5,
+      "independent_model": false,
+      "strengths": [
+        "ubiquitous language"
+      ],
+      "invoke": "/domain-modeling"
+    },
+    {
+      "id": "ecc:prp-prd",
+      "plugin": "everything-claude-code",
+      "kind": "skill",
+      "author": "ecc",
+      "rank": 6,
+      "independent_model": false,
+      "strengths": [
+        "PRP style requirements"
+      ],
+      "invoke": "/prp-prd"
+    }
+  ],
+  "plan": [
+    {
+      "id": "superpowers:writing-plans",
+      "plugin": "superpowers",
+      "kind": "skill",
+      "author": "obra",
+      "rank": 1,
+      "independent_model": false,
+      "strengths": [
+        "bite-sized TDD tasks"
+      ],
+      "invoke": "/writing-plans"
+    },
+    {
+      "id": "ecc:planner",
+      "plugin": "everything-claude-code",
+      "kind": "agent",
+      "author": "ecc",
+      "rank": 2,
+      "independent_model": false,
+      "strengths": [
+        "phases",
+        "risks",
+        "dependencies"
+      ],
+      "invoke": "/planner"
+    },
+    {
+      "id": "ecc:code-architect",
+      "plugin": "everything-claude-code",
+      "kind": "agent",
+      "author": "ecc",
+      "rank": 3,
+      "independent_model": false,
+      "strengths": [
+        "codebase pattern extraction",
+        "build order"
+      ],
+      "invoke": "/code-architect"
+    },
+    {
+      "id": "ecc:prp-plan",
+      "plugin": "everything-claude-code",
+      "kind": "skill",
+      "author": "ecc",
+      "rank": 4,
+      "independent_model": false,
+      "strengths": [
+        "validation loops"
+      ],
+      "invoke": "/prp-plan"
+    },
+    {
+      "id": "mattpocock-skills:codebase-design",
+      "kind": "skill",
+      "author": "mattpocock",
+      "rank": 5,
+      "independent_model": false,
+      "strengths": [
+        "deep modules",
+        "seams"
+      ],
+      "invoke": "/codebase-design"
+    }
+  ],
+  "implement": [
+    {
+      "id": "superpowers:subagent-driven-development",
+      "plugin": "superpowers",
+      "kind": "skill",
+      "author": "obra",
+      "rank": 1,
+      "independent_model": false,
+      "strengths": [
+        "fresh context per task",
+        "two-stage review"
+      ],
+      "invoke": "/subagent-driven-development"
+    },
+    {
+      "id": "ecc:tdd-guide",
+      "plugin": "everything-claude-code",
+      "kind": "agent",
+      "author": "ecc",
+      "rank": 2,
+      "independent_model": false,
+      "strengths": [
+        "test first",
+        "coverage"
+      ],
+      "invoke": "/tdd-guide"
+    },
+    {
+      "id": "mattpocock-skills:tdd",
+      "kind": "skill",
+      "author": "mattpocock",
+      "rank": 3,
+      "independent_model": false,
+      "strengths": [
+        "red green refactor discipline"
+      ],
+      "invoke": "/tdd"
+    },
+    {
+      "id": "ecc:prp-implement",
+      "plugin": "everything-claude-code",
+      "kind": "skill",
+      "author": "ecc",
+      "rank": 4,
+      "independent_model": false,
+      "strengths": [
+        "validation loops"
+      ],
+      "invoke": "/prp-implement"
+    }
+  ],
+  "review": [
+    {
+      "id": "ecc:code-review",
+      "plugin": "everything-claude-code",
+      "kind": "skill",
+      "author": "ecc",
+      "rank": 1,
+      "independent_model": false,
+      "strengths": [
+        "multi-dimension fan-out",
+        "language reviewers",
+        "security trigger"
+      ],
+      "invoke": "/code-review"
+    },
+    {
+      "id": "mattpocock-skills:code-review",
+      "kind": "skill",
+      "author": "mattpocock",
+      "rank": 2,
+      "independent_model": false,
+      "strengths": [
+        "standards axis",
+        "spec axis"
+      ],
+      "invoke": "/code-review"
+    },
+    {
+      "id": "superpowers:requesting-code-review",
+      "plugin": "superpowers",
+      "kind": "skill",
+      "author": "obra",
+      "rank": 3,
+      "independent_model": false,
+      "strengths": [
+        "fresh code-reviewer subagent",
+        "plan-vs-implementation check"
+      ],
+      "invoke": "/requesting-code-review"
+    },
+    {
+      "id": "code-review:code-review",
+      "kind": "skill",
+      "author": "anthropic",
+      "rank": 4,
+      "independent_model": false,
+      "strengths": [
+        "confidence filtered",
+        "low noise"
+      ],
+      "invoke": "/code-review"
+    },
+    {
+      "id": "feature-dev:code-reviewer",
+      "kind": "agent",
+      "author": "anthropic",
+      "rank": 5,
+      "independent_model": false,
+      "strengths": [
+        "bugs and logic errors",
+        "convention adherence"
+      ],
+      "invoke": "/code-reviewer"
+    },
+    {
+      "id": "caveman:cavecrew-reviewer",
+      "kind": "agent",
+      "author": "caveman",
+      "rank": 6,
+      "independent_model": false,
+      "strengths": [
+        "terse severity tagged findings"
+      ],
+      "invoke": "/cavecrew-reviewer"
+    }
+  ]
+}

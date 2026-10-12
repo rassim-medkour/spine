@@ -5,9 +5,13 @@ const path = require('node:path');
 
 const COUNT_BY_SIZE = { S: 1, M: 2, L: 3 };
 
-function loadRegistry() {
-  const registryPath = process.env.SPINE_REGISTRY_PATH || path.join(__dirname, '..', '..', 'providers.json');
-  return JSON.parse(fs.readFileSync(registryPath, 'utf8'));
+function registryPath(host = 'claude') {
+  if (host === 'cursor') return process.env.SPINE_CURSOR_REGISTRY_PATH || path.join(__dirname, '..', '..', 'providers.cursor.json');
+  return process.env.SPINE_REGISTRY_PATH || path.join(__dirname, '..', '..', 'providers.json');
+}
+
+function loadRegistry(host = 'claude') {
+  return JSON.parse(fs.readFileSync(registryPath(host), 'utf8'));
 }
 
 function pluginOf(id) {
@@ -27,7 +31,7 @@ function installedPlugins(claudeHome = process.env.SPINE_CLAUDE_HOME || path.joi
 function selectProviders(stage, size, installed, registry = loadRegistry(), lensBudget = 6) {
   const wanted = Math.min(COUNT_BY_SIZE[size] || 1, lensBudget);
   const available = (registry[stage] || [])
-    .filter((p) => installed.includes(pluginOf(p.id)))
+    .filter((p) => installed.includes(p.plugin || pluginOf(p.id)))
     .sort((a, b) => a.rank - b.rank);
   const chosen = [];
   const authors = new Set();
