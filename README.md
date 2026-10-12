@@ -73,6 +73,10 @@ Known limits in Cursor:
   prompt instead.
 - How imported Claude skills are named in Cursor is unverified, so spine falls
   back to generic subagents when it cannot resolve a provider.
+- Hook behavior was cross-checked against the Cursor 3.23.12 app bundle (a
+  leading byte-order mark on stdin on Windows, and stop and subagentStop running
+  from the workspace folder), but it has still not been tested in a live agent
+  session.
 - To keep the reminders but drop the re-prompts, set `"strictness": "warn"` in
   `~/.spine/config.json`.
 

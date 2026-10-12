@@ -5,6 +5,9 @@
 Cursor support is experimental: it is built from Cursor's documentation and
 has not been tested in a live Cursor agent session.
 The manual Cursor smoke test is pending (checklist in `docs/cursor-smoke-test.md`).
+Hook behavior was cross-checked against the Cursor 3.23.12 app bundle (BOM on
+Windows stdin, stop and subagentStop working directory) but is still not
+tested in a live agent session.
 
 ### Added
 
