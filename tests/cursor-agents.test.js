@@ -16,6 +16,10 @@ for (const file of fs.readdirSync(DIR).filter((f) => f.endsWith('.md')).sort()) 
     assert.equal(fm.name, name);
     assert.ok(fm.description && fm.description.length > 40);
     assert.ok(fm.tools, 'Claude tools field missing');
-    assert.equal(fm.readonly, IMPLEMENTERS.has(name) ? 'false' : 'true', `${name} readonly`);
+    // readonly:true restricts shell in Cursor, so agents that list Bash must not set it.
+    const usesBash = fm.tools.split(',').map((s) => s.trim()).includes('Bash');
+    const expected = IMPLEMENTERS.has(name) || usesBash ? 'false' : 'true';
+    if (usesBash) assert.notEqual(fm.readonly, 'true', `${name} lists Bash but is readonly`);
+    else assert.equal(fm.readonly, expected, `${name} readonly`);
   });
 }

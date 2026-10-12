@@ -3,12 +3,15 @@ const os = require('node:os');
 const path = require('node:path');
 const { installedProvidersCursor } = require('../cursor-providers');
 
-// Markers present only inside Cursor (spike T-4). CLAUDE_PROJECT_DIR is an alias Cursor also sets, so it is not a signal.
+// Cursor sets CURSOR_VERSION plus a project dir alias (CURSOR_PROJECT_DIR, or CLAUDE_PROJECT_DIR for imported plugins).
+// CURSOR_VERSION alone can leak from a shell started inside Cursor, so it is not enough.
 const CURSOR_SIGNALS = Object.freeze(['CURSOR_VERSION', 'CURSOR_PROJECT_DIR']);
+const PROJECT_DIR_KEYS = Object.freeze(['CURSOR_PROJECT_DIR', 'CLAUDE_PROJECT_DIR']);
 const CURSOR_STDIN_KEYS = Object.freeze(['cursor_version', 'conversation_id', 'workspace_roots']);
 
 function runningUnderCursor(env = process.env, input = {}) {
-  if (CURSOR_SIGNALS.some((k) => typeof env[k] === 'string' && env[k] !== '')) return true;
+  const set = (k) => typeof env[k] === 'string' && env[k] !== '';
+  if (set('CURSOR_VERSION') && PROJECT_DIR_KEYS.some(set)) return true;
   return Boolean(input) && typeof input === 'object' && CURSOR_STDIN_KEYS.some((k) => input[k] !== undefined && input[k] !== null);
 }
 
