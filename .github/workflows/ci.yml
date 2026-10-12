@@ -20,7 +20,7 @@ jobs:
           - os: ubuntu-latest
             node: '24'
     env:
-      MIN_TESTS: 386
+      MIN_TESTS: 396
     steps:
       - uses: actions/checkout@v4
         with:
