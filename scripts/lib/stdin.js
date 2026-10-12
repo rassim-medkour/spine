@@ -10,6 +10,11 @@ function sleepMs(ms) {
   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
 }
 
+// Windows PowerShell 5.1 (Cursor on Windows) prefixes piped stdin with U+FEFF.
+function stripBom(text) {
+  return typeof text === 'string' && text.charCodeAt(0) === 0xfeff ? text.slice(1) : text;
+}
+
 // Reads at most `max` bytes. Never throws.
 function readStdinCapped(fd = 0, max = MAX_STDIN_BYTES) {
   const chunks = [];
@@ -33,13 +38,13 @@ function readStdinCapped(fd = 0, max = MAX_STDIN_BYTES) {
     if (total > max) return { text: '', error: 'oversized' };
     chunks.push(Buffer.from(buf.subarray(0, n)));
   }
-  const text = Buffer.concat(chunks).toString('utf8');
+  const text = stripBom(Buffer.concat(chunks).toString('utf8'));
   return text.trim() ? { text, error: null } : { text: '', error: 'empty' };
 }
 
 function parseHookJson(text) {
   try {
-    const value = JSON.parse(text);
+    const value = JSON.parse(stripBom(text));
     return value && typeof value === 'object' && !Array.isArray(value) ? value : null;
   } catch {
     return null;
@@ -53,4 +58,4 @@ function readHookPayload(fd = 0, max = MAX_STDIN_BYTES) {
   return payload ? { payload, error: null } : { payload: null, error: 'non-json' };
 }
 
-module.exports = { MAX_STDIN_BYTES, readStdinCapped, parseHookJson, readHookPayload };
+module.exports = { MAX_STDIN_BYTES, stripBom, readStdinCapped, parseHookJson, readHookPayload };

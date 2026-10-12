@@ -130,3 +130,19 @@ test('artifact body text never reaches the followup', () => {
   assert.doesNotMatch(msg, /ignore previous instructions/);
   assert.ok(msg.length <= 2000);
 });
+
+test('every Cursor adapter behaves identically for a BOM-prefixed payload (Cursor on Windows)', () => {
+  const cases = [['stop.js', 'stop.json'], ['subagent-stop.js', 'subagent-stop.json'], ['session-start.js', 'session-start.json'], ['after-edit.js', 'post-tool-use.json']];
+  for (const [script, fx] of cases) {
+    const r = cursorRepo({ ...BASE, stage: 'intent' });
+    const payload = JSON.stringify({ ...fixture(fx), workspace_roots: [r.root] });
+    const plain = runCursor(script, payload, { SPINE_HOME: r.home });
+    const bom = runCursor(script, `﻿${payload}`, { SPINE_HOME: r.home });
+    assert.doesNotMatch(bom.stderr, /ignored/, script);
+    assert.equal(bom.status, plain.status, script);
+    assert.equal(bom.stdout, plain.stdout, script);
+  }
+  const r = cursorRepo({ ...BASE, stage: 'intent' });
+  const res = runCursor('stop.js', `﻿${JSON.stringify({ ...fixture('stop.json'), workspace_roots: [r.root] })}`, { SPINE_HOME: r.home });
+  assert.match(followupOf(res), /intent\.md is missing/);
+});

@@ -1,8 +1,10 @@
 'use strict';
 const fs = require('node:fs');
 const path = require('node:path');
+const { stripBom, readHookPayload } = require('./stdin');
 
-function readHookInput(stdinText) {
+function readHookInput(rawStdinText) {
+  const stdinText = stripBom(rawStdinText);
   if (!stdinText || !stdinText.trim()) return {};
   try {
     const parsed = JSON.parse(stdinText);
@@ -44,8 +46,6 @@ function appendHookLog(run, eventName, outcome) {
     // never throw: logging must not affect hook behavior
   }
 }
-
-const { readHookPayload } = require('./stdin');
 
 // Ignore empty, non-JSON, non-object or oversized stdin: exit 0, one stderr line, no writes.
 function readGuardedInput(hookName, fd = 0) {

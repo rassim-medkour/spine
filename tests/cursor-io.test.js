@@ -123,3 +123,14 @@ test('reportError prints one spine line with an error code, never the message te
   cur.reportError('cursor stop', err, null, 'c', 'Stop');
   assert.deepEqual(writes, ['spine: cursor stop error: SyntaxError\n']);
 });
+
+const BOM = '﻿';
+test('readStdinCapped strips one leading BOM and treats a BOM-only input as empty', () => {
+  assert.deepEqual(readStdinCapped(fdOf(`${BOM}{"a":1}`)), { text: '{"a":1}', error: null });
+  assert.equal(readStdinCapped(fdOf(BOM)).error, 'empty');
+  assert.equal(readStdinCapped(fdOf(`${BOM}  \n`)).error, 'empty');
+});
+test('readHookPayload and parseHookJson parse a BOM-prefixed object', () => {
+  assert.deepEqual(readHookPayload(fdOf(`${BOM}{"x":1}`)), { payload: { x: 1 }, error: null });
+  assert.deepEqual(require('../scripts/lib/stdin').parseHookJson(`${BOM}{"x":1}`), { x: 1 });
+});
