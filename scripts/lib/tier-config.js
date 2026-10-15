@@ -5,10 +5,10 @@ const TIERS = Object.freeze(['leaf', 'branch', 'trunk']);
 const TIER_RANK = Object.freeze({ leaf: 0, branch: 1, trunk: 2 });
 const TRUNK_SIGNAL_CHOICES = Object.freeze(['critical_paths', 'entry_point', 'one_way_door', 'public_interface', 'security_path', 'shared_state']);
 
-// fan_in_* are provisional until spike T-7; tree_* until spike T-11.
+// fan_in_* measured by spike T-7 on spine and five local repos (Python, TypeScript, JavaScript, Go), 2026-10. tree_* provisional until spike T-11.
 const TIER_DEFAULTS = Object.freeze({
-  fan_in_trunk: 10,
-  fan_in_branch: 3,
+  fan_in_trunk: 8,
+  fan_in_branch: 2,
   churn_branch: 20,
   downstream_depth: 3,
   trunk_signals: Object.freeze(['critical_paths', 'entry_point', 'one_way_door']),
