@@ -57,7 +57,9 @@ test('a hook followup never stands in for gate approval', () => {
 });
 
 test('record-contract and gap-check reach Cursor as exact copies, and no rules file exists', () => {
-  for (const name of ['record-contract', 'gap-check']) assert.equal(read(`cursor/skills/${name}/SKILL.md`), read(`skills/${name}/SKILL.md`));
+  // Compare with line endings normalised: a Windows checkout can hold CRLF copies of LF files.
+  const lf = (s) => s.replace(/\r\n/g, '\n');
+  for (const name of ['record-contract', 'gap-check']) assert.equal(lf(read(`cursor/skills/${name}/SKILL.md`)), lf(read(`skills/${name}/SKILL.md`)));
   assert.equal(fs.existsSync(path.join(ROOT, 'rules')), false);
 });
 
