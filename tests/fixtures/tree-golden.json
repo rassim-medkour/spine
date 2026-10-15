@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "tier": "trunk",
+  "inputs": {
+    "base_sha": "1111111111111111111111111111111111111111",
+    "head_sha": "2222222222222222222222222222222222222222",
+    "diff_sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+    "config_sha256": "4444444444444444444444444444444444444444444444444444444444444444",
+    "classifier_version": "1",
+    "parser_version": "1"
+  },
+  "knobs": {
+    "is_trunk": { "answer": "yes", "evidence": ["signal:fan_in", "src/lib/math.ts"] },
+    "wide_downstream": { "answer": "yes", "evidence": ["signal:fan_in", "src/lib/math.ts"] },
+    "gated": { "answer": "no", "evidence": ["signal:gated", "src/lib/math.ts"] },
+    "severe_if_broken": { "answer": "yes", "evidence": ["signal:fan_in", "src/lib/math.ts"] },
+    "instant_rollback": { "answer": "unknown", "evidence": ["signal:one_way_door", "signal:gated"] }
+  },
+  "files": [
+    {
+      "path": "README.md",
+      "status": "modified",
+      "tier": "leaf",
+      "reasons": ["docs only"],
+      "parser": "none",
+      "signals": {
+        "fan_in": { "value": 0, "resolved": true, "rule": "direct importers (none)" },
+        "entry_point": { "value": false, "rule": "docs file" },
+        "shared_state": { "value": false, "rule": "no shared-state pattern" },
+        "public_interface": { "value": false, "rule": "docs file" },
+        "one_way_door": { "value": false, "rule": "docs file" },
+        "security_path": { "value": false, "rule": "no security pattern" },
+        "churn": { "value": 2, "rule": "commits in 90 days" },
+        "tested": { "value": false, "rule": "no test file imports it (heuristic)" },
+        "gated": { "value": false, "rule": "docs file" }
+      },
+      "importers_top": [],
+      "downstream": 0
+    },
+    {
+      "path": "src/lib/math.ts",
+      "status": "modified",
+      "tier": "trunk",
+      "reasons": ["fan-in 12 >= 10"],
+      "parser": "typescript",
+      "signals": {
+        "fan_in": { "value": 12, "resolved": true, "rule": "direct importers (typescript)" },
+        "entry_point": { "value": false, "rule": "no entry pattern" },
+        "shared_state": { "value": false, "rule": "no shared-state pattern" },
+        "public_interface": { "value": true, "rule": "changes an exported declaration" },
+        "one_way_door": { "value": false, "rule": "no one-way-door pattern" },
+        "security_path": { "value": false, "rule": "no security pattern" },
+        "churn": { "value": 4, "rule": "commits in 90 days" },
+        "tested": { "value": true, "rule": "imported by test src/math.test.ts (heuristic)" },
+        "gated": { "value": false, "rule": "not detected" }
+      },
+      "importers_top": ["src/a.ts", "src/b.ts", "src/c.ts"],
+      "downstream": 14
+    }
+  ]
+}

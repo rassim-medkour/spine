@@ -87,6 +87,59 @@ function validateRecord(obj) {
   return errors;
 }
 
+const TREE_SCHEMA_VERSION = 1;
+const TIER_ORDER = ['leaf', 'branch', 'trunk'];
+const stripValue = (e) => e.replace(/, got [\s\S]*$/, '');
+
+function isRepoRelative(p) {
+  return typeof p === 'string' && p.length > 0 && !p.includes('\\') && !p.startsWith('/') && !/^[a-zA-Z]:/.test(p) && !p.split('/').includes('..');
+}
+
+function checkTreeFile(f, i, schema, errors) {
+  const at = `files[${i}]`;
+  if (!isRepoRelative(f.path)) errors.push(`${at}.path must be repo-relative with forward slashes`);
+  if (!Array.isArray(f.reasons) || !f.reasons.length || !f.reasons.every((r) => typeof r === 'string' && r)) {
+    errors.push(`${at}.reasons must be a non-empty array of strings`);
+  }
+  const signals = f.signals && typeof f.signals === 'object' ? f.signals : null;
+  for (const key of schema.signals) {
+    const s = signals && signals[key];
+    if (!s || typeof s !== 'object' || !('value' in s) || typeof s.rule !== 'string' || !s.rule) errors.push(`${at}.signals missing ${key}`);
+  }
+  if (signals && signals.fan_in && typeof signals.fan_in === 'object' && typeof signals.fan_in.resolved !== 'boolean') {
+    errors.push(`${at}.signals.fan_in.resolved must be a boolean`);
+  }
+}
+
+function checkKnobs(knobs, schema, errors) {
+  for (const key of schema.knobs) {
+    const k = knobs && knobs[key];
+    if (!k || typeof k !== 'object') {
+      errors.push(`knobs missing ${key}`);
+      continue;
+    }
+    if (!schema.knob_answers.includes(k.answer)) errors.push(`knobs.${key}.answer must be yes, no or unknown`);
+    if (!Array.isArray(k.evidence) || !k.evidence.length) errors.push(`knobs.${key}.evidence must be a non-empty array`);
+  }
+}
+
+function validateTree(obj) {
+  const schema = loadSchema('tree');
+  const base = validateJson(obj, schema).map(stripValue);
+  if (base.length) return base;
+  const errors = [];
+  if (obj.schema_version !== TREE_SCHEMA_VERSION) errors.push(`schema_version must be ${TREE_SCHEMA_VERSION}`);
+  const inputs = obj.inputs && typeof obj.inputs === 'object' ? obj.inputs : {};
+  for (const key of schema.inputs) if (typeof inputs[key] !== 'string') errors.push(`inputs missing ${key}`);
+  checkKnobs(obj.knobs, schema, errors);
+  obj.files.forEach((f, i) => checkTreeFile(f, i, schema, errors));
+  const paths = obj.files.map((f) => f.path);
+  if (paths.some((p, i) => i > 0 && !(paths[i - 1] < p))) errors.push('files must be sorted by path without duplicates');
+  const top = obj.files.reduce((t, f) => (TIER_ORDER.indexOf(f.tier) > TIER_ORDER.indexOf(t) ? f.tier : t), 'leaf');
+  if (obj.tier !== top) errors.push('tier must equal the highest file tier');
+  return errors;
+}
+
 function schemaFor(relPath) {
   const base = path.basename(relPath);
   const parent = path.basename(path.dirname(relPath));
@@ -98,6 +151,7 @@ function schemaFor(relPath) {
     'tickets.json': 'tickets',
     'review.json': 'review',
     'class.json': 'class',
+    'tree.json': 'tree',
   };
   return map[base] || null;
 }
@@ -111,12 +165,14 @@ function validateArtifactFile(absPath, relPath = absPath) {
   } catch {
     return [`cannot read ${relPath}`];
   }
-  if (name === 'record') {
+  if (name === 'record' || name === 'tree') {
+    let parsed;
     try {
-      return validateRecord(JSON.parse(text));
+      parsed = JSON.parse(text);
     } catch {
       return [`${relPath} is not valid JSON`];
     }
+    return name === 'record' ? validateRecord(parsed) : validateTree(parsed);
   }
   const schema = loadSchema(name);
   if (schema.kind === 'markdown') return validateMarkdown(text, schema);
@@ -127,4 +183,4 @@ function validateArtifactFile(absPath, relPath = absPath) {
   }
 }
 
-module.exports = { loadSchema, validateJson, validateMarkdown, validateRecord, validateArtifactFile, schemaFor, parseFrontmatter };
+module.exports = { loadSchema, validateJson, validateMarkdown, validateRecord, validateTree, validateArtifactFile, schemaFor, parseFrontmatter };

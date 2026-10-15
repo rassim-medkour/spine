@@ -1,0 +1,21 @@
+{
+  "kind": "json",
+  "schema_version": 1,
+  "required": ["schema_version", "tier", "inputs", "knobs", "files"],
+  "enums": { "tier": ["leaf", "branch", "trunk"] },
+  "arrays": {
+    "files": {
+      "required": ["path", "status", "tier", "reasons", "parser", "signals", "importers_top", "downstream"],
+      "enums": {
+        "tier": ["leaf", "branch", "trunk"],
+        "status": ["added", "modified", "renamed", "deleted"],
+        "parser": ["python", "typescript", "javascript", "go", "generic", "none"]
+      }
+    }
+  },
+  "inputs": ["base_sha", "head_sha", "diff_sha256", "config_sha256", "classifier_version", "parser_version"],
+  "signals": ["fan_in", "entry_point", "shared_state", "public_interface", "one_way_door", "security_path", "churn", "tested", "gated"],
+  "knobs": ["is_trunk", "wide_downstream", "gated", "severe_if_broken", "instant_rollback"],
+  "knob_answers": ["yes", "no", "unknown"],
+  "consumer_fields": ["schema_version", "tier", "files[].path", "files[].tier"]
+}
