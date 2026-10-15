@@ -100,4 +100,93 @@ function detectSignals({ path: file, parser, text, hunks = [], fanIn, tested, ch
   };
 }
 
-module.exports = { SIGNAL_KEYS, SECURITY_RE, DOCS_RE, MIGRATION_RE, detectGating, detectSignals };
+const { globToRegExp } = require('../classify');
+const { maxTier } = require('./tier-config');
+
+const KNOB_KEYS = Object.freeze(['is_trunk', 'wide_downstream', 'gated', 'severe_if_broken', 'instant_rollback']);
+const FORCEABLE = Object.freeze([
+  ['one_way_door', 'one-way door'],
+  ['entry_point', 'entry point'],
+  ['shared_state', 'shared state'],
+  ['public_interface', 'public interface'],
+  ['security_path', 'security path'],
+]);
+
+function tierFor(entry, tc) {
+  const { path: file, signals } = entry;
+  const cp = tc.critical_paths.find((g) => globToRegExp(g).test(file)) || null;
+  if (!cp && DOCS_RE.test(file)) return { tier: 'leaf', reasons: ['docs only'] };
+  const forced = new Set(tc.trunk_signals);
+  let tier = 'leaf';
+  const reasons = [];
+  const raise = (t, why) => {
+    tier = maxTier(tier, t);
+    reasons.push(why);
+  };
+  if (cp) raise('trunk', `critical_paths override: ${cp}`);
+  for (const [key, label] of FORCEABLE) {
+    if (signals[key].value === true) raise(forced.has(key) ? 'trunk' : 'branch', `${label}: ${signals[key].rule}`);
+  }
+  const fi = signals.fan_in;
+  if (!fi.resolved) raise('branch', fi.rule);
+  else if (fi.value >= tc.fan_in_trunk) raise('trunk', `fan-in ${fi.value} >= ${tc.fan_in_trunk}`);
+  else if (fi.value >= tc.fan_in_branch) raise('branch', `fan-in ${fi.value} >= ${tc.fan_in_branch}`);
+  if (Number.isInteger(signals.churn.value) && signals.churn.value >= tc.churn_branch) raise('branch', `churn ${signals.churn.value} >= ${tc.churn_branch}`);
+  const source = entry.parser !== 'none' && !TEST_FILE.test(file) && entry.status !== 'deleted';
+  if (tc.untested_is_branch && source && signals.tested.value === false) raise('branch', 'untested: no test file imports it');
+  const lowerable = tier === 'branch' && signals.gated.value === true && fi.resolved && !cp
+    && signals.one_way_door.value !== true && signals.security_path.value !== true;
+  if (lowerable) return { tier: 'leaf', reasons: [...reasons, 'gated: lowered branch to leaf'] };
+  return { tier, reasons: reasons.length ? reasons : [`leaf: fan-in ${fi.value}, no trunk or branch signal`] };
+}
+
+const first3 = (files) => files.slice(0, 3).map((f) => f.path);
+const cite = (signal, files) => [`signal:${signal}`, ...first3(files)];
+
+function computeKnobs(files, tc) {
+  const code = files.filter((f) => !DOCS_RE.test(f.path));
+  const trunk = files.filter((f) => f.tier === 'trunk');
+  const branch = files.filter((f) => f.tier === 'branch');
+  const wide = code.filter((f) => Number.isInteger(f.downstream) && f.downstream >= tc.fan_in_trunk);
+  const unknownDown = code.filter((f) => f.downstream === null);
+  const ungated = code.filter((f) => f.signals.gated.value !== true);
+  const allGated = code.length > 0 && ungated.length === 0;
+  const doors = files.filter((f) => f.signals.one_way_door.value === true);
+  const security = files.filter((f) => f.signals.security_path.value === true);
+  const severe = [...new Set([...cite('security_path', security), ...first3(trunk), ...first3(doors)])];
+  return {
+    is_trunk: trunk.length ? { answer: 'yes', evidence: first3(trunk) } : { answer: 'no', evidence: cite('fan_in', files) },
+    wide_downstream: wide.length ? { answer: 'yes', evidence: cite('fan_in', wide) }
+      : unknownDown.length ? { answer: 'unknown', evidence: cite('fan_in', unknownDown) }
+        : { answer: 'no', evidence: cite('fan_in', code) },
+    gated: allGated ? { answer: 'yes', evidence: cite('gated', code) } : { answer: 'no', evidence: cite('gated', ungated) },
+    severe_if_broken: trunk.length || security.length || doors.length ? { answer: 'yes', evidence: severe }
+      : branch.length ? { answer: 'unknown', evidence: cite('fan_in', branch) }
+        : { answer: 'no', evidence: cite('fan_in', files) },
+    instant_rollback: doors.length ? { answer: 'no', evidence: cite('one_way_door', doors) }
+      : allGated ? { answer: 'yes', evidence: cite('gated', code) }
+        : { answer: 'unknown', evidence: ['signal:one_way_door', 'signal:gated'] },
+  };
+}
+
+const byPath = (a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0);
+const NO_CHURN = () => ({ value: null, rule: 'churn unknown: not computed' });
+
+function classifyTree(files, graph, tc, churnFn = NO_CHURN, coverageFn = () => null) {
+  const results = [...files].sort(byPath).map((f) => {
+    const covered = coverageFn(f.path);
+    const tested = covered === true || covered === false ? { value: covered, rule: 'coverage data' } : f.tested || graph.tested(f.path);
+    const signals = detectSignals({
+      path: f.path, parser: f.parser, text: f.text, hunks: f.hunks || [],
+      fanIn: f.fanIn || graph.fanIn(f.path), tested, churn: churnFn(f.path),
+      declaredEntry: Boolean(f.declaredEntry), flagNames: tc.flag_names,
+    });
+    const { tier, reasons } = tierFor({ path: f.path, status: f.status, parser: f.parser, signals }, tc);
+    const importers = f.importers || graph.importersOf(f.path);
+    const downstream = f.downstream !== undefined ? f.downstream : graph.downstream(f.path, tc.downstream_depth);
+    return { path: f.path, status: f.status, tier, reasons, parser: f.parser, signals, importers_top: importers.slice(0, 3), downstream };
+  });
+  return { tier: results.reduce((t, f) => maxTier(t, f.tier), 'leaf'), knobs: computeKnobs(results, tc), files: results };
+}
+
+module.exports = { SIGNAL_KEYS, KNOB_KEYS, SECURITY_RE, DOCS_RE, MIGRATION_RE, detectGating, detectSignals, classifyTree, computeKnobs };
