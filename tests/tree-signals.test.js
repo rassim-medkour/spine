@@ -30,6 +30,7 @@ test('entry point rules', () => {
   assert.equal(s({ path: 'tools/x.go', parser: 'go', text: 'package main\n' }).entry_point.value, true);
   assert.equal(s({ path: 'lib/x.js', parser: 'javascript', declaredEntry: true }).entry_point.rule, 'declared entry (package.json main/bin/exports)');
   assert.equal(s({ path: 'src/main.test.ts' }).entry_point.value, false);
+  assert.equal(s({ path: 'bin/run.js', parser: 'javascript', text: ['#!/usr/bin/env node', 'require.main === module;'].join(String.fromCharCode(10)) }).entry_point.value, false);
 });
 
 test('shared state, config or schema and security paths', () => {

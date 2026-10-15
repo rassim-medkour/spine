@@ -43,8 +43,7 @@ function entryPoint(file, text, declared) {
   if (typeof text !== 'string') return sig(false, 'no entry pattern');
   if (file.endsWith('.go') && /^package\s+main\b/m.test(text)) return sig(true, 'go package main');
   if (file.endsWith('.py') && /__name__\s*==\s*['"]__main__['"]/.test(text)) return sig(true, '__main__ guard');
-  if (/\brequire\.main\s*===\s*module\b/.test(text)) return sig(true, 'node CLI guard');
-  if (text.startsWith('#!')) return sig(true, 'shebang');
+  // Spike T-9 dropped the node CLI guard and shebang rules: shebang marked 30% of one local repo, far over the 5% cap.
   return sig(false, 'no entry pattern');
 }
 
