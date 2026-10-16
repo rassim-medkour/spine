@@ -122,3 +122,19 @@ test('CLI writes proof.json and exits 0 with ok false on a malformed tree.json',
   fs.writeFileSync(path.join(dir, 'tree.json'), '{ broken');
   assert.equal(JSON.parse(cli(['--run', dir]).stdout).ok, false);
 });
+
+test('a record scoped to one file does not satisfy a requirement spanning two', () => {
+  const { root, dir } = runDir();
+  const base = leafTree();
+  const second = { ...base.files[0], path: 'src/b.ts' };
+  const tree = { ...base, files: [...base.files, second] };
+  const lint = rec('lint', { command: 'npm run lint', exit_code: 0, status: 'ok' });
+  const partial = check({ runDir: dir, root, tree, records: [rec('test_run', PASS, { scope: ['src/a.ts'] }), lint] });
+  const gap = partial.missing.find((m) => m.requirement === 'test_run');
+  assert.ok(gap, 'scoped record leaves a gap');
+  assert.match(gap.reason, /src\/b\.ts/);
+  const union = check({ runDir: dir, root, tree, records: [rec('test_run', PASS, { scope: ['src/a.ts'] }), rec('test_run', PASS, { scope: ['src/b.ts'] }), lint] });
+  assert.equal(union.missing.find((m) => m.requirement === 'test_run'), undefined);
+  const whole = check({ runDir: dir, root, tree, records: [rec('test_run', PASS, { scope: undefined }), lint] });
+  assert.equal(whole.missing.find((m) => m.requirement === 'test_run'), undefined);
+});

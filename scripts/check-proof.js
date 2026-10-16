@@ -83,7 +83,10 @@ function checkProof({ runDir, root, tree, records, tc, noCheckout = false, findV
       missing.push(gap(requirement, judged.length ? judged[judged.length - 1].v.reason : 'no proof record'));
       continue;
     }
-    present.push({ requirement, record_ids: good.map((r) => r.id) });
+    const covered = new Set(good.flatMap((r) => scopeOf(r, tree)));
+    const uncovered = gap(requirement, '').files.filter((p) => !covered.has(p));
+    if (uncovered.length) missing.push(gap(requirement, `proof scope misses ${uncovered.join(', ')}`));
+    else present.push({ requirement, record_ids: good.map((r) => r.id) });
     if (!COVERING.has(requirement)) continue;
     for (const r of good) for (const p of scopeOf(r, tree)) covering[p] = [...new Set([...(covering[p] || []), r.id])].sort();
   }
