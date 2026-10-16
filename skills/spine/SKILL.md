@@ -333,6 +333,27 @@ downstream artifact and re-run. The Stop hook enforces this.
     gap; with it off, approval proceeds and the waiver records it. Then
     stage `done`, status `done`, delete `active.json`.
 
+### Opening a PR (after G3)
+
+Only after G3 is approved (stage `done`), and only when the human asks for a
+PR:
+
+1. Read the change tier from `<run>/tree.json` (`branch` when it is absent).
+   Write `<run>/pr-written.md` with the written sections: `## TL;DR` (at most
+   3 lines for leaf, 5 otherwise) for every tier; for branch and trunk also
+   `## The problem, with an example` with a before and an after; for trunk
+   also `## The design decision that shaped everything`, drawn from the spec's
+   owner decisions and the disagreements the owner resolved.
+2. Run `node <root>/scripts/pr-body.js --run <run>`. It checks the written
+   sections exist and fit the per-tier line caps, generates every other
+   section from the run's records (what changed, rollout, decisions to check,
+   how it was checked, not verified, how to test, and the risk and reading map
+   for trunk), and writes `<run>/pr-body.md`. Fix every error it prints and
+   run it again.
+3. Ask the human before opening the PR, then run
+   `gh pr create --title "<conventional commit title>" --body-file <run>/pr-body.md`.
+   The title and body carry no attribution or co-author lines.
+
 ### Live verification
 
 Tests prove the code; this proves the running app. It uses the repo's own
