@@ -116,3 +116,20 @@ test('PostToolUse fails open on an UNPROVEN review.json without missing_proof', 
   assert.equal(out.status, 0);
   assert.match(out.stdout, /missing_proof must be a non-empty array/);
 });
+
+test('a run marked spine_version >= 0.3.0 without tree.json is UNPROVEN, an unmarked run stays legacy', () => {
+  const r = oldRun();
+  const state = { id: '20260920-old-review', stage: 'review', status: 'active', awaiting: null, size: 'S', updated: '2026-09-20T10:00:00Z', host: 'claude-code', spine_version: '0.3.0' };
+  writeState(r.dir, state);
+  const run = () => spawnSync(process.execPath, [path.join(ROOT, 'scripts', 'verdict.js'), '--run', r.dir, '--write'], { cwd: r.root, encoding: 'utf8', env: cleanEnv({ SPINE_HOME: r.home }) });
+  const out = JSON.parse(run().stdout);
+  assert.equal(out.ok, true);
+  assert.equal(out.verdict, 'UNPROVEN');
+  assert.equal(out.legacy, false);
+  assert.equal(out.missing_proof[0].requirement, 'tree.json');
+  assert.deepEqual(validateArtifactFile(path.join(r.dir, 'review.json'), 'review.json'), []);
+  writeState(r.dir, { ...state, spine_version: '0.2.0' });
+  assert.equal(JSON.parse(run().stdout).legacy, true);
+  assert.equal(computeVerdict({ records: [], tree: null, proof: null, tc, treeExpected: true }).verdict, 'UNPROVEN');
+  assert.equal(computeVerdict({ records: [], tree: null, proof: null, tc: tierConfig({ risk_tiers: false }), treeExpected: true }).legacy, true);
+});

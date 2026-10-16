@@ -23,7 +23,7 @@ All artifacts for a run live in `<repo>/.spine/<id>/` (or the configured
 words joined by dashes. You are the only writer of:
 
 - `.spine/active.json`: `{ "id": "<id>" }`
-- `<run>/state.json`: `{ "id", "stage", "status", "awaiting", "size", "updated", "host" }`
+- `<run>/state.json`: `{ "id", "stage", "status", "awaiting", "size", "updated", "host", "spine_version" }`
   - `stage` is one of `intent`, `spec`, `plan`, `implement`, `review`, `done`.
   - `status` is `active`, `paused`, or `done`.
   - `awaiting` is `null`, `human`, `G1`, `G2`, or `G3`. Set it to the gate
@@ -39,6 +39,7 @@ words joined by dashes. You are the only writer of:
     every state write. If `state.json` already says `"cursor"`, say in one
     line that the run was last driven from Cursor and that one host should
     drive a run at a time, then continue.
+  - `spine_version` is the plugin version (`version` in `.claude-plugin/plugin.json`, for example `"0.3.0"`). Write it when you bootstrap a run, only if `state.json` has none; never change it later. A run with `spine_version` 0.3.0 or later that has no `tree.json` is `UNPROVEN` at review; a run without the field is a legacy run and keeps the v0.2.0 rules.
 - `<run>/class.json`: output of `node <root>/scripts/classify.js`.
 - `<run>/tree.json`, `<run>/diagnostics.json`, `<run>/classify.log`: written
   by `node <root>/scripts/tree.js --run <run> ...`, never by hand. tree.json
@@ -119,7 +120,7 @@ It writes `<run>/tree.json`, copies the change tier into `class.json` as
 proof record you write later carries it. If it prints `"disabled": true`, the
 repo set `"risk_tiers": false`; skip every tree, proof, verdict and
 reading-map step below and use the verdict rule exactly as v0.2.0 did. A run
-started before this version has no tree.json and is handled the same way.
+started before this version has no tree.json and no `spine_version` and is handled the same way; a run that has `spine_version` 0.3.0 or later but no tree.json is `UNPROVEN`, so run tree.js.
 
 Select providers per stage with:
 

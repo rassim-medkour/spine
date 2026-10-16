@@ -32,10 +32,22 @@ function findWaiver(records, missing) {
   return { record_id: last.id, covers_all: missing.every((m) => last.waives.includes(m.requirement)) };
 }
 
-function computeVerdict({ records, tree, proof, tc }) {
+const MISSING_TREE = Object.freeze({
+  requirement: 'tree.json', kinds: ['tree.json'], files: [],
+  hint: 'run scripts/tree.js --run <run>: this run was created on 0.3.0 or later and must have a tree.json',
+});
+
+// A run whose state.json carries spine_version >= 0.3.0 was created with risk tiers on.
+function expectsTree(state) {
+  const m = /^(\d+)\.(\d+)\.(\d+)/.exec(String((state && state.spine_version) || ''));
+  return Boolean(m) && (Number(m[1]) > 0 || Number(m[2]) >= 3);
+}
+
+function computeVerdict({ records, tree, proof, tc, treeExpected = false }) {
   const open = openFindings(records);
-  const legacy = !tc.enabled || !tree || !proof || proof.legacy;
-  const missing = legacy ? [] : proof.missing.map((m) => ({ requirement: m.requirement, kinds: m.kinds, tier: m.tier, files: m.files, hint: m.hint }));
+  const treeMissing = tc.enabled && !tree && treeExpected;
+  const legacy = !treeMissing && (!tc.enabled || !tree || !proof || proof.legacy);
+  const missing = treeMissing ? [MISSING_TREE] : legacy ? [] : proof.missing.map((m) => ({ requirement: m.requirement, kinds: m.kinds, tier: m.tier, files: m.files, hint: m.hint }));
   let verdict = 'PASS';
   if (open.some((r) => verifiedStrong(r, records))) verdict = 'FAIL';
   else if (missing.length) verdict = 'UNPROVEN';
@@ -43,7 +55,7 @@ function computeVerdict({ records, tree, proof, tc }) {
   if (legacy) return { verdict, legacy: true };
   const waiver = findWaiver(records, missing);
   return {
-    verdict, legacy: false, tier: tree.tier, missing_proof: missing,
+    verdict, legacy: false, tier: tree ? tree.tier : null, missing_proof: missing,
     proof_gate: tc.unproven_blocks ? 'enforce' : 'shadow',
     waiver,
     unproven_needs_waiver: verdict === 'UNPROVEN' && tc.unproven_blocks && !(waiver && waiver.covers_all),
@@ -54,7 +66,7 @@ function applyToReview(review, result) {
   const { tier, missing_proof: missingProof, ...rest } = review;
   const base = { ...rest, verdict: result.verdict };
   if (result.legacy) return base;
-  return { ...base, tier: result.tier, ...(result.missing_proof.length ? { missing_proof: result.missing_proof } : {}) };
+  return { ...base, ...(result.tier ? { tier: result.tier } : {}), ...(result.missing_proof.length ? { missing_proof: result.missing_proof } : {}) };
 }
 
 function loadTree(runDir) {
@@ -73,7 +85,8 @@ function main(argv, root = process.cwd()) {
   const records = listRecords(runDir).map((r) => r.record);
   const tree = loadTree(runDir);
   const proof = tree ? checkProof({ runDir, root, tree, records, tc, noCheckout: argv.includes('--no-checkout') }) : null;
-  const result = computeVerdict({ records, tree, proof, tc });
+  const treeExpected = expectsTree(readJson(path.join(runDir, 'state.json')));
+  const result = computeVerdict({ records, tree, proof, tc, treeExpected });
   if (!argv.includes('--write')) return { ok: true, ...result };
   const reviewPath = path.join(runDir, 'review.json');
   const review = readJson(reviewPath);
