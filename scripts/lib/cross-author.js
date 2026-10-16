@@ -101,4 +101,4 @@ function authorIndex(registries) {
   };
 }
 
-module.exports = { NO_AUTHOR_NOTE, evidenceKey, isFinding, groupFindings, pickVerifier, verifierPlan, daGateOpen, checkCrossAuthor, authorIndex };
+module.exports = { NO_AUTHOR_NOTE, evidenceKey, isFinding, groupFindings, pickVerifier, verifierPlan, daGateOpen, checkCrossAuthor, authorIndex, latestVerification };

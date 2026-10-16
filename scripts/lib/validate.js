@@ -156,6 +156,18 @@ function schemaFor(relPath) {
   return map[base] || null;
 }
 
+function validateReview(obj) {
+  const errors = validateJson(obj, loadSchema('review'));
+  if (errors.length) return errors;
+  const missing = obj.missing_proof;
+  if (obj.verdict === 'UNPROVEN' && (!Array.isArray(missing) || !missing.length)) errors.push('missing_proof must be a non-empty array when verdict is UNPROVEN');
+  (Array.isArray(missing) ? missing : []).forEach((m, i) => {
+    if (!Array.isArray(m.kinds) || !m.kinds.length) errors.push(`missing_proof[${i}].kinds must be a non-empty array`);
+    if (!Array.isArray(m.files)) errors.push(`missing_proof[${i}].files must be an array`);
+  });
+  return errors;
+}
+
 function validateArtifactFile(absPath, relPath = absPath) {
   const name = schemaFor(relPath);
   if (!name) return [];
@@ -165,14 +177,15 @@ function validateArtifactFile(absPath, relPath = absPath) {
   } catch {
     return [`cannot read ${relPath}`];
   }
-  if (name === 'record' || name === 'tree') {
+  if (name === 'record' || name === 'tree' || name === 'review') {
     let parsed;
     try {
       parsed = JSON.parse(text);
     } catch {
       return [`${relPath} is not valid JSON`];
     }
-    return name === 'record' ? validateRecord(parsed) : validateTree(parsed);
+    if (name === 'record') return validateRecord(parsed);
+    return name === 'tree' ? validateTree(parsed) : validateReview(parsed);
   }
   const schema = loadSchema(name);
   if (schema.kind === 'markdown') return validateMarkdown(text, schema);
@@ -183,4 +196,4 @@ function validateArtifactFile(absPath, relPath = absPath) {
   }
 }
 
-module.exports = { loadSchema, validateJson, validateMarkdown, validateRecord, validateTree, validateArtifactFile, schemaFor, parseFrontmatter };
+module.exports = { loadSchema, validateJson, validateMarkdown, validateRecord, validateTree, validateReview, validateArtifactFile, schemaFor, parseFrontmatter };
