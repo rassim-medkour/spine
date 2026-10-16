@@ -32,6 +32,7 @@ function leafTree() {
   return { ...t, tier: 'leaf', files: [{ ...t.files[1], path: 'src/a.ts', tier: 'leaf', reasons: ['leaf: fan-in 0, no trunk or branch signal'] }] };
 }
 
+const REV_EXPECTED = `${golden().inputs.head_sha}:${golden().inputs.diff_sha256}`;
 const noSkill = () => [];
 const check = (over) => checkProof({ tc, findVerify: noSkill, records: [], ...over });
 
@@ -49,6 +50,9 @@ test('stale proof stays a gap and names why', () => {
   const out = check({ runDir: dir, root, tree: leafTree(), records: [rec('test_run', PASS, { revision: `${'9'.repeat(40)}:x` })] });
   const gap = out.missing.find((m) => m.requirement === 'test_run');
   assert.match(gap.reason, /^stale/);
+  assert.ok(gap.reason.includes(REV_EXPECTED), 'names the expected revision');
+  assert.ok(gap.reason.includes('9'.repeat(40) + ':x'), 'names the record revision');
+  assert.match(gap.reason, /record-proof.js/);
   assert.deepEqual(gap.files, ['src/a.ts']);
   assert.ok(gap.hint.length > 0);
 });
@@ -71,7 +75,11 @@ test('trunk without a verify skill: live verify exempt as INFO, rollback section
   const out = check({ runDir: dir, root, tree: golden() });
   assert.ok(!out.required.includes('live_verify'));
   assert.deepEqual(out.info, [{ requirement: 'live_verify', exempt: true, reason: 'no project verify skill covers the trunk files' }]);
-  assert.equal(out.missing.find((m) => m.requirement === 'rollback_or_flag_plan').reason, 'no ## Rollback section');
+  const why = out.missing.find((m) => m.requirement === 'rollback_or_flag_plan').reason;
+  assert.match(why, /^no ## Rollback section/);
+  assert.match(why, /review.md/);
+  assert.match(why, /plan.md/);
+  assert.match(why, /record-proof.js/);
   fs.writeFileSync(path.join(dir, 'review.md'), '## Rollback\n\nRun `git revert HEAD`.\n');
   const after = check({ runDir: dir, root, tree: golden() });
   assert.ok(after.present.some((p) => p.requirement === 'rollback_or_flag_plan'));

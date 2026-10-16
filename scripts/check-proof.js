@@ -43,6 +43,12 @@ function hintFor(requirement, noCheckout, oneWayDoor) {
   return HINTS[requirement];
 }
 
+const NO_PLAN = 'no ## Rollback section';
+function explainPlanGap(reason) {
+  if (reason !== NO_PLAN) return reason;
+  return `${NO_PLAN}; looked in review.md and plan.md under the run dir; add one or run scripts/record-proof.js --run <run> --kind rollback_plan --from <file.md>`;
+}
+
 function scopeOf(record, tree) {
   const all = tree.files.map((f) => f.path);
   if (!Array.isArray(record.scope) || record.scope.includes('*')) return all;
@@ -74,7 +80,7 @@ function checkProof({ runDir, root, tree, records, tc, noCheckout = false, findV
     if (requirement === 'rollback_or_flag_plan') {
       const plan = checkRollbackPlan(planText, { oneWayDoor });
       if (plan.ok) present.push({ requirement, record_ids: [], source: 'review.md or plan.md ## Rollback' });
-      else missing.push(gap(requirement, plan.reason));
+      else missing.push(gap(requirement, explainPlanGap(plan.reason)));
       continue;
     }
     const judged = proofRecords.map((r) => ({ r, v: recordSatisfies(r, requirement, ctx) })).filter(({ v }) => v.reason !== 'other proof kind');

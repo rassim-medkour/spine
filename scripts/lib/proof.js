@@ -105,7 +105,7 @@ function kindOf(record) {
 function recordSatisfies(record, requirement, ctx) {
   const kind = kindOf(record);
   if (!(REQUIREMENTS[requirement] || []).includes(kind)) return { ok: false, reason: 'other proof kind' };
-  if (record.revision !== ctx.revision) return { ok: false, reason: `stale: not produced against ${String(ctx.revision).slice(0, 12)}` };
+  if (record.revision !== ctx.revision) return { ok: false, reason: `stale: expected revision ${ctx.revision}, record has ${record.revision === undefined ? 'none' : record.revision}; record it again with record-proof.js` };
   const result = record.result || {};
   if (result.status === 'timeout') return { ok: false, reason: 'command timed out' };
   if (result.status && result.status !== 'ok') return { ok: false, reason: `status ${result.status}` };
