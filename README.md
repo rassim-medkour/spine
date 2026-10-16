@@ -1,7 +1,7 @@
 # spine
 
-> **Status: alpha (0.2.0).** Commands, artifact shapes and gate behaviour may
-> change between minor versions. `master` is the alpha channel; pin `v0.2.0`
+> **Status: alpha (0.3.0).** Commands, artifact shapes and gate behaviour may
+> change between minor versions. `master` is the alpha channel; pin `v0.3.0`
 > for a fixed version.
 
 A gated, evidence-first engineering process for Claude Code. One plugin that
@@ -35,7 +35,7 @@ the [releases page](https://github.com/rassim-medkour/spine/releases) for
 what changed.
 
 Pin a version instead with
-`claude plugin marketplace add https://github.com/rassim-medkour/spine.git#v0.2.0`.
+`claude plugin marketplace add https://github.com/rassim-medkour/spine.git#v0.3.0`.
 Remove spine with `claude plugin uninstall spine@spine` and
 `claude plugin marketplace remove spine`.
 
