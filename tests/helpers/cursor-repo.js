@@ -1,6 +1,7 @@
 // tests/helpers/cursor-repo.js
 'use strict';
 const fs = require('node:fs');
+const { tmpDir } = require('./tmp');
 const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
@@ -10,7 +11,7 @@ const { cleanEnv } = require('./claude-cases');
 const ROOT = path.join(__dirname, '..', '..');
 const FIX = path.join(ROOT, 'tests', 'fixtures');
 const BASE = { id: '20260920-demo', status: 'active', awaiting: null, size: 'S', updated: '2026-09-20T10:00:00Z' };
-const tmp = (p) => fs.mkdtempSync(path.join(os.tmpdir(), p));
+const tmp = (p) => tmpDir(p);
 
 function cursorRepo(state, globalConfig = {}) {
   const root = tmp('spine-cur-');

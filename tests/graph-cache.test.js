@@ -2,13 +2,14 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
+const { tmpDir } = require('./helpers/tmp');
 const os = require('node:os');
 const path = require('node:path');
 const { execFileSync } = require('node:child_process');
 const { gitBlobSha, cachePath, loadCache, saveCache, CACHE_FORMAT } = require('../scripts/lib/graph-cache');
 const { PARSER_VERSION } = require('../scripts/lib/imports');
 
-const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'spine-cache-'));
+const tmp = () => tmpDir('spine-cache-');
 const KA = `typescript:${'a'.repeat(40)}`;
 const KB = `python:${'b'.repeat(40)}`;
 const entries = () => new Map([

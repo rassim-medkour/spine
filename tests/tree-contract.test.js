@@ -2,6 +2,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
+const { tmpDir } = require('./helpers/tmp');
 const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
@@ -71,8 +72,8 @@ test('the Stop gate never requires tree.json, reading-map.md or proof', () => {
 });
 
 function hookRepo() {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'spine-tree-hook-'));
-  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'spine-tree-home-'));
+  const root = tmpDir('spine-tree-hook-');
+  const home = tmpDir('spine-tree-home-');
   fs.mkdirSync(path.join(home, '.spine'));
   fs.writeFileSync(path.join(home, '.spine', 'config.json'), '{}');
   const id = '20261015-tree-hook';
