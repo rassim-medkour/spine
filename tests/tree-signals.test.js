@@ -97,3 +97,13 @@ test('flags.push is not a feature flag; added files are never gated by their own
   const modified = s({ path: 'scripts/lib/test-quality.js', parser: 'javascript', status: 'modified', hunks: [hunk("if (isEnabled('x')) {", '  flags.push(1);')] });
   assert.equal(modified.gated.value, true);
 });
+
+test('an added file with exports is public only by path or with an importer outside its directory', () => {
+  const h = [hunk('export function helper() {}')];
+  const base = { path: 'src/lib/helper.ts', hunks: h, status: 'added' };
+  assert.equal(s({ ...base, importers: [] }).public_interface.value, false);
+  assert.equal(s({ ...base, importers: ['src/lib/other.ts'] }).public_interface.value, false);
+  assert.equal(s({ ...base, importers: ['src/app/page.ts'] }).public_interface.value, true);
+  assert.equal(s({ ...base, path: 'src/api/helper.ts', importers: [] }).public_interface.value, true);
+  assert.equal(s({ ...base, status: 'modified', importers: [] }).public_interface.value, true);
+});

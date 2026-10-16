@@ -1,4 +1,5 @@
 'use strict';
+const path = require('node:path');
 const { TEST_FILE } = require('./graph');
 
 const SIGNAL_KEYS = Object.freeze(['fan_in', 'entry_point', 'shared_state', 'public_interface', 'one_way_door', 'security_path', 'churn', 'tested', 'gated']);
@@ -60,12 +61,13 @@ function oneWayDoor(file, text, hunks) {
   return hit ? sig(true, `data deletion: ${hit[0]}`) : sig(false, 'no one-way-door pattern');
 }
 
-function publicInterface(file, parser, hunks) {
+function publicInterface(file, parser, hunks, added = false, importers = []) {
   if (PUBLIC_PATH_RE.test(file)) return sig(true, 'public interface path');
   if (TEST_FILE.test(file)) return sig(false, 'test file');
   if (parser === 'go' && /(^|\/)internal\//.test(file)) return sig(false, 'go internal package');
   if (!hunks.length) return sig(false, 'no diff: path rule only');
   const re = EXPORT_CHANGE[parser];
+  if (added && !importers.some((i) => path.posix.dirname(i) !== path.posix.dirname(file))) return sig(false, 'new file: no importer outside its directory');
   const changed = hunks.flatMap((h) => [...h.added, ...h.removed]).map((l) => l.text);
   return re && changed.some((t) => re.test(t)) ? sig(true, 'changes an exported declaration') : sig(false, 'no exported declaration changed');
 }
@@ -95,13 +97,13 @@ function detectGating(hunks, flagNames = [], status = 'modified') {
   return every ? sig(true, 'flag conditional in every changed hunk') : sig(false, 'not detected');
 }
 
-function detectSignals({ path: file, parser, text, hunks = [], fanIn, tested, churn, declaredEntry = false, flagNames = [], status = 'modified' }) {
+function detectSignals({ path: file, parser, text, hunks = [], fanIn, tested, churn, declaredEntry = false, flagNames = [], status = 'modified', importers = [] }) {
   const docs = DOCS_RE.test(file);
   return {
     fan_in: { value: fanIn.value, resolved: fanIn.resolved, rule: fanIn.rule },
     entry_point: docs ? sig(false, 'docs file') : entryPoint(file, text, declaredEntry),
     shared_state: SHARED_STATE_RE.test(file) ? sig(true, 'shared state, config or schema path') : sig(false, 'no shared-state pattern'),
-    public_interface: docs ? sig(false, 'docs file') : publicInterface(file, parser, hunks),
+    public_interface: docs ? sig(false, 'docs file') : publicInterface(file, parser, hunks, status === 'added', importers),
     one_way_door: docs ? sig(false, 'docs file') : oneWayDoor(file, text, hunks),
     security_path: SECURITY_RE.test(file) ? sig(true, 'security path pattern') : sig(false, 'no security pattern'),
     churn: { value: churn.value, rule: churn.rule },
@@ -187,13 +189,13 @@ function classifyTree(files, graph, tc, churnFn = NO_CHURN, coverageFn = () => n
   const results = [...files].sort(byPath).map((f) => {
     const covered = coverageFn(f.path);
     const tested = covered === true || covered === false ? { value: covered, rule: 'coverage data' } : f.tested || graph.tested(f.path);
+    const importers = f.importers || graph.importersOf(f.path);
     const signals = detectSignals({
       path: f.path, parser: f.parser, text: f.text, hunks: f.hunks || [],
       fanIn: f.fanIn || graph.fanIn(f.path), tested, churn: churnFn(f.path),
-      declaredEntry: Boolean(f.declaredEntry), flagNames: tc.flag_names, status: f.status,
+      declaredEntry: Boolean(f.declaredEntry), flagNames: tc.flag_names, status: f.status, importers,
     });
     const { tier, reasons } = tierFor({ path: f.path, status: f.status, parser: f.parser, signals }, tc);
-    const importers = f.importers || graph.importersOf(f.path);
     const downstream = f.downstream !== undefined ? f.downstream : graph.downstream(f.path, tc.downstream_depth);
     return { path: f.path, status: f.status, tier, reasons, parser: f.parser, signals, importers_top: importers.slice(0, 3), downstream };
   });
