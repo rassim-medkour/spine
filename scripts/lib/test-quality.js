@@ -66,9 +66,31 @@ function matchBrace(text, open) {
   return text.length;
 }
 
+// True for every index inside a '...', "..." or `...` literal (quote characters excluded).
+function stringMask(src) {
+  const mask = new Array(src.length).fill(false);
+  let quote = null;
+  for (let i = 0; i < src.length; i += 1) {
+    const c = src[i];
+    if (!quote) {
+      if (c === '"' || c === "'" || c === '`') quote = c;
+    } else if (c === '\\') {
+      mask[i] = true;
+      if (i + 1 < src.length) mask[i + 1] = true;
+      i += 1;
+    } else if (c === quote || (c === '\n' && quote !== '`')) {
+      quote = null;
+    } else {
+      mask[i] = true;
+    }
+  }
+  return mask;
+}
+
 function jsFlags(text, changed) {
   const src = blankComments(text);
-  const starts = [...src.matchAll(JS_TEST_START)];
+  const inString = stringMask(src);
+  const starts = [...src.matchAll(JS_TEST_START)].filter((m) => !inString[m.index]);
   const flags = [];
   starts.forEach((m, k) => {
     const line = lineAt(src, m.index);

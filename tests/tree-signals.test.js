@@ -107,3 +107,8 @@ test('an added file with exports is public only by path or with an importer outs
   assert.equal(s({ ...base, path: 'src/api/helper.ts', importers: [] }).public_interface.value, true);
   assert.equal(s({ ...base, status: 'modified', importers: [] }).public_interface.value, true);
 });
+
+test('security path matches auth as a word, not cross-author or author', () => {
+  for (const p of ['scripts/check-cross-author.js', 'docs/author-guide.md', 'src/authors.ts', 'tests/cross-author.test.js']) assert.equal(s({ path: p }).security_path.value, false, p);
+  for (const p of ['src/auth/login.ts', 'src/oauth.ts', 'src/authz.js', 'src/AuthService.ts', 'src/password.ts']) assert.equal(s({ path: p }).security_path.value, true, p);
+});

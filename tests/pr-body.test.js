@@ -117,3 +117,21 @@ test('CLI refuses to run before G3 and writes pr-body.md after it', () => {
   assert.equal(out.tier, 'branch');
   assert.match(fs.readFileSync(path.join(runDir, 'pr-body.md'), 'utf8'), /^## TL;DR/);
 });
+
+test('How to test lists only commands from passing records', () => {
+  const failed = { id: 'R-0003', stage: 'review', agent: 'spine:proof', claim: 'lint', evidence: [{ kind: 'command', ref: 'npm run lint' }], confidence: 1, severity: 'INFO', proof_kind: 'lint', result: { command: 'npm run lint', exit_code: 1, status: 'ok' } };
+  const base = data('leaf');
+  const out = buildPrBody(data('leaf', { records: [...base.records, failed] }), WRITTEN);
+  assert.ok(out.ok, out.errors.join('; '));
+  assert.match(out.body, /`npm test`/);
+  assert.ok(!out.body.includes('npm run lint'));
+});
+
+test('the body never links gitignored .spine/ paths', () => {
+  const many = Array.from({ length: 30 }, (_, i) => ({ ref: `src/f${i}.ts:1-2`, reasons: ['trunk'] }));
+  const rm = { totals: { read_yourself: { hunks: 30, minutes: 9 }, whole: { minutes: 20 } }, groups: { read_yourself: many } };
+  const out = buildPrBody(data('trunk', { readingMap: rm }), WRITTEN);
+  assert.ok(out.ok, out.errors.join('; '));
+  assert.ok(!out.body.includes('.spine/'), 'no .spine/ path in the body');
+  assert.match(out.body, /src\/f0\.ts:1-2/);
+});

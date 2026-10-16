@@ -65,7 +65,7 @@ function genReadingMap(data) {
   if (!rm) return [...head, '- Reading map: not generated.'];
   return [
     ...head,
-    `- Read yourself: ${rm.totals.read_yourself.hunks} hunks, about ${rm.totals.read_yourself.minutes} min (whole diff ${rm.totals.whole.minutes} min). Full map: \`${data.runRel}/reading-map.md\``,
+    `- Read yourself: ${rm.totals.read_yourself.hunks} hunks, about ${rm.totals.read_yourself.minutes} min (whole diff ${rm.totals.whole.minutes} min).`,
     ...rm.groups.read_yourself.map((e, i) => `${i + 1}. \`${e.ref}\` · ${e.reasons.join(', ')}`),
   ];
 }
@@ -113,7 +113,7 @@ function genNotVerified(data) {
 }
 
 function genHowToTest(data) {
-  const cmds = [...new Set(data.records.filter((r) => r.proof_kind && r.result && typeof r.result.command === 'string').map((r) => r.result.command))];
+  const cmds = [...new Set(data.records.filter((r) => r.proof_kind && r.result && r.result.exit_code === 0 && typeof r.result.command === 'string').map((r) => r.result.command))];
   return cmds.map((c) => `- \`${c.replace(/`/g, "'")}\``);
 }
 
@@ -132,7 +132,7 @@ function capRows(rows, cap, note) {
 }
 
 function generated(s, data, cap) {
-  const note = `see ${data.runRel}`;
+  const note = 'list capped';
   if (s.key === 'changed') {
     const header = ['| Area | Files | Lines | Tier | What |', '|---|---|---|---|---|'];
     const rows = genChanged(data);

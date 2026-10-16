@@ -4,7 +4,7 @@ const { TEST_FILE } = require('./graph');
 
 const SIGNAL_KEYS = Object.freeze(['fan_in', 'entry_point', 'shared_state', 'public_interface', 'one_way_door', 'security_path', 'churn', 'tested', 'gated']);
 // Same pattern as SECURITY_RE in scripts/classify.js (pinned by tests/tree-signals.test.js).
-const SECURITY_RE = /(auth|login|password|token|secret|upload|payment|billing|crypto)/i;
+const SECURITY_RE = /(auth(?!or)|login|password|token|secret|upload|payment|billing|crypto)/i;
 const DOCS_RE = /(^|\/)docs\/|\.(md|markdown|rst|txt)$/i;
 const ENTRY_ANYWHERE_RE = /(^|\/)(main|server|cli|manage|wsgi|asgi|__main__)\.(py|[cm]?[jt]sx?|go)$/;
 const ENTRY_SHALLOW_RE = /^([^/]+\/)?(index|app)\.(py|[cm]?[jt]sx?)$/;

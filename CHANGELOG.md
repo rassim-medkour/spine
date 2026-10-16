@@ -33,7 +33,8 @@ and the manual Cursor smoke test is pending (checklist in
 
 - [both] Fan-in is module-level; there is no call graph and no language server.
 - [both] Reading times are estimates from fixed lines-per-minute rates.
-- [both] An older spine install reading a review.json with `UNPROVEN` reports a schema problem (it never blocks).
+- [both] An older spine install does not know the `UNPROVEN` verdict: its validator reports a review.json carrying it as a schema problem and asks for a fix, so it can hold up the review step until the file is edited by hand. Pin one version per repo.
+- [both] tree.json is not always reproducible: when `tree_budget_ms` is exceeded the tree is partial (unknown fan-in, never leaf), so a re-run on the same revision can produce a different tree.json.
 - [both] Seven baseline-pinned test files still leak temporary directories.
 
 ## 0.2.0

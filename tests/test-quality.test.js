@@ -83,3 +83,14 @@ test('test calls inside a template literal are strings, not tests', () => {
   const src = "const code = `\ntest('x', () => { run(); });\n`;\n";
   assert.deepEqual(findHollowTests('src/gen.test.js', src), []);
 });
+
+test('test calls inside string and template literals are not tests', () => {
+  const nl = String.fromCharCode(10);
+  const text = [
+    "const a = \"test('x', () => { run(); })\";",
+    "const b = 'it(\"y\", () => { run(); })';",
+    'const c = `test("z", () => { run(); })`;',
+    '',
+  ].join(nl);
+  assert.deepEqual(findHollowTests('src/fixture.test.js', text), []);
+});
