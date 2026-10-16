@@ -108,7 +108,10 @@ test('an added file with exports is public only by path or with an importer outs
   assert.equal(s({ ...base, status: 'modified', importers: [] }).public_interface.value, true);
 });
 
-test('security path matches auth as a word, not cross-author or author', () => {
-  for (const p of ['scripts/check-cross-author.js', 'docs/author-guide.md', 'src/authors.ts', 'tests/cross-author.test.js']) assert.equal(s({ path: p }).security_path.value, false, p);
-  for (const p of ['src/auth/login.ts', 'src/oauth.ts', 'src/authz.js', 'src/AuthService.ts', 'src/password.ts']) assert.equal(s({ path: p }).security_path.value, true, p);
+// Same pattern as classify.js (kept identical to master for REQ-2). Over-matching "author" is accepted:
+// a false security signal only adds review depth, while missing "authorization" would remove it.
+test('security path matches every auth* path, including authorization, authorize and authority', () => {
+  for (const p of ['src/auth/login.ts', 'src/oauth.ts', 'src/authz.js', 'src/AuthService.ts', 'src/password.ts',
+    'src/authorization/policy.js', 'src/authorize.ts', 'src/authority.go']) assert.equal(s({ path: p }).security_path.value, true, p);
+  assert.equal(s({ path: 'src/widgets/button.ts' }).security_path.value, false);
 });

@@ -4,7 +4,7 @@ const { loadConfig } = require('./lib/state');
 const { churnCounts } = require('./lib/churn');
 
 const SERVICE_ROOTS = new Set(['services', 'apps', 'packages']);
-const SECURITY_RE = /(auth(?!or)|login|password|token|secret|upload|payment|billing|crypto)/i;
+const SECURITY_RE = /(auth|login|password|token|secret|upload|payment|billing|crypto)/i;
 const DATABASE_RE = /(migrat|schema|\.sql$)/i;
 const CHURN_CRITICAL = 20;
 const LANG_BY_EXT = { '.py': 'python', '.ts': 'typescript', '.tsx': 'typescript', '.js': 'javascript', '.jsx': 'javascript', '.go': 'go', '.rs': 'rust' };
