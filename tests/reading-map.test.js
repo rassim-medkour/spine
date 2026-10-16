@@ -163,3 +163,14 @@ test('the rendered map and summary hold references only, never source text', () 
   assert.equal(s.g3, `tier trunk · verdict UNPROVEN · read yourself 4 hunks, ${s.minutes.read_yourself} min (whole diff ${s.minutes.whole} min) · .spine/20261015-x/reading-map.md`);
   assert.ok(!JSON.stringify(s).includes('SECRET_VALUE_42'));
 });
+
+test('a covered, tested leaf test file is skimmed, never skipped', () => {
+  const diff = ['diff --git a/tests/leaf.test.ts b/tests/leaf.test.ts', '--- a/tests/leaf.test.ts', '+++ b/tests/leaf.test.ts', '@@ -1 +1 @@', '-x', '+y', ''].join(String.fromCharCode(10));
+  const out = classifyTree([input('tests/leaf.test.ts')], null, tc, () => ({ value: 0, rule: 'commits in 90 days' }));
+  const tree = { schema_version: 1, tier: out.tier, inputs: golden.inputs, knobs: out.knobs, files: out.files };
+  const proof = { missing: [], covering: { 'tests/leaf.test.ts': ['R-0001'] } };
+  const map = buildReadingMap({ diffFiles: parseDiff(diff), tree, records: [], proof, tc });
+  assert.equal(out.files[0].tier, 'leaf');
+  assert.equal(map.groups.skip.length, 0);
+  assert.deepEqual(map.groups.skim.map((e) => [e.ref, e.reason]), [['tests/leaf.test.ts:1-1', 'test file: tests changed are never skipped']]);
+});

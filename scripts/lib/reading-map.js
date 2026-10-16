@@ -2,6 +2,7 @@
 const { isFinding } = require('./cross-author');
 const { hunkLineCount } = require('./diff');
 const { DOCS_RE } = require('./tiers');
+const { TEST_FILE } = require('./graph');
 
 const REASON_ORDER = Object.freeze(['one-way door', 'open dissent', 'no proof', 'trunk', 'low-confidence finding', 'hollow test']);
 const TOUCHES = Object.freeze([['shared_state', 'state/config/schema'], ['one_way_door', 'one-way door'], ['public_interface', 'public interface'], ['security_path', 'security path']]);
@@ -107,6 +108,7 @@ function place(h, file, ctx, groups) {
   const { reasons, cited } = reasonsFor(h, file, ctx.cites, ctx.gapFiles);
   if (reasons.length) return groups.read_yourself.push(readEntry(h, ref, file, reasons, cited, proofIds));
   if (DOCS_RE.test(h.path)) return groups.skim.push({ ref, path: h.path, start: h.start, lines: h.lines, reason: 'docs only' });
+  if (TEST_FILE.test(h.path)) return groups.skim.push({ ref, path: h.path, start: h.start, lines: h.lines, reason: 'test file: tests changed are never skipped' });
   if (file && file.tier === 'leaf' && file.signals.tested.value === true && proofIds.length) return groups.skip.push({ ref, path: h.path, start: h.start, lines: h.lines, evidence: proofIds });
   const why = skimReason(file);
   if (why) return groups.skim.push({ ref, path: h.path, start: h.start, lines: h.lines, reason: why });
