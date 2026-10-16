@@ -212,6 +212,7 @@ each other before anything reaches you.
 |---|---|
 | `PASS` | No findings above INFO. |
 | `PASS_WITH_ADVISORIES` | Only MEDIUM or lower remain. Safe to merge, with notes. |
+| `UNPROVEN` | Required proof for the change tier is missing; the summary names each proof gap. In 0.3.0 this is shadow mode: G3 can still approve, and the approval is recorded as a waiver. |
 | `FAIL` | A verified CRITICAL or HIGH is still open. Fix before merging. |
 
 Unresolved disagreements become tickets of kind spike, test or question.
@@ -257,6 +258,98 @@ app, and records the evidence. No verify skill means one `INFO` record
 suggesting `/pstack:create-verification-skill`; spine never generates or edits
 that skill. PR reviews via `gh pr diff` skip it, since the code is not on disk.
 
+## Risk tiers, proof and the reading map
+
+Spine sizes a change by where it sits, not only by how big it is.
+`scripts/tree.js` gives every changed file a file tier from nine signals and
+writes them to `.spine/<run>/tree.json`:
+
+| File tier | When | What it needs |
+|---|---|---|
+| `trunk` | a `critical_paths` match, a one-way door (migration, data deletion, external contract), an entry point, or fan-in at or above the trunk threshold | branch proof plus a rollback or flag plan, the test-quality check, a migration dry-run when a migration changed, and live verification when a verify skill covers it |
+| `branch` | shared state, config or schema, a public interface, a security path, fan-in at or above the branch threshold, unknown fan-in, high churn, or no test imports it | leaf proof plus integration tests or runtime logs |
+| `leaf` | everything else; a branch file gated behind a feature flag is lowered to leaf (trunk never is) | a test run and a lint or type check |
+
+The change tier is the highest file tier, so a one-line edit to a shared
+module outranks 300 lines in a new isolated file. Fan-in comes from import
+parsers for Python, TypeScript, JavaScript and Go, plus a generic line-pattern
+fallback for every other language. A file whose fan-in cannot be worked out is
+never leaf.
+
+Agents run the proof commands and record them; `scripts/check-proof.js`
+checks the records against the change tier, `scripts/verdict.js` computes the
+verdict (`FAIL` > `UNPROVEN` > `PASS_WITH_ADVISORIES` > `PASS`) and
+`scripts/reading-map.js` writes `.spine/<run>/reading-map.md`: every hunk is
+sorted into read-yourself, skim or skip, with reasons, importers, the evidence
+that covers it, and reading times next to the time for the whole diff. After
+G3, `scripts/pr-body.js` turns the run into a PR description.
+
+### tree.json contract
+
+<!-- tree-contract:start -->
+Later features (for example model routing) read only `schema_version`,
+`tier`, `files[].path` and `files[].tier`; a breaking change to those bumps
+`schema_version`.
+
+- Top level, in this order: `schema_version` (1), `tier` (change tier),
+  `inputs`, `knobs`, `files`.
+- `inputs`: `base_sha`, `head_sha`, `diff_sha256`, `config_sha256`,
+  `classifier_version`, `parser_version`. Compare them to detect a stale tier
+  without reclassifying.
+- `knobs`: `is_trunk`, `wide_downstream`, `gated`, `severe_if_broken`,
+  `instant_rollback`, each `{ "answer": "yes" | "no" | "unknown", "evidence": [...] }`.
+- `files[]`: `path`, `status`, `tier`, `reasons`, `parser`, `signals`,
+  `importers_top`, `downstream`.
+- `signals`: `fan_in`, `entry_point`, `shared_state`, `public_interface`,
+  `one_way_door`, `security_path`, `churn`, `tested`, `gated`, each
+  `{ "value", "rule" }` (`fan_in` adds `resolved`).
+<!-- tree-contract:end -->
+
+### Turning it off, and old runs
+
+Set `"risk_tiers": false` in `~/.spine/config.json` or the repo config: no
+tree.json, no `UNPROVEN`, no proof requirement, and review.json in its 0.2.0
+shape. Set `"unproven_blocks": true` to make G3 refuse an `UNPROVEN` review
+unless the human waives every gap. Runs started on 0.2.0 keep the old verdict
+rules. An older spine install that reads a review.json with `UNPROVEN` reports
+a schema problem in its PostToolUse message and never blocks; pin one version
+across machines.
+
+### Keep run files out of git
+
+`.spine/` is already ignored in this repo. If you commit `.spine/`, ignore at
+least the diff, evidence and cache, which can contain secrets or large files:
+
+```gitignore
+.spine/*/diff.patch
+.spine/*/evidence/
+.spine/cache/
+```
+
+### The generated PR description
+
+After G3, the skill writes the sections only a person can know to
+`.spine/<run>/pr-written.md`, then `scripts/pr-body.js --run <run>` checks them
+and generates the rest from the run's records into `pr-body.md`. The sections
+depend on the change tier, and each has a line cap per tier that the script
+enforces. `.github/pull_request_template.md` has the same headings for PRs
+written by hand.
+
+| Section | Source | leaf | branch | trunk |
+|---|---|---|---|---|
+| Risk and reading map | generated: the four review-knob answers, then what to read yourself with minutes | | | first |
+| TL;DR | written, at most 5 lines | yes | yes | yes |
+| The problem, with an example | written, a before and an after | | yes | yes |
+| The design decision that shaped everything | written | | | yes |
+| What changed | generated: a table by area | yes | yes | yes |
+| Rollout / switch order | generated from the rollback or flag plan | | | yes |
+| Decisions to check | generated from open dissent, devil's advocate records and spec assumptions | | yes | yes |
+| How it was checked | generated from review.json and the proof records | yes | yes | yes |
+| Not verified | generated from proof gaps, unverified-only evidence and skipped checks | when it has content | yes | yes |
+| How to test | generated: the commands from the proof records | yes | yes | yes |
+
+"Not verified" is never left out when it has content, at any tier.
+
 ## Spine's own parts
 
 | Part | Kind | What it does |
@@ -270,6 +363,11 @@ that skill. PR reviews via `gh pr diff` skip it, since the code is not on disk.
 | `boundary-checker` | agent | Compares a stage file with the one before it and reports PASS or drift with line numbers. Never fixes. |
 | `devils-advocate` | agent | Builds the strongest case against what reviewers agreed on. |
 | `synthesis` | agent | Merges a stage's records into agreement, disagreement and blind spots. Adds no findings. |
+| `scripts/tree.js` | script | Writes tree.json: file tiers, signals, change tier, review knobs. |
+| `scripts/check-proof.js` | script | Lists required, present and missing proof for the change tier. |
+| `scripts/verdict.js` | script | Computes the verdict and writes it into review.json. |
+| `scripts/reading-map.js` | script | Writes the reading map and the G3 summary line. |
+| `scripts/pr-body.js` | script | Builds the PR description from the run after G3. |
 
 ## Configuration
 
@@ -281,7 +379,17 @@ that skill. PR reviews via `gh pr diff` skip it, since the code is not on disk.
   "lens_budget": 6,
   "second_model": false,
   "render_artifacts": false,
-  "critical_paths": ["src/payments/**"]
+  "critical_paths": ["src/payments/**"],
+  "risk_tiers": true,
+  "unproven_blocks": false,
+  "tiers": {
+    "fan_in_trunk": 8,
+    "fan_in_branch": 2,
+    "flag_names": ["FEATURE_FLAGS"],
+    "reading_rates": { "read_yourself": 20, "skim": 80, "whole": 40 },
+    "evidence_cap_bytes": 1048576,
+    "proof_timeout_seconds": 600
+  }
 }
 ```
 
@@ -293,6 +401,19 @@ that skill. PR reviews via `gh pr diff` skip it, since the code is not on disk.
   never dropped, since they are always inserted first).
 - `critical_paths` globs use forward slashes only; Windows-style backslash
   paths never match.
+- `risk_tiers` (default true) is the kill switch: false turns off tree.json,
+  required proof, `UNPROVEN` and the reading map, and reviews behave as in 0.2.0.
+- `unproven_blocks` (default false, shadow mode) makes G3 refuse an `UNPROVEN`
+  review unless the human waives every proof gap. Off, G3 can approve and the
+  approval is recorded as a waiver.
+- `tiers.fan_in_trunk` and `tiers.fan_in_branch` are the importer counts at
+  which a file becomes trunk or branch.
+- `tiers.flag_names` lists your feature-flag helper names so a flagged branch
+  file can be lowered to leaf.
+- `tiers.reading_rates` are lines per minute for read-yourself, skim and the
+  whole diff; they only change the minutes shown in the reading map.
+- `tiers.evidence_cap_bytes` caps each saved proof file;
+  `tiers.proof_timeout_seconds` is the longest a proof command may run.
 - `npm test` is `node --test "tests/**/*.test.js"` (not `node --test tests/`)
   because a bare directory argument fails on Node 22 on Windows.
 
@@ -306,6 +427,12 @@ on a run, a repo config with `strictness: "warn"`, and the self-written
 without the condition they claim to be true actually holding. `hooks.log`
 records every hook decision so these trust points are at least auditable
 after the fact.
+
+Risk tiers are an estimate, not a call graph: fan-in is module-level only
+(who imports a file, not who calls a function). Dedicated import parsers cover
+Python, TypeScript, JavaScript and Go; other languages use a line-pattern
+fallback. Reading times come from fixed rates. `UNPROVEN` is advisory (shadow
+mode) in 0.3.0 unless you set `"unproven_blocks": true`.
 
 ## Reporting issues
 
