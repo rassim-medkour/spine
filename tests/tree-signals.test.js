@@ -78,7 +78,8 @@ test('flag gating is conservative', () => {
   assert.equal(detectGating([hunk("if (client.variation('new_checkout')) {")], []).value, false);
   assert.equal(detectGating([hunk('if (FEATURE_NEW_UI) {'), hunk('run();')], []).value, false, 'every hunk must be gated');
   assert.deepEqual(detectGating([], []), { value: false, rule: 'not detected: no diff' });
-  assert.equal(detectGating([hunk('const x = a?.b;', 'if (flags.newUi) {')], []).value, true);
+  assert.equal(detectGating([hunk('if (flags.newUi) {', 'const x = a?.b;')], []).value, true);
+  assert.equal(detectGating([hunk('const x = a?.b;', 'if (flags.newUi) {')], []).value, false, 'gate must precede the other added lines');
   assert.equal(detectGating([hunk('const y = cfg?.flags;')], []).value, false);
 });
 
@@ -86,4 +87,13 @@ test('churn, tested and fan_in pass through unchanged', () => {
   const out = s({ path: 'src/a.ts', churn: { value: null, rule: 'churn unknown: shallow clone' }, fanIn: { value: null, resolved: false, rule: 'fan-in unknown: binary file' } });
   assert.deepEqual(out.churn, { value: null, rule: 'churn unknown: shallow clone' });
   assert.deepEqual(out.fan_in, { value: null, resolved: false, rule: 'fan-in unknown: binary file' });
+});
+
+test('flags.push is not a feature flag; added files are never gated by their own content', () => {
+  assert.equal(detectGating([hunk('const flags = [];', 'flags.push(x);', 'if (a && b) {')], []).value, false);
+  assert.equal(detectGating([hunk('flags.newUi && render();')], []).value, false, 'bare flags.x outside an if-condition');
+  const added = s({ path: 'scripts/lib/test-quality.js', parser: 'javascript', status: 'added', hunks: [hunk("if (isEnabled('x')) {", '  flags.push(1);')] });
+  assert.equal(added.gated.value, false);
+  const modified = s({ path: 'scripts/lib/test-quality.js', parser: 'javascript', status: 'modified', hunks: [hunk("if (isEnabled('x')) {", '  flags.push(1);')] });
+  assert.equal(modified.gated.value, true);
 });

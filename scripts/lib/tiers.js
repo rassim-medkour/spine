@@ -25,7 +25,8 @@ const EXPORT_CHANGE = Object.freeze({
   python: /^(async\s+def|def|class)\s+[A-Za-z]\w*/,
   go: /^(func|type|var|const)\s+(\([^)]*\)\s*)?[A-Z]/,
 });
-const DEFAULT_FLAG_RE = /\b(isEnabled|featureFlag|flags\.[A-Za-z_]\w*|FEATURE_[A-Z0-9_]+)\b/;
+const DEFAULT_FLAG_RE = /\b(isEnabled|featureFlag|FEATURE_[A-Z0-9_]+)\b/;
+const FLAGS_PROPERTY_IN_CONDITION = /\b(?:if|elif|unless|when)\b.*\bflags\.[A-Za-z_]\w*/;
 const COMMENT_LINE = /^\s*(\/\/|#|\/\*|\*|--)/;
 const CONDITIONAL = /\b(if|elif|unless|when|switch|case)\b|&&|\|\||\?(?!\.)[^:]*:/;
 
@@ -74,18 +75,27 @@ function lineGated(text, names) {
   const code = stripTrailingComment(text);
   const bare = stripStrings(code);
   if (!CONDITIONAL.test(bare)) return false;
-  if (DEFAULT_FLAG_RE.test(bare)) return true;
+  if (DEFAULT_FLAG_RE.test(bare) || FLAGS_PROPERTY_IN_CONDITION.test(bare)) return true;
   const callOrProperty = /\w\s*\(|\.\w/.test(bare);
   return callOrProperty && names.some((n) => new RegExp(`(['"\`])${escapeRe(n)}\\1|\\b${escapeRe(n)}\\b`).test(code));
 }
 
-function detectGating(hunks, flagNames = []) {
+const isCodeLine = (l) => l.text.trim() !== '' && !COMMENT_LINE.test(l.text);
+
+// The gate must lead the hunk's added code (precede or wrap the other added lines).
+const hunkGated = (h, names) => {
+  const lead = h.added.find(isCodeLine);
+  return Boolean(lead) && lineGated(lead.text, names);
+};
+
+function detectGating(hunks, flagNames = [], status = 'modified') {
+  if (status === 'added') return sig(false, 'new file: not gated by its own content');
   if (!hunks.length) return sig(false, 'not detected: no diff');
-  const every = hunks.every((h) => h.added.some((l) => lineGated(l.text, flagNames)));
+  const every = hunks.every((h) => hunkGated(h, flagNames));
   return every ? sig(true, 'flag conditional in every changed hunk') : sig(false, 'not detected');
 }
 
-function detectSignals({ path: file, parser, text, hunks = [], fanIn, tested, churn, declaredEntry = false, flagNames = [] }) {
+function detectSignals({ path: file, parser, text, hunks = [], fanIn, tested, churn, declaredEntry = false, flagNames = [], status = 'modified' }) {
   const docs = DOCS_RE.test(file);
   return {
     fan_in: { value: fanIn.value, resolved: fanIn.resolved, rule: fanIn.rule },
@@ -96,7 +106,7 @@ function detectSignals({ path: file, parser, text, hunks = [], fanIn, tested, ch
     security_path: SECURITY_RE.test(file) ? sig(true, 'security path pattern') : sig(false, 'no security pattern'),
     churn: { value: churn.value, rule: churn.rule },
     tested: { value: tested.value, rule: tested.rule },
-    gated: docs ? sig(false, 'docs file') : detectGating(hunks, flagNames),
+    gated: docs ? sig(false, 'docs file') : detectGating(hunks, flagNames, status),
   };
 }
 
@@ -180,7 +190,7 @@ function classifyTree(files, graph, tc, churnFn = NO_CHURN, coverageFn = () => n
     const signals = detectSignals({
       path: f.path, parser: f.parser, text: f.text, hunks: f.hunks || [],
       fanIn: f.fanIn || graph.fanIn(f.path), tested, churn: churnFn(f.path),
-      declaredEntry: Boolean(f.declaredEntry), flagNames: tc.flag_names,
+      declaredEntry: Boolean(f.declaredEntry), flagNames: tc.flag_names, status: f.status,
     });
     const { tier, reasons } = tierFor({ path: f.path, status: f.status, parser: f.parser, signals }, tc);
     const importers = f.importers || graph.importersOf(f.path);
