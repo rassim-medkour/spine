@@ -21,7 +21,7 @@ function section(text, heading) {
   return next < 0 ? rest : rest.slice(0, next);
 }
 
-const BANNED_SYNONYMS = [/\bcheckpoints?\b/i, /\bmilestones?\b/i, /\bphase gates?\b/i, /\bapproval points?\b/i, /\bt-shirt size\b/i, /\btiers?\b/i, /\bfinding files?\b/i, /\brun key\b/i, /\bsession id\b/i];
+const BANNED_SYNONYMS = [/\bcheckpoints?\b/i, /\bmilestones?\b/i, /\bphase gates?\b/i, /\bapproval points?\b/i, /\bt-shirt size\b/i, /\bsize tiers?\b/i, /\btier [SML]\b/, /\bfinding files?\b/i, /\brun key\b/i, /\bsession id\b/i];
 const GLOSSARY_ANCHORS = [
   '`stage` is one of `intent`, `spec`, `plan`, `implement`, `review`, `done`.',
   '`awaiting` is `null`, `human`, `G1`, `G2`, or `G3`.',

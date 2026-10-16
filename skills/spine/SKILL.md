@@ -40,6 +40,16 @@ words joined by dashes. You are the only writer of:
     line that the run was last driven from Cursor and that one host should
     drive a run at a time, then continue.
 - `<run>/class.json`: output of `node <root>/scripts/classify.js`.
+- `<run>/tree.json`, `<run>/diagnostics.json`, `<run>/classify.log`: written
+  by `node <root>/scripts/tree.js --run <run> ...`, never by hand. tree.json
+  holds each changed file's file tier (`trunk`, `branch` or `leaf`), its nine
+  signals, the change tier (the highest file tier) and the four review-knob
+  answers.
+- `<run>/diff.patch` is the exact diff under review. `<run>/evidence/` holds
+  proof payloads saved with `save-evidence.js`. `<run>/proof.json`,
+  `<run>/reading-map.md` and `<run>/reading-map.json` are written by
+  `check-proof.js` and `reading-map.js`. `<run>/pr-written.md` and
+  `<run>/pr-body.md` hold the PR description (see "Opening a PR (after G3)").
 - `<run>/records/R-NNNN.json`: one file per record. Get the next id by
   listing the directory; ids are zero-padded to four digits.
 - Stage artifacts: `intent.md`, `spec.md`, `tickets.json`, `plan.md`,
@@ -96,6 +106,20 @@ Write the output to `<run>/class.json`. It decides:
 | `size` L | three providers, all three workflows, council on the spec |
 | `blast_radius` critical | security lens on, devils advocate on |
 | `devils_advocate` true | pass `devilsAdvocate: true` to the review workflow |
+| `tier` trunk (from tree.js) | required proof adds a rollback or flag plan and the test-quality check; every trunk hunk is read-yourself |
+
+Then compute the file tier of the same files:
+
+```bash
+node <root>/scripts/tree.js --run <run> --files <same comma-separated files>
+```
+
+It writes `<run>/tree.json`, copies the change tier into `class.json` as
+`tier`, and prints `{ ok, tier, files, revision }`. Keep `revision`: every
+proof record you write later carries it. If it prints `"disabled": true`, the
+repo set `"risk_tiers": false`; skip every tree, proof, verdict and
+reading-map step below and use the verdict rule exactly as v0.2.0 did. A run
+started before this version has no tree.json and is handled the same way.
 
 Select providers per stage with:
 
@@ -209,8 +233,12 @@ downstream artifact and re-run. The Stop hook enforces this.
 
 1. Bootstrap the run (see above).
 2. Compute the diff: `git diff <base>...HEAD` for a branch, `gh pr diff <n>`
-   for a PR, `git diff` for `--diff`. List changed files. Re-classify with
-   those files. Record the wall-clock start time: `date -u +%s`.
+   for a PR, `git diff` for `--diff`. Save it unchanged to `<run>/diff.patch`.
+   List changed files. Re-classify with those files, then run
+   `node <root>/scripts/tree.js --run <run> --files <changed files> --diff <run>/diff.patch --base <base>`
+   (`--base HEAD` for `--diff`; leave `--base` out for a PR). This review-time
+   tree.json replaces the one from classification. Record the wall-clock start
+   time: `date -u +%s`.
 3. Select providers for `review`.
 4. Size S: run the one selected provider inline (invoke its skill or agent),
    write its records, then for any CRITICAL or HIGH dispatch a verifier of a
@@ -218,7 +246,8 @@ downstream artifact and re-run. The Stop hook enforces this.
    and take the first entry whose author differs from the finder's.
 5. Size M or L: call the Workflow tool with
    `name: "spine:spine-review"` and
-   `args: { diff, changedFiles, language, providers, devilsAdvocate: class.devils_advocate, runId, stage: "review" }`.
+   `args: { diff, changedFiles, language, providers, devilsAdvocate: class.devils_advocate, runId, stage: "review", tree: { tier, files: [{ path, tier }] } }`.
+   `tree` comes from `<run>/tree.json` (its `tier` and each file's `path` and `tier`); leave it out when tree.json is absent.
    Write the returned records.
 6. Run [live verification](#live-verification) when the code under review is
    the working tree: a branch that is checked out, or `--diff`. A PR reviewed
@@ -226,7 +255,41 @@ downstream artifact and re-run. The Stop hook enforces this.
    "live verification skipped: PR not checked out", evidence
    `command gh pr diff <n>`. Take `date -u +%s` before and after it and keep
    the difference as `live_verify_seconds` (0 when skipped).
-7. Record the wall-clock end time the same way (`date -u +%s`) and compute
+7. Collect required proof. Skip this step when tree.json is absent.
+   1. Run `node <root>/scripts/check-proof.js --run <run>` (add
+      `--no-checkout` for a PR reviewed through `gh pr diff`). It writes
+      `<run>/proof.json` and lists `required`, `present`, `missing` (each
+      with a `hint`) and `info`. For each `info` entry write one `INFO`
+      record from `spine:orchestrator`, claim
+      `live verification not required: <reason>`, evidence
+      `command node <root>/scripts/check-proof.js --run <run>`.
+   2. For each `missing` requirement, run the project's own command for it
+      (tests, lint or typecheck, integration tests or the app with its logs,
+      a migration dry-run against a non-production target) with a timeout of
+      `tiers.proof_timeout_seconds` from config (default 600). Spine never
+      runs deploys or rollbacks, never runs a migration against production
+      and never connects to a production database. Save long output with
+      `node <root>/scripts/save-evidence.js --run <run> --from <file> --name <name>`.
+      Write one record per command with `write-record.js`: agent
+      `"spine:proof"`, stage `review`, severity `INFO`, confidence 1,
+      evidence `{ "kind": "command", "ref": "<exact command>" }`, and the
+      fields `proof_kind` (`test_run`, `lint`, `typecheck`, `integration`,
+      `runtime_log` or `migration_dry_run`), `revision` (from tree.js),
+      `scope` (`["*"]` or the paths it covers), `result`
+      `{ "command", "exit_code", "counts": { "pass", "fail", "skip" }, "status", "target" }`
+      (`status` is `ok`, `timeout` or `error`; `target` only for a dry-run)
+      and `payloads` (the save-evidence.js output). A command that timed out
+      is recorded with `"status": "timeout"` and counts as missing proof.
+   3. Change tier trunk: write a `## Rollback` section in `review.md` naming
+      a revert command, a flag name, or the words "not instantly reversible".
+      For a one-way door add backup or restore steps. The human confirms it
+      at G3 under "Confirm at G3" in the reading map.
+   4. Change tier trunk: run
+      `node <root>/scripts/test-quality.js --run <run> > <run>/tmp/test-quality.json`
+      then `node <root>/scripts/write-record.js <run> --file <run>/tmp/test-quality.json`.
+      Its MEDIUM flags are advisories; they never make the verdict UNPROVEN.
+   5. Run check-proof.js again. Whatever is still `missing` is a proof gap.
+8. Record the wall-clock end time the same way (`date -u +%s`) and compute
    `elapsed_seconds` (end minus start, so it includes `live_verify_seconds`).
    This is total review-stage time, not
    a per-phase breakdown — workflow scripts cannot read the clock (it would
@@ -234,19 +297,41 @@ downstream artifact and re-run. The Stop hook enforces this.
    available. Write `review.json`: `{ "id", "upstream_id", "verdict",
    "providers": [ids], "findings": [ { "record_id", "severity",
    "corroboration", "verified" } ], "dissent": [record ids],
-   "elapsed_seconds", "live_verify_seconds" }`. Verdict is `FAIL` when any verified CRITICAL or HIGH
-   remains, `PASS_WITH_ADVISORIES` when only MEDIUM or lower, `PASS` when
-   none. Mention the elapsed time in the STATE line, for example
+   "elapsed_seconds", "live_verify_seconds" }`. Then run `node <root>/scripts/verdict.js --run <run> --write` (add
+   `--no-checkout` for a PR not checked out). It sets `verdict`, `tier` and
+   `missing_proof` in review.json; never write `verdict`, `tier` or
+   `missing_proof` by hand. Verdict is `FAIL` when any verified CRITICAL or HIGH
+   remains, `UNPROVEN` when required proof is missing, `PASS_WITH_ADVISORIES`
+   when only MEDIUM or lower remain, `PASS` when none. When the review loop
+   fixes a finding, close it with a record from `spine:orchestrator` that has
+   `"resolves": "<R-id>"` and the test or command that shows the fix as
+   evidence, then re-run tree.js, check-proof.js and verdict.js. Mention the elapsed time in the STATE line, for example
    `review took 3m12s`.
-8. Dispatch `spine:synthesis` for the stage. Write its record. Add its dissent
+9. Dispatch `spine:synthesis` for the stage. Write its record. Add its dissent
    map as a Mermaid diagram under a `## Dissent map` heading in `review.md`
    (optional companion file, not gated).
-9. Boundary checker `code-vs-plan` if a plan exists; for a standalone review
-   with no plan, write one record from yourself with agent
-   `spine:boundary-checker`, stage `review`, claim `PASS`, note "standalone
-   review, no upstream". Gate G3: `awaiting: "G3"`, summary block, and for
-   size L suggest `/code-review ultra` as an optional extra. Stop. On
-   approval: stage `done`, status `done`, delete `active.json`.
+10. Run `node <root>/scripts/reading-map.js --run <run>`. It writes
+    `<run>/reading-map.md` and prints `{ counts, minutes, g3, stale }`. If
+    `stale` is true, re-run tree.js and this step.
+11. Boundary checker `code-vs-plan` if a plan exists; for a standalone review
+    with no plan, write one record from yourself with agent
+    `spine:boundary-checker`, stage `review`, claim `PASS`, note "standalone
+    review, no upstream". Gate G3: `awaiting: "G3"`, summary block with the
+    reading map's `g3` string in STATE, for example
+    `STATE: stage 5/5 review · run <id> · tier trunk · verdict UNPROVEN · read yourself 4 hunks, 12 min (whole diff 40 min) · .spine/<id>/reading-map.md`.
+    When the verdict is UNPROVEN, DONE lists every proof gap as
+    `<requirement> · <files> · <hint>`; for a PR not checked out the hint is
+    "check out the branch to collect proof". Ask the human to confirm the
+    rollback or flag plan listed under "Confirm at G3". For size L suggest
+    `/code-review ultra` as an optional extra. Stop. On approval of an
+    UNPROVEN review, write a waiver record from `spine:orchestrator`: claim
+    `G3 waiver: UNPROVEN accepted`, evidence
+    `{ "kind": "doc", "ref": "human message", "note": "<their words, max 200 chars>" }`,
+    confidence 1, severity `INFO`, `"waives": [<requirement ids>]`. With
+    `"unproven_blocks": true` in config (off by default: shadow mode),
+    approve an UNPROVEN review only when the human explicitly waives every
+    gap; with it off, approval proceeds and the waiver records it. Then
+    stage `done`, status `done`, delete `active.json`.
 
 ### Live verification
 
@@ -280,6 +365,7 @@ repairs that skill.
    exists, so the unverified-evidence cap does not apply). A feature the skill
    marks unreachable, or one you could not reach, is `MEDIUM` with the missing
    prerequisite in the evidence entry's `note`; never report it as verified.
+   Also add `"revision"` (from tree.js) and `"payloads"` (each evidence file saved with `save-evidence.js`) so the record counts as `live_verify` proof.
 5. Always run the skill's cleanup, even after a failure, and confirm its
    evidence survived before writing the records.
 
@@ -359,4 +445,7 @@ add prose before NEXT.
 - When a dependency plugin is missing (the SessionStart hook tells you), use
   `general-purpose` with the provider's strengths pasted into the prompt, and
   say so in WHY.
+- Never write `verdict`, `tier` or `missing_proof` by hand; `verdict.js --write`
+  owns them. Use the fixed words file tier, change tier, signal, one-way door,
+  gated, required proof, proof gap and reading map (read-yourself, skim, skip).
 - One question to the human per turn.
