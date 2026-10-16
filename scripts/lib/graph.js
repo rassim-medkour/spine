@@ -39,6 +39,36 @@ function buildContext(paths, hints) {
   };
 }
 
+const dirSegments = (file) => path.posix.dirname(file).split('/').filter((s) => s && s !== '.');
+const endsWithSegments = (dir, tail) => tail.length <= dir.length && tail.every((s, i) => s.toLowerCase() === dir[dir.length - tail.length + i].toLowerCase());
+
+// An unresolved import is a plausible resolution of `file` only when its directory
+// part can point at the file's directory; a bare or aliased name must at least be
+// compatible with the importer's own directory or the repo root.
+function plausibleTarget(file, u) {
+  const fileDir = dirSegments(file);
+  const importerDir = dirSegments(u.from);
+  const sameAsImporter = fileDir.join('/') === importerDir.join('/');
+  if (u.parser === 'python') {
+    const lead = (u.specifier.match(/^\.+/) || [''])[0].length;
+    const mods = u.specifier.split('.').filter(Boolean);
+    const dirs = mods.slice(0, -1);
+    if (lead) return fileDir.join('/') === [...importerDir.slice(0, Math.max(0, importerDir.length - (lead - 1))), ...dirs].join('/');
+    if (!dirs.length) return sameAsImporter || !fileDir.length;
+    return endsWithSegments(fileDir, dirs);
+  }
+  const spec = u.specifier.replace(/\/+$/, '');
+  if (spec.startsWith('.')) {
+    const joined = path.posix.normalize(path.posix.join(importerDir.join('/') || '.', spec));
+    return fileDir.join('/') === dirSegments(joined).join('/');
+  }
+  const segs = spec.split('/').filter(Boolean);
+  if (segs.length && /^[^A-Za-z0-9_]/.test(segs[0])) segs.shift();
+  const dirs = segs.slice(0, -1);
+  if (!dirs.length) return sameAsImporter || !fileDir.length;
+  return endsWithSegments(fileDir, dirs);
+}
+
 function entryFor(f, cached, diagnostics) {
   const hit = f.key ? cached.get(f.key) : null;
   if (hit) {
@@ -71,7 +101,9 @@ function index(kept, ctx, cached) {
       if (r.targets.length || r.packages.length || r.external) continue;
       diagnostics.unresolved += 1;
       const stem = specStem(entry.parser, spec.specifier);
-      if (stem && !state.unresolvedByStem.has(stem)) state.unresolvedByStem.set(stem, f.path);
+      if (!stem) continue;
+      if (!state.unresolvedByStem.has(stem)) state.unresolvedByStem.set(stem, []);
+      state.unresolvedByStem.get(stem).push({ from: f.path, parser: entry.parser, specifier: spec.specifier });
     }
   }
   return { state, diagnostics };
@@ -97,8 +129,8 @@ function buildGraph({ files, hints = {}, cached = new Map() }) {
     if (node.error === 'binary') return { value: null, resolved: false, rule: 'fan-in unknown: binary file' };
     if (node.error) return { value: null, resolved: false, rule: `fan-in unknown: ${node.error}` };
     const value = importersOf(file).length;
-    const partialFrom = state.unresolvedByStem.get(stemOf(file));
-    if (partialFrom) return { value, resolved: false, rule: `fan-in partial: unresolved import in ${partialFrom}` };
+    const partial = (state.unresolvedByStem.get(stemOf(file)) || []).find((u) => plausibleTarget(file, u));
+    if (partial) return { value, resolved: false, rule: `fan-in partial: unresolved import in ${partial.from}` };
     return { value, resolved: true, rule: `direct importers (${node.parser})` };
   }
 

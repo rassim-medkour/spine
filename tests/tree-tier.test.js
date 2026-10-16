@@ -125,3 +125,12 @@ test('a tree assembled from classifyTree validates against schemas/tree.json', (
   const out = run([file(), file({ path: 'README.md', parser: 'none' })]);
   assert.deepEqual(validateTree({ schema_version: 1, tier: out.tier, inputs: golden.inputs, knobs: out.knobs, files: out.files }), []);
 });
+
+test('partial fan-in applies the thresholds to the known lower bound, branch as floor', () => {
+  const partial = (value) => ({ value, resolved: false, rule: 'fan-in partial: unresolved import in x.ts' });
+  assert.equal(tierOf({ fanIn: partial(tc.fan_in_trunk) }).tier, 'trunk');
+  assert.equal(tierOf({ fanIn: partial(tc.fan_in_trunk + 5) }).tier, 'trunk');
+  assert.equal(tierOf({ fanIn: partial(0) }).tier, 'branch');
+  assert.equal(tierOf({ fanIn: partial(1) }).tier, 'branch');
+  assert.equal(tierOf({ fanIn: partial(tc.fan_in_branch) }).tier, 'branch');
+});

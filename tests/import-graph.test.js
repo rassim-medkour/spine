@@ -127,3 +127,36 @@ test('TEST_FILE and parseLooseJson helpers', () => {
   assert.deepEqual(parseLooseJson('{ /* c */ "a": [1, 2,], }'), { a: [1, 2] });
   assert.equal(parseLooseJson('nope'), null);
 });
+
+test('partial fan-in marking is scoped to plausible candidates, not every same-named file', () => {
+  const importers = Array.from({ length: 3 }, (_, i) => ({ path: `src/c${i}.ts`, text: "import { h } from './helper';" }));
+  const files = [
+    { path: 'src/helper.ts', text: 'export const h = 1;' },
+    ...importers,
+    { path: 'other/main.ts', text: "import x from './index';\nimport u from 'utils';" },
+    { path: 'src/index.ts', text: 'export const i = 1;' },
+    { path: 'other/generated.ts', text: "export * from './index';" },
+    { path: 'src/utils.ts', text: 'export const u = 1;' },
+    { path: 'other/deep/utils.ts', text: 'export const u2 = 1;' },
+  ];
+  const g = buildGraph({ files });
+  const h = g.fanIn('src/helper.ts');
+  assert.equal(h.resolved, true);
+  assert.equal(h.value, 3);
+  // './index' in other/ resolves nowhere; it can only be a candidate for an index file in other/
+  assert.equal(g.fanIn('src/index.ts').resolved, true);
+  // bare 'utils' from other/ is a candidate in other/ or the root, not src/ or other/deep/
+  assert.equal(g.fanIn('src/utils.ts').resolved, true);
+  assert.equal(g.fanIn('other/deep/utils.ts').resolved, true);
+});
+
+test('partial fan-in keeps its lower bound and the aliased candidate stays partial', () => {
+  const g = buildGraph({ files: [
+    { path: 'src/lib/date.ts', text: 'export const d = 1;' },
+    { path: 'src/a.ts', text: "import { d } from './lib/date';" },
+    { path: 'src/x.ts', text: "import { d } from '~/lib/date';" },
+  ] });
+  const f = g.fanIn('src/lib/date.ts');
+  assert.equal(f.resolved, false);
+  assert.equal(f.value, 1);
+});

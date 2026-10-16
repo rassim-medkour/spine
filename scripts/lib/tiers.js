@@ -128,9 +128,10 @@ function tierFor(entry, tc) {
     if (signals[key].value === true) raise(forced.has(key) ? 'trunk' : 'branch', `${label}: ${signals[key].rule}`);
   }
   const fi = signals.fan_in;
-  if (!fi.resolved) raise('branch', fi.rule);
+  if (!fi.resolved && !Number.isInteger(fi.value)) raise('branch', fi.rule);
   else if (fi.value >= tc.fan_in_trunk) raise('trunk', `fan-in ${fi.value} >= ${tc.fan_in_trunk}`);
   else if (fi.value >= tc.fan_in_branch) raise('branch', `fan-in ${fi.value} >= ${tc.fan_in_branch}`);
+  else if (!fi.resolved) raise('branch', fi.rule);
   if (Number.isInteger(signals.churn.value) && signals.churn.value >= tc.churn_branch) raise('branch', `churn ${signals.churn.value} >= ${tc.churn_branch}`);
   const source = entry.parser !== 'none' && !TEST_FILE.test(file) && entry.status !== 'deleted';
   if (tc.untested_is_branch && source && signals.tested.value === false) raise('branch', 'untested: no test file imports it');
