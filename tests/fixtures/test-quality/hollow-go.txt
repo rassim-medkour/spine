@@ -1,0 +1,22 @@
+package store
+
+import "testing"
+
+func TestNoFailurePath(t *testing.T) {
+	_ = Get()
+}
+
+func TestSubtests(t *testing.T) {
+	t.Run("checks", func(t *testing.T) {
+		if Get() != 1 {
+			t.Errorf("bad")
+		}
+	})
+	t.Run("hollow", func(t *testing.T) {
+		_ = Get()
+	})
+}
+
+func TestSkipped(t *testing.T) {
+	t.Skip("later")
+}

@@ -1,0 +1,24 @@
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const { jest } = require('@jest/globals');
+jest.mock('./util');
+const util = require('./util');
+
+test('no assertion at all', () => {
+  util.run();
+});
+
+test('only a constant truth', () => {
+  assert.ok(true);
+});
+
+it('compares a value with itself', () => {
+  const x = util.run();
+  expect(x).toBe(x);
+});
+
+test.skip('skipped', () => {
+  assert.equal(util.run(), 1);
+});
+
+test.todo('later');
