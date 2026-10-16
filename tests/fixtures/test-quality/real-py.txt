@@ -1,0 +1,21 @@
+import pytest
+from pkg.math import add, parse
+
+
+def test_add():
+    assert add(1, 2) == 3
+
+
+def test_raises():
+    with pytest.raises(ValueError):
+        parse("x")
+
+
+def test_helper():
+    """Uses a project helper."""
+    check_tree(parse("{}"))
+
+
+class TestMath:
+    def test_method(self):
+        self.assertEqual(add(2, 2), 4)

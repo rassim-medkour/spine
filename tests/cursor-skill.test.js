@@ -21,7 +21,7 @@ function section(text, heading) {
   return next < 0 ? rest : rest.slice(0, next);
 }
 
-const BANNED_SYNONYMS = [/\bcheckpoints?\b/i, /\bmilestones?\b/i, /\bphase gates?\b/i, /\bapproval points?\b/i, /\bt-shirt size\b/i, /\btiers?\b/i, /\bfinding files?\b/i, /\brun key\b/i, /\bsession id\b/i];
+const BANNED_SYNONYMS = [/\bcheckpoints?\b/i, /\bmilestones?\b/i, /\bphase gates?\b/i, /\bapproval points?\b/i, /\bt-shirt size\b/i, /\bsize tiers?\b/i, /\btier [SML]\b/, /\bfinding files?\b/i, /\brun key\b/i, /\bsession id\b/i];
 const GLOSSARY_ANCHORS = [
   '`stage` is one of `intent`, `spec`, `plan`, `implement`, `review`, `done`.',
   '`awaiting` is `null`, `human`, `G1`, `G2`, or `G3`.',
@@ -57,7 +57,9 @@ test('a hook followup never stands in for gate approval', () => {
 });
 
 test('record-contract and gap-check reach Cursor as exact copies, and no rules file exists', () => {
-  for (const name of ['record-contract', 'gap-check']) assert.equal(read(`cursor/skills/${name}/SKILL.md`), read(`skills/${name}/SKILL.md`));
+  // Compare with line endings normalised: a Windows checkout can hold CRLF copies of LF files.
+  const lf = (s) => s.replace(/\r\n/g, '\n');
+  for (const name of ['record-contract', 'gap-check']) assert.equal(lf(read(`cursor/skills/${name}/SKILL.md`)), lf(read(`skills/${name}/SKILL.md`)));
   assert.equal(fs.existsSync(path.join(ROOT, 'rules')), false);
 });
 

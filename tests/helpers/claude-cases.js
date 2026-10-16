@@ -1,6 +1,7 @@
 // tests/helpers/claude-cases.js
 'use strict';
 const fs = require('node:fs');
+const { tmpDir } = require('./tmp');
 const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
@@ -11,7 +12,7 @@ const FIX = path.join(ROOT, 'tests', 'fixtures');
 const FULL = ['ecc', 'superpowers', 'mattpocock-skills', 'code-review', 'feature-dev', 'caveman'];
 const BASE = { id: '20260920-demo', status: 'active', awaiting: null, size: 'S', updated: '2026-09-20T10:00:00Z' };
 
-const tmp = (prefix) => fs.mkdtempSync(path.join(os.tmpdir(), prefix));
+const tmp = (prefix) => tmpDir(prefix);
 
 // Strips the developer's own Cursor/Claude session vars, then applies `extra`
 // (so tests can still set CURSOR_PLUGIN_ROOT or canary keys on purpose).

@@ -3,12 +3,13 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
+const { tmpDir } = require('./helpers/tmp');
 const os = require('node:os');
 const path = require('node:path');
 const { resolveProjectRoot, locateRun } = require('../scripts/lib/root');
 const { writeState, setActive, loadConfig } = require('../scripts/lib/state');
 
-const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'spine-root-'));
+const tmp = () => tmpDir('spine-root-');
 // Isolate from the developer's real ~/.spine/config.json (artifacts_dir could differ).
 process.env.SPINE_HOME = tmp();
 function withRun() {

@@ -2,6 +2,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
+const { tmpDir } = require('./helpers/tmp');
 const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
@@ -16,7 +17,7 @@ for (const [script, hook] of Object.entries(SCRIPTS)) {
   for (const [name, content] of Object.entries(INPUTS)) {
     test(`${script} exits 0 with one stderr line and no state writes on ${name} stdin`, () => {
       const r = cursorRepo({ ...BASE, stage: 'intent' });
-      const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'spine-in-')), 'stdin');
+      const file = path.join(tmpDir('spine-in-'), 'stdin');
       fs.writeFileSync(file, content);
       const fd = fs.openSync(file, 'r');
       const res = spawnSync(process.execPath, [path.join(ROOT, 'scripts', script)], { stdio: [fd, 'pipe', 'pipe'], encoding: 'utf8', cwd: r.root, env: cleanEnv({ SPINE_HOME: r.home }) });

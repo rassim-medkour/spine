@@ -1,0 +1,25 @@
+from unittest import mock
+import pytest
+from pkg import util
+
+
+def test_nothing():
+    pass
+
+
+def test_constant():
+    assert True
+
+
+@pytest.mark.skip(reason="later")
+def test_skipped():
+    assert util.helper() == 1
+
+
+def test_no_assert():
+    util.helper()
+
+
+@mock.patch("pkg.util")
+def test_mocks_unit(m):
+    assert m.helper() is not None

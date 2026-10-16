@@ -2,6 +2,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
+const { tmpDir } = require('./helpers/tmp');
 const os = require('node:os');
 const path = require('node:path');
 const gate = require('../scripts/lib/gate');
@@ -9,7 +10,7 @@ const gate = require('../scripts/lib/gate');
 const FIX = path.join(__dirname, 'fixtures');
 
 function run(stage, extra = {}) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'spine-gate-'));
+  const dir = tmpDir('spine-gate-');
   return { id: '20260920-demo', dir, state: { stage, status: 'active', awaiting: null, ...extra } };
 }
 

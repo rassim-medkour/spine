@@ -2,6 +2,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
+const { tmpDir } = require('./helpers/tmp');
 const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
@@ -13,7 +14,7 @@ test('readHookInput parses a BOM-prefixed payload and treats BOM-only as empty',
 });
 
 test('readGuardedInput accepts a BOM-prefixed payload and ignores BOM-only stdin', () => {
-  const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'spine-bom-')), 'in');
+  const file = path.join(tmpDir('spine-bom-'), 'in');
   const probe = (content) => {
     fs.writeFileSync(file, content);
     const code = `const {readGuardedInput}=require(${JSON.stringify(path.join(__dirname, '..', 'scripts', 'lib', 'hook-io.js'))});` +

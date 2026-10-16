@@ -3,6 +3,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
+const { tmpDir } = require('./helpers/tmp');
 const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
@@ -13,7 +14,7 @@ const { cleanEnv } = require('./helpers/claude-cases');
 const ROOT = path.join(__dirname, '..');
 const cursorReg = JSON.parse(fs.readFileSync(path.join(ROOT, 'providers.cursor.json'), 'utf8'));
 const claudeReg = JSON.parse(fs.readFileSync(path.join(ROOT, 'providers.json'), 'utf8'));
-const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'spine-cp-'));
+const tmp = () => tmpDir('spine-cp-');
 const pluginName = (p) => p.plugin || pluginOf(p.id);
 
 test('every Cursor registry id is unique per stage and has author, rank and kind', () => {
