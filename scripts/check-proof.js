@@ -46,7 +46,20 @@ function hintFor(requirement, noCheckout, oneWayDoor) {
 const NO_PLAN = 'no ## Rollback section';
 function explainPlanGap(reason) {
   if (reason !== NO_PLAN) return reason;
-  return `${NO_PLAN}; looked in review.md and plan.md under the run dir; add one or run scripts/record-proof.js --run <run> --kind rollback_plan --from <file.md>`;
+  return `${NO_PLAN}; looked in review.md, plan.md and rollback_plan records of this run; add one or run scripts/record-proof.js --run <run> --kind rollback_plan --from <file.md>`;
+}
+
+const PLAN_KINDS = new Set(['rollback_plan', 'flag_plan']);
+
+function recordedPlans(proofRecords, revision) {
+  return proofRecords
+    .filter((r) => PLAN_KINDS.has(r.proof_kind) && r.revision === revision && r.result && (!r.result.status || r.result.status === 'ok') && typeof r.result.plan === 'string')
+    .map((r) => r.result.plan);
+}
+
+function judgePlans(texts, oneWayDoor) {
+  const judged = texts.map((t) => checkRollbackPlan(t, { oneWayDoor }));
+  return judged.find((j) => j.ok) || judged.filter((j) => j.reason !== NO_PLAN).pop() || judged[0];
 }
 
 function scopeOf(record, tree) {
@@ -71,15 +84,15 @@ function checkProof({ runDir, root, tree, records, tc, noCheckout = false, findV
   const oneWayDoor = tree.files.some((f) => f.signals.one_way_door.value === true);
   const proofRecords = records.filter((r) => r.proof_kind || r.agent === 'spine:live-verify');
   const ctx = { revision, verifyPayload: verifyPayload(runDir) };
-  const planText = ['review.md', 'plan.md'].map((n) => readText(path.join(runDir, n))).join('\n');
+  const planTexts = [...['review.md', 'plan.md'].map((n) => readText(path.join(runDir, n))), ...recordedPlans(proofRecords, revision)];
   const present = [];
   const missing = [];
   const covering = {};
   const gap = (requirement, reason) => ({ requirement, kinds: [...REQUIREMENTS[requirement]], tier: tree.tier, files: filesFor(requirement, tree, live.liveFiles), reason, hint: hintFor(requirement, noCheckout, oneWayDoor) });
   for (const requirement of required) {
     if (requirement === 'rollback_or_flag_plan') {
-      const plan = checkRollbackPlan(planText, { oneWayDoor });
-      if (plan.ok) present.push({ requirement, record_ids: [], source: 'review.md or plan.md ## Rollback' });
+      const plan = judgePlans(planTexts, oneWayDoor);
+      if (plan.ok) present.push({ requirement, record_ids: [], source: 'review.md or plan.md ## Rollback, or a rollback_plan record' });
       else missing.push(gap(requirement, explainPlanGap(plan.reason)));
       continue;
     }
