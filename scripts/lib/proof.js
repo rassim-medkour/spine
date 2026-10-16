@@ -20,7 +20,7 @@ const BY_TIER = Object.freeze({
 const RUNTIME = new Set(['test_run', 'static_check', 'integration_or_runtime', 'test_quality', 'migration_dry_run', 'live_verify']);
 const NEEDS_PAYLOAD = new Set(['runtime_log', 'live_verify']);
 const HINTS = Object.freeze({
-  test_run: 'run the test suite and record a test_run proof with command, exit_code and counts',
+  test_run: 'run the test suite and record it with scripts/record-proof.js --kind test_run',
   static_check: 'run lint or a type check and record it as lint or typecheck proof',
   integration_or_runtime: 'run integration tests or capture runtime logs with save-evidence.js',
   rollback_or_flag_plan: 'add a ## Rollback section to review.md naming a revert command, a flag name, or "not instantly reversible"',

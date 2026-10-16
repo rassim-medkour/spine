@@ -297,30 +297,35 @@ downstream artifact and re-run. The Stop hook enforces this.
       record from `spine:orchestrator`, claim
       `live verification not required: <reason>`, evidence
       `command node <root>/scripts/check-proof.js --run <run>`.
-   2. For each `missing` requirement, run the project's own command for it
-      (tests, lint or typecheck, integration tests or the app with its logs,
-      a migration dry-run against a non-production target) with a timeout of
-      `tiers.proof_timeout_seconds` from config (default 600). Spine never
-      runs deploys or rollbacks, never runs a migration against production
-      and never connects to a production database. Save long output with
-      `node <root>/scripts/save-evidence.js --run <run> --from <file> --name <name>`.
-      Write one record per command with `write-record.js`: agent
-      `"spine:proof"`, stage `review`, severity `INFO`, confidence 1,
-      evidence `{ "kind": "command", "ref": "<exact command>" }`, and the
-      fields `proof_kind` (`test_run`, `lint`, `typecheck`, `integration`,
-      `runtime_log` or `migration_dry_run`), `revision` (from tree.js),
-      `scope` (`["*"]` or the paths it covers), `result`
-      `{ "command", "exit_code", "counts": { "pass", "fail", "skip" }, "status", "target" }`
-      (`status` is `ok`, `timeout` or `error`; `target` only for a dry-run)
-      and `payloads` (the save-evidence.js output). A command that timed out
-      is recorded with `"status": "timeout"` and counts as missing proof.
-   3. Change tier trunk: write a `## Rollback` section in `review.md` naming
-      a revert command, a flag name, or the words "not instantly reversible".
-      For a one-way door add backup or restore steps. The human confirms it
-      at G3 under "Confirm at G3" in the reading map.
+   2. For each `missing` command requirement, let `record-proof.js` run the
+      project's own command and write the record. It runs the command with a
+      timeout of `tiers.proof_timeout_seconds` from config (default 600),
+      saves the output as evidence (the `node <root>/scripts/save-evidence.js --run <run> --from <file> --name <name>` logic), writes the record with agent `"spine:proof"`, parses node:test `# pass` and
+      `# fail` totals (otherwise it keeps the exit code only), takes the
+      `revision` from tree.json and numbers the record itself:
+      `node <root>/scripts/record-proof.js --run <run> --kind <kind> --command "<cmd>" [--scope a,b]`.
+      Use `--kind test_run` for the test suite, `--kind lint` or
+      `--kind typecheck` for the static check when the repo has one,
+      `--kind integration` or `--kind runtime_log` for integration or runtime
+      proof, and `--kind migration_dry_run --target <non-production target>`
+      for a dry-run. `--from <file>` records output you already captured
+      instead of running the command (add `--exit-code N` when the output has
+      no TAP totals). A failing command is still recorded and exits 1. Spine
+      never runs deploys or rollbacks, never runs a migration against
+      production and never connects to a production database. Never write
+      `revision` or `result` by hand; a hand-written record without the exact
+      tree.json revision is rejected as stale.
+   3. Change tier trunk: write a short markdown file with a `## Rollback`
+      section naming a revert command, a flag name, or the words "not
+      instantly reversible" (a one-way door also needs backup or restore
+      steps), then run
+      `node <root>/scripts/record-proof.js --run <run> --kind rollback_plan --from <file.md>`.
+      A `## Rollback` section in `review.md` still counts. Use
+      `--kind flag_plan` for a flag. The human confirms it at G3 under
+      "Confirm at G3" in the reading map.
    4. Change tier trunk: run
-      `node <root>/scripts/test-quality.js --run <run> > <run>/tmp/test-quality.json`
-      then `node <root>/scripts/write-record.js <run> --file <run>/tmp/test-quality.json`.
+      `node <root>/scripts/record-proof.js --run <run> --kind test_quality`,
+      which runs `node <root>/scripts/test-quality.js --run <run>` and writes its records.
       Its MEDIUM flags are advisories; they never make the verdict UNPROVEN.
    5. Run check-proof.js again. Whatever is still `missing` is a proof gap.
 8. Record the wall-clock end time the same way (`date -u +%s`) and compute
