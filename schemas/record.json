@@ -1,6 +1,11 @@
 {
   "kind": "json",
   "required": ["id", "stage", "agent", "claim", "evidence", "confidence", "severity"],
+  "optional": {
+    "model": "object: role, tier, tier_source, class, requested, source, reason? (see scripts/lib/model-policy.js validateModelBlock)",
+    "verifier_model": "object, same shape",
+    "model_note": "string: verifier below finder strength"
+  },
   "enums": {
     "stage": ["intent", "spec", "plan", "implement", "review"],
     "severity": ["CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"]
