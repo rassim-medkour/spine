@@ -96,7 +96,8 @@ There are three groups.
 Every subagent you dispatch ends its answer with one fenced block tagged
 `json spine-record` per record. Never copy record JSON by hand: save the
 subagent's answer to `<run>/tmp/<label>.md` and run
-`node <root>/scripts/write-record.js <run> --from-text <run>/tmp/<label>.md --provider <id> --author <author> --host cursor`.
+`node <root>/scripts/write-record.js <run> --from-text <run>/tmp/<label>.md --provider <id> --author <author> --host cursor --model-role <role>`
+(the role of the subagent, see [Model routing](#model-routing)).
 It validates each record against the record contract, assigns the next
 `R-NNNN` id and writes `records/R-NNNN.json`. On a validation error it prints
 the problems and writes nothing; fix the answer and rerun. A record with only
@@ -166,6 +167,50 @@ provider from a different author. Write one record from yourself with agent
 `{ "kind": "unverified", "ref": "workflow-tool" }`, confidence 1, severity
 `INFO`. Gates, boundary checks and the summary block are unchanged.
 
+## Model routing
+
+At the start of every stage that dispatches subagents, run:
+
+```bash
+node <root>/scripts/select-model.js --run <run> --stage <stage> --host cursor
+```
+
+It reads the tier from `<run>/tree.json` (or the size when tree.json is
+absent, stale or invalid), applies `model_policy`, discovers the models this
+Cursor install offers from local files only, writes the stage's plan to
+`<run>/models.json` once and prints it. Re-running it in the same stage
+returns the same plan (resume). Every dispatch below names its role; take the
+model from `roles.<role>.model` in that output:
+
+- Task tool: if your Task tool has a model parameter, pass the plan model when
+  it is not null; leave it out when it is null. If the Task tool rejects the
+  model or the subagent fails to start, retry once without a model. Otherwise
+  start the subagent without one and write its records with
+  `--model-source unsupported-dispatch`.
+- Write each subagent's records with `--model-role <role>`, and add
+  `--model-source session-fallback` after a retry without a model. The block
+  is read from `<run>/models.json`; never type it by hand.
+- If select-model.js exits non-zero or prints `"ok": false`, dispatch with no
+  model and write records with `--model-source fallback-error`. A broken
+  router never stops a run.
+- At G3 cite `discovery.found` from `<run>/models.json` as "models found", and
+  each class's reason from `discovery.class_map`.
+
+`"model_policy": "inherit"` in `~/.spine/config.json` or the repo config turns
+routing off: every role gets `model: null` and every subagent runs on the
+session model, as in 0.3.0. Routing never changes which provider verifies a
+finding; the verifier on a trunk change is raised to the finder's class when
+the policy would set it lower.
+
+Limitations (the subagent runs on the session model):
+
+- `limitation:not-routed`: planner, grilling and the size L council are not routed.
+- `limitation:inline-skill`: a provider of kind skill run inline (size S, or the
+  parallel-subagents-unavailable fallback) runs in this session; record it with
+  `--model-source unsupported-dispatch`.
+- `limitation:cursor-task-model`: a Task tool without a model parameter cannot
+  take the planned model; record it with `--model-source unsupported-dispatch`.
+
 ## Stages
 
 ```
@@ -175,7 +220,8 @@ intent -> classify -> [spec] -G1-> [plan] -G2-> [implement] -> [review] -G3-> do
 Before every gate and before marking a stage done, dispatch
 `spine:boundary-checker` with the upstream and downstream file paths and the
 boundary name (`spec-vs-intent`, `plan-vs-spec`, `code-vs-plan`,
-`tests-vs-acceptance`). Write its record. If the claim is not `PASS`, fix the
+`tests-vs-acceptance`) as role `boundary_checker`. Write its record with
+`--model-role boundary_checker`. If the claim is not `PASS`, fix the
 downstream artifact and re-run. The Stop hook enforces this.
 
 ### intent
@@ -197,9 +243,10 @@ downstream artifact and re-run. The Stop hook enforces this.
 - Size S or M: draft `spec.md` yourself with headings `## Summary`,
   `## Requirements`, `## Design`, `## Error paths`, `## Data and migrations`,
   `## Test anchors`, `## Assumptions`, `## Out of scope`. For M, invoke the two
-  selected spec providers first and fold their output in.
+  selected spec providers first (role `spec_lens`, `--model-role spec_lens`)
+  and fold their output in.
 - Size L: fan out one read-only subagent per lens in `class.lenses`, in
-  parallel. Each gets `intent.md`, its lens name and the selected spec
+  parallel (role `spec_lens`, records with `--model-role spec_lens`). Each gets `intent.md`, its lens name and the selected spec
   providers' strengths, and returns requirements, risks, questions and
   assumptions as records. Merge them into `spec.md` and put each disagreement
   between lenses under a `## Open disagreements` heading with its resolution
@@ -227,12 +274,15 @@ downstream artifact and re-run. The Stop hook enforces this.
 
 - Size S: dispatch one `general-purpose` implementer per ticket with the
   spec section, acceptance criteria, and TDD instructions from
-  `superpowers:subagent-driven-development`; then one reviewer from the
-  selected provider.
-- Size M or L: for each ticket in order, start one implementer subagent with
+  `superpowers:subagent-driven-development` (role `implementer`, records with
+  `--model-role implementer`); then one reviewer from the selected provider
+  (role `finder`, `--model-role finder`).
+- Size M or L: for each ticket in order, start one implementer subagent (role
+  `implementer`, `--model-role implementer`) with
   the ticket, its spec section, its acceptance criteria and TDD instructions
   (provider: the first entry of `select-providers.js implement <size> --host cursor`).
-  When it returns, start two read-only reviewer subagents in parallel: a
+  When it returns, start two read-only reviewer subagents in parallel (role
+  `finder`, `--model-role finder`): a
   spec-compliance reviewer and a quality reviewer, drawn from
   `select-providers.js review <size> --host cursor`. Write every record. Mark
   each ticket `done` in `tickets.json` when the implementer reports it
@@ -254,16 +304,18 @@ downstream artifact and re-run. The Stop hook enforces this.
    tree.json replaces the one from classification. Record the wall-clock start
    time: `date -u +%s`.
 3. Select providers for `review`.
-4. Size S: run the one selected provider inline and write its records. For
+4. Size S: run the one selected provider inline (role `finder`) and write its
+   records with `--model-role finder`. For
    any CRITICAL or HIGH, write `select-providers.js review M --host cursor`
    output to `<run>/tmp/providers-M.json` and run
    `node <root>/scripts/pick-verifier.js <run> --providers <run>/tmp/providers-M.json`;
-   dispatch the verifier it names, a provider of a different author.
+   dispatch the verifier it names, a provider of a different author (role
+   `verifier`, `--model-role verifier`).
 5. Size M or L, in this order:
    1. Find: one read-only finder subagent per selected review provider, all
       in parallel, each given the diff, the changed files and the provider's
       strengths. When tree.json exists, add this line to every finder prompt:
-      `Change tier: <tier>. Trunk files (read these hardest): <paths>.` Write each finder's records with `write-record.js`.
+      `Change tier: <tier>. Trunk files (read these hardest): <paths>.` Write each finder's records with `write-record.js ... --model-role finder`.
    2. Verify: save the provider list to `<run>/tmp/providers.json` and run
       `node <root>/scripts/pick-verifier.js <run> --providers <run>/tmp/providers.json`.
       For each CRITICAL or HIGH it names a verifier whose author differs from
@@ -272,14 +324,14 @@ downstream artifact and re-run. The Stop hook enforces this.
       subagent per finding that has a verifier, all in parallel, asking it to
       try to refute the finding and to default to refuted when it cannot
       confirm it. Write each verifier's record with
-      `--verifies <R-id> --provider <verifier id> --author <verifier author> --verified true|false`.
+      `--verifies <R-id> --provider <verifier id> --author <verifier author> --verified true|false --model-role verifier`.
       For a finding with no independent author, write a record from yourself
       with `--provider spine:orchestrator --author spine --verifies <R-id> --verified false --verifier-note "no independent author available"`;
       it is never counted as verified.
    3. Dissent: run `node <root>/scripts/da-gate.js <run> --devils-advocate <class.devils_advocate>`.
       Only when it prints `"open": true`, start the `devils-advocate`
-      subagent with the verified findings and write its records (each
-      carries `dissent` and `resolution`).
+      subagent with the verified findings and write its records with
+      `--model-role devils_advocate` (each carries `dissent` and `resolution`).
    4. Run `node <root>/scripts/check-cross-author.js <run>`. It exits
       non-zero when a verifier shares an author with a finding it verified;
       fix that before writing `review.json`.
@@ -345,7 +397,8 @@ downstream artifact and re-run. The Stop hook enforces this.
    `"resolves": "<R-id>"` and the test or command that shows the fix as
    evidence, then re-run tree.js, check-proof.js and verdict.js. Mention the elapsed time in the STATE line, for example
    `review took 3m12s`.
-9. Dispatch `spine:synthesis` for the stage. Write its record. Add its dissent
+9. Dispatch `spine:synthesis` for the stage (role `synthesis`). Write its record
+   with `--model-role synthesis`. Add its dissent
    map as a Mermaid diagram under a `## Dissent map` heading in `review.md`
    (optional companion file, not gated).
 10. Run `node <root>/scripts/reading-map.js --run <run>`. It writes
@@ -360,7 +413,8 @@ downstream artifact and re-run. The Stop hook enforces this.
     When the verdict is UNPROVEN, DONE lists every proof gap as
     `<requirement> · <files> · <hint>`; for a PR not checked out the hint is
     "check out the branch to collect proof". Ask the human to confirm the
-    rollback or flag plan listed under "Confirm at G3". Stop. On approval of an
+    rollback or flag plan listed under "Confirm at G3". Run `node <root>/scripts/run-status.js <run>`;
+    when it prints `model_mix`, add `model_mix.line` to DONE. Stop. On approval of an
     UNPROVEN review, write a waiver record from `spine:orchestrator`: claim
     `G3 waiver: UNPROVEN accepted`, evidence
     `{ "kind": "doc", "ref": "human message", "note": "<their words, max 200 chars>" }`,
@@ -504,6 +558,8 @@ add prose before NEXT.
 - Never write `verdict`, `tier` or `missing_proof` by hand; `verdict.js --write`
   owns them. Use the fixed words file tier, change tier, signal, one-way door,
   gated, required proof, proof gap and reading map (read-yourself, skim, skip).
+- Never choose a model by hand: `select-model.js` owns the plan, and a model
+  that was only requested is reported as requested, never as having run.
 - One question to the human per turn.
 - A gate passes only when the human approves in chat. A hook followup never
   answers a gate: never set `awaiting` to `null` for `G1`, `G2` or `G3`, and
