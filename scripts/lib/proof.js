@@ -97,6 +97,29 @@ function checkRollbackPlan(markdown, { oneWayDoor = false } = {}) {
   return { ok: true, reason: 'rollback section is concrete' };
 }
 
+const PLAN_KINDS = new Set(['rollback_plan', 'flag_plan']);
+const PLAN_LINE_MAX = 100;
+
+function firstPlanLine(plan) {
+  const body = planSection(plan) || String(plan || '');
+  const line = body.split(/\r?\n/).map((l) => l.trim()).find((l) => l && !l.startsWith('#')) || '';
+  return line.length > PLAN_LINE_MAX ? `${line.slice(0, PLAN_LINE_MAX - 3)}...` : line;
+}
+
+// The knob's rollback answer, derived at render time from the proof records so
+// tree.json stays deterministic.
+function rollbackAnswer(tree, proof, records) {
+  const base = tree && tree.knobs && tree.knobs.instant_rollback ? tree.knobs.instant_rollback.answer : 'unknown';
+  if (!proof || proof.legacy) return base;
+  const oneWayDoor = Boolean(tree && tree.files && tree.files.some((f) => f.signals && f.signals.one_way_door && f.signals.one_way_door.value === true));
+  const plan = (records || []).find((r) => PLAN_KINDS.has(r.proof_kind) && r.revision === proof.revision && r.result
+    && (!r.result.status || r.result.status === 'ok') && typeof r.result.plan === 'string' && checkRollbackPlan(r.result.plan, { oneWayDoor }).ok);
+  if (plan) return `yes (${plan.id}: ${firstPlanLine(plan.result.plan)})`;
+  const required = (proof.required || []).includes('rollback_or_flag_plan');
+  const missing = (proof.missing || []).some((m) => m.requirement === 'rollback_or_flag_plan');
+  return required && missing ? 'no plan' : base;
+}
+
 function kindOf(record) {
   if (record.proof_kind) return record.proof_kind;
   return record.agent === 'spine:live-verify' && record.severity === 'INFO' ? 'live_verify' : null;
@@ -123,5 +146,5 @@ function recordSatisfies(record, requirement, ctx) {
 
 module.exports = {
   PROOF_KINDS, REQUIREMENTS, RUNTIME, HINTS,
-  requiredEvidence, changeContext, checkCommand, checkTestRun, checkMigrationDryRun, planSection, checkRollbackPlan, recordSatisfies,
+  requiredEvidence, changeContext, checkCommand, checkTestRun, checkMigrationDryRun, planSection, checkRollbackPlan, rollbackAnswer, recordSatisfies,
 };

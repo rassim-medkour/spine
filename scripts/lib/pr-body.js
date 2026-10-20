@@ -1,6 +1,6 @@
 'use strict';
 const { maxTier } = require('./tier-config');
-const { planSection } = require('./proof');
+const { planSection, rollbackAnswer } = require('./proof');
 const { computeMix, mixLine } = require('./model-mix');
 
 const ALL = Object.freeze(['leaf', 'branch', 'trunk']);
@@ -55,7 +55,7 @@ function genChanged(data) {
 
 function genReadingMap(data) {
   const knobs = (data.tree && data.tree.knobs) || {};
-  const ans = (k) => (knobs[k] ? knobs[k].answer : 'unknown');
+  const ans = (k) => (k === 'instant_rollback' ? rollbackAnswer(data.tree, data.proof, data.records) : knobs[k] ? knobs[k].answer : 'unknown');
   const head = [
     `- Is this trunk code? ${ans('is_trunk')}`,
     `- Wide downstream dependencies? ${ans('wide_downstream')}`,
@@ -72,7 +72,7 @@ function genReadingMap(data) {
 }
 
 function genRollout(data) {
-  const knob = data.tree && data.tree.knobs ? data.tree.knobs.instant_rollback.answer : 'unknown';
+  const knob = rollbackAnswer(data.tree, data.proof, data.records);
   const body = planSection(data.planText);
   return [`- Instant rollback: ${knob}`, ...(body ? body.split('\n').filter((l) => l.trim()) : ['- No rollback or flag plan was recorded.'])];
 }
