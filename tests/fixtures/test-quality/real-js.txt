@@ -1,0 +1,28 @@
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const { add, parse } = require('./math');
+const { assertValidTree } = require('./helpers');
+
+test('adds numbers', () => {
+  assert.equal(add(1, 2), 3);
+});
+
+test('rejects bad input', async () => {
+  await assert.rejects(() => parse('x'), /bad/);
+});
+
+it('matches the snapshot', () => {
+  expect(parse('{}')).toMatchSnapshot();
+});
+
+test('property: add is commutative', () => {
+  for (const [a, b] of [[1, 2], [3, 4]]) assert.equal(add(a, b), add(b, a));
+});
+
+test('custom helper', () => {
+  assertValidTree(parse('{}'));
+});
+
+test('regex inside a body', () => {
+  assert.ok(/x/.test(parse('x').name));
+});

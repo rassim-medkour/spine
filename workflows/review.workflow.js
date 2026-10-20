@@ -8,10 +8,18 @@ export const meta = {
   ]
 };
 
-// args: { diff, changedFiles, language, providers, devilsAdvocate, runId, stage }
+// args: { diff, changedFiles, language, providers, devilsAdvocate, runId, stage, tree? }
 if (!args || typeof args.diff !== 'string' || !args.diff.trim()) throw new Error('spine-review: args.diff is required');
 if (!Array.isArray(args.providers) || !args.providers.length) throw new Error('spine-review: args.providers is required');
 const changedFiles = Array.isArray(args.changedFiles) ? args.changedFiles : [];
+const oneLine = (s) => String(s).replace(/[\r\n]+/g, '');
+const tree = args.tree && typeof args.tree.tier === 'string' && Array.isArray(args.tree.files) ? args.tree : null;
+
+function tierContext() {
+  if (!tree) return '';
+  const trunk = tree.files.filter((f) => f && f.tier === 'trunk' && typeof f.path === 'string').map((f) => oneLine(f.path)).slice(0, 20);
+  return `\nChange tier: ${oneLine(tree.tier)}. Trunk files (read these hardest): ${trunk.length ? trunk.join(', ') : 'none'}.`;
+}
 
 const EVIDENCE = {
   type: 'object',
@@ -91,7 +99,7 @@ function finderPrompt(p) {
   if (p.kind === 'skill') how = `Invoke the skill ${p.id} with the Skill tool and apply it to the diff below.`;
   else if (p.kind === 'tool') how = `Use the ${p.id} tool on the diff below and normalize its output.`;
   else how = `Review the diff below as ${p.id} would.`;
-  return `${how}\nYour strengths: ${p.strengths.join(', ')}.\n${CONTRACT}\nChanged files: ${changedFiles.join(', ')}\nLanguage: ${args.language || 'unknown'}\n\nDIFF:\n${args.diff}`;
+  return `${how}\nYour strengths: ${p.strengths.join(', ')}.\n${CONTRACT}\nChanged files: ${changedFiles.join(', ')}\nLanguage: ${args.language || 'unknown'}${tierContext()}\n\nDIFF:\n${args.diff}`;
 }
 
 function agentTypeFor(p) {

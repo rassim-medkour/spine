@@ -3,6 +3,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
+const { tmpDir } = require('./helpers/tmp');
 const os = require('node:os');
 const path = require('node:path');
 const { readStdinCapped, readHookPayload, MAX_STDIN_BYTES } = require('../scripts/lib/stdin');
@@ -10,7 +11,7 @@ const st = require('../scripts/lib/safe-text');
 const cur = require('../scripts/lib/host/cursor');
 
 function fdOf(content) {
-  const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'spine-stdin-')), 'in');
+  const file = path.join(tmpDir('spine-stdin-'), 'in');
   fs.writeFileSync(file, content);
   return fs.openSync(file, 'r');
 }
@@ -110,7 +111,7 @@ test('stopOutput, capOutput and contextOutput render Cursor JSON', () => {
 });
 
 test('appendCursorLog writes host, decision and a sanitized conversation id', () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'spine-log-'));
+  const dir = tmpDir('spine-log-');
   cur.appendCursorLog({ dir }, 'Stop', 'followup', 'conv 1\n$(rm)');
   const line = fs.readFileSync(path.join(dir, 'hooks.log'), 'utf8');
   assert.match(line, /^\S+ Stop followup host=cursor conversation=conv1rm\n$/);

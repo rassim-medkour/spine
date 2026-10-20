@@ -1,5 +1,42 @@
 # Changelog
 
+## 0.3.0
+
+Cursor support is still experimental: it is built from Cursor's documentation
+and the manual Cursor smoke test is pending (checklist in
+`docs/cursor-smoke-test.md`).
+
+### Added
+
+- [both] File tiers (trunk, branch, leaf) from nine recorded signals, written by `scripts/tree.js` to `.spine/<run>/tree.json` with a documented, versioned shape.
+- [both] Import parsers for Python, TypeScript, JavaScript and Go, plus a generic fallback for every other language; a per-blob import cache under `.spine/cache/`.
+- [both] Required proof per change tier, checked by `scripts/check-proof.js`; evidence files saved and capped by `scripts/save-evidence.js`.
+- [both] New verdict `UNPROVEN` when required proof is missing, computed by `scripts/verdict.js` (FAIL > UNPROVEN > PASS_WITH_ADVISORIES > PASS). Shadow mode in this release: G3 can approve and the approval is recorded as a waiver; set `"unproven_blocks": true` to block.
+- [both] Advisory hollow-test check (`scripts/test-quality.js`) for Python, JS/TS and Go tests.
+- [both] Reading map (`scripts/reading-map.js`): read-yourself, skim and skip with reasons and reading times, summarised in the G3 block.
+- [both] PR description generator (`scripts/pr-body.js`) and `.github/pull_request_template.md`.
+- [claude-code] The review workflow passes the change tier and trunk files to finders.
+
+### Changed
+
+- [both] `review.json` may carry `tier` and `missing_proof`; `class.json` may carry `tier`. Every 0.2.0 file still validates.
+
+### Turning it off
+
+- [both] Set `"risk_tiers": false` in `~/.spine/config.json` or the repo config to get 0.2.0 behaviour back. Pin `v0.2.0` to stay on the previous version.
+
+### Fixed
+
+- [both] Tests clean up the temporary directories they create.
+
+### Known limitations
+
+- [both] Fan-in is module-level; there is no call graph and no language server.
+- [both] Reading times are estimates from fixed lines-per-minute rates.
+- [both] An older spine install does not know the `UNPROVEN` verdict: its validator reports a review.json carrying it as a schema problem and asks for a fix, so it can hold up the review step until the file is edited by hand. Pin one version per repo.
+- [both] tree.json is not always reproducible: when `tree_budget_ms` is exceeded the tree is partial (unknown fan-in, never leaf), so a re-run on the same revision can produce a different tree.json.
+- [both] Seven baseline-pinned test files still leak temporary directories.
+
 ## 0.2.0
 
 Cursor support is experimental: it is built from Cursor's documentation and

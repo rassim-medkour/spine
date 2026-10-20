@@ -3,6 +3,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
+const { tmpDir } = require('./helpers/tmp');
 const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
@@ -12,7 +13,7 @@ const { cleanEnv } = require('./helpers/claude-cases');
 const ROOT = path.join(__dirname, '..');
 const node = (script, args, input) => spawnSync(process.execPath, [path.join(ROOT, 'scripts', script), ...args], { input: input || '', encoding: 'utf8', env: cleanEnv() });
 function runDir() {
-  const dir = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'spine-wr-')), '.spine', '20260920-demo');
+  const dir = path.join(tmpDir('spine-wr-'), '.spine', '20260920-demo');
   writeState(dir, { id: '20260920-demo', stage: 'review', status: 'active', awaiting: null });
   return dir;
 }

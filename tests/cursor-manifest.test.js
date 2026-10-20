@@ -2,6 +2,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
+const { tmpDir } = require('./helpers/tmp');
 const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
@@ -58,14 +59,14 @@ test('no Cursor file references CLAUDE_PLUGIN_ROOT and no Claude file references
 });
 
 test('Cursor hook commands run from an install path containing spaces and shell metacharacters', () => {
-  const install = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'spine-inst-')), 'a b&c');
+  const install = path.join(tmpDir('spine-inst-'), 'a b&c');
   for (const part of ['scripts', 'schemas', 'hooks']) fs.cpSync(path.join(ROOT, part), path.join(install, part), { recursive: true });
   for (const f of ['providers.json', 'providers.cursor.json']) fs.copyFileSync(path.join(ROOT, f), path.join(install, f));
   const r = cursorRepo({ ...BASE, stage: 'intent' });
   const { hooks } = json('hooks/cursor-hooks.json');
   const command = hooks.stop[0].command.replace('${CURSOR_PLUGIN_ROOT}', install);
   const res = spawnSync(command, {
-    shell: true, encoding: 'utf8', cwd: fs.mkdtempSync(path.join(os.tmpdir(), 'spine-userproj-')),
+    shell: true, encoding: 'utf8', cwd: tmpDir('spine-userproj-'),
     input: JSON.stringify({ ...fixture('stop.json'), workspace_roots: [r.root] }),
     env: cleanEnv({ SPINE_HOME: r.home, CURSOR_PLUGIN_ROOT: install }),
   });

@@ -1,11 +1,12 @@
 {
   "kind": "json",
   "required": ["id", "upstream_id", "verdict", "providers", "findings", "dissent"],
-  "enums": { "verdict": ["PASS", "FAIL", "PASS_WITH_ADVISORIES"] },
+  "enums": { "verdict": ["PASS", "FAIL", "PASS_WITH_ADVISORIES", "UNPROVEN"], "tier": ["leaf", "branch", "trunk"] },
   "arrays": {
     "findings": {
       "required": ["record_id", "severity", "corroboration", "verified"],
       "enums": { "severity": ["CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"] }
-    }
+    },
+    "missing_proof": { "required": ["requirement", "kinds", "files"] }
   }
 }
