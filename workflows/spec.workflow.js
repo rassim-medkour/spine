@@ -12,6 +12,99 @@ if (!args || typeof args.intentText !== 'string' || !args.intentText.trim()) thr
 const lenses = Array.isArray(args.lenses) && args.lenses.length ? args.lenses : ['domain', 'architecture', 'data', 'security', 'ops', 'testability'];
 const providers = Array.isArray(args.providers) ? args.providers : [];
 
+// --- spine model routing (identical in all three workflows; pinned by tests/workflow-model-parity.test.js) ---
+const MODEL_CLASS_RANK = { cheap: 0, mid: 1, top: 2 };
+const WEAK_VERIFIER_NOTE = 'verifier below finder strength';
+const modelArgs = args.models && typeof args.models === 'object' && !Array.isArray(args.models) && args.models.roles && typeof args.models.roles === 'object' && !Array.isArray(args.models.roles) ? args.models : null;
+const modelBlocks = {};
+const notRun = [];
+function markNotRun(label) {
+  const requested = modelBlocks[label] && modelBlocks[label].requested;
+  if (modelArgs && requested && !notRun.includes(label)) notRun.push(label);
+}
+function plannedFor(role) {
+  const r = modelArgs ? modelArgs.roles[role] : null;
+  if (!r || typeof r !== 'object') return null;
+  return { class: typeof r.class === 'string' ? r.class : null, model: typeof r.model === 'string' && r.model ? r.model : null };
+}
+function blockFor(role, planned, source, reason) {
+  const b = { role, tier: modelArgs.tier || null, tier_source: modelArgs.tier_source || null, class: planned ? planned.class : null, requested: planned ? planned.model : null, source };
+  return reason ? { ...b, reason } : b;
+}
+function effectiveClass(block) {
+  return block && (block.source === 'requested' || block.source === 'floor-raised') ? block.class : 'session';
+}
+function floorClass(cls, raiserClasses) {
+  if (!(cls in MODEL_CLASS_RANK)) return { class: cls, raised: false };
+  let best = cls;
+  for (const c of raiserClasses) if (c in MODEL_CLASS_RANK && MODEL_CLASS_RANK[c] > MODEL_CLASS_RANK[best]) best = c;
+  return { class: best, raised: best !== cls };
+}
+function isWeakVerifier(verifierBlock, raiserBlocks) {
+  if (!modelArgs || modelArgs.tier !== 'trunk' || modelArgs.kill_switch) return false;
+  const v = effectiveClass(verifierBlock);
+  if (v === 'pinned') return false;
+  const raisers = raiserBlocks.map(effectiveClass).filter((c) => c in MODEL_CLASS_RANK);
+  if (!(v in MODEL_CLASS_RANK)) return raisers.some((c) => MODEL_CLASS_RANK[c] > 0);
+  return raisers.some((c) => MODEL_CLASS_RANK[c] > MODEL_CLASS_RANK[v]);
+}
+async function routed(role, prompt, opts, floorFrom) {
+  if (!modelArgs) return agent(prompt, opts);
+  let planned = plannedFor(role);
+  let source = planned && planned.model ? 'requested' : 'inherit';
+  let reason = null;
+  if (planned && floorFrom && modelArgs.tier === 'trunk' && !modelArgs.kill_switch) {
+    const f = floorClass(planned.class, floorFrom.map((label) => effectiveClass(modelBlocks[label])));
+    const ids = modelArgs.class_ids && typeof modelArgs.class_ids === 'object' ? modelArgs.class_ids : {};
+    if (f.raised && typeof ids[f.class] === 'string' && ids[f.class]) {
+      reason = `policy_clamped: raised from ${planned.class} to ${f.class} (finder class)`;
+      planned = { class: f.class, model: ids[f.class] };
+      source = 'floor-raised';
+    }
+  }
+  if (!planned || !planned.model) {
+    modelBlocks[opts.label] = blockFor(role, planned, 'inherit');
+    const direct = await agent(prompt, opts);
+    if (!direct) markNotRun(opts.label);
+    return direct;
+  }
+  let result = null;
+  let failure = null;
+  try {
+    result = await agent(prompt, { ...opts, model: planned.model });
+  } catch (e) {
+    failure = e;
+  }
+  if (result) {
+    modelBlocks[opts.label] = blockFor(role, planned, source, reason);
+    return result;
+  }
+  const why = failure ? `model ${planned.model} failed: ${String(failure && failure.message).replace(/\s+/g, ' ').slice(0, 120)}` : `model ${planned.model} returned nothing`;
+  log(`${opts.label}: ${why}; retrying once on the session model`);
+  modelBlocks[opts.label] = blockFor(role, planned, 'session-fallback', why);
+  const retry = await agent(prompt, opts);
+  if (!retry) markNotRun(opts.label);
+  return retry;
+}
+function didNotRunRecords(stage, agentFor, startIndex) {
+  if (!modelArgs) return [];
+  return notRun.map((label, i) => ({
+    id: `R-${String(startIndex + i + 1).padStart(4, '0')}`,
+    stage,
+    agent: agentFor(label),
+    provider: agentFor(label),
+    claim: `agent did not run: ${label}`,
+    evidence: [{ kind: 'unverified', ref: `workflow:${label}` }],
+    confidence: 1,
+    severity: 'INFO',
+    dissent: null,
+    resolution: null,
+    alternatives: [],
+    model: modelBlocks[label] || blockFor('implementer', null, 'fallback-error'),
+  }));
+}
+// --- end spine model routing ---
+
 const SECTION = {
   type: 'object',
   properties: {
@@ -78,8 +171,9 @@ const failedLenses = [];
 
 phase('Lenses');
 const sections = await parallel(lenses.map((lens, i) => () =>
-  agent(lensPrompt(lens, i), { label: `lens:${lens}`, phase: 'Lenses', schema: SECTION })
+  routed('spec_lens', lensPrompt(lens, i), { label: `lens:${lens}`, phase: 'Lenses', schema: SECTION })
     .catch((e) => {
+      markNotRun(`lens:${lens}`);
       failedLenses.push(lens);
       log(`lens:${lens} failed: ${e && e.message}`);
       return null;
@@ -94,7 +188,8 @@ const good = sections.filter(Boolean);
 log(`spine-spec: ${good.length}/${lenses.length} lenses returned`);
 
 phase('Synthesis');
-const merged = await agent(
+const merged = await routed(
+  'synthesis',
   `Merge these lens sections into one spec draft. Keep every requirement, dedupe exact duplicates, and where two lenses disagree record it under dissent with both positions and the evidence that would settle it (a test, a spike, or a question). Do not invent requirements that no lens proposed.
 
 SECTIONS:
@@ -104,6 +199,7 @@ INTENT:
 ${args.intentText}`,
   { label: 'synthesis', phase: 'Synthesis', schema: MERGE }
 ).catch((e) => {
+  markNotRun('synthesis');
   log(`synthesis failed: ${e && e.message}`);
   return null;
 });
@@ -119,7 +215,28 @@ const records = good.map((s, i) => ({
   severity: 'INFO',
   dissent: null,
   resolution: null,
-  alternatives: []
+  alternatives: [],
+  ...(modelArgs ? { model: modelBlocks[`lens:${s.lens}`] || null } : {})
 }));
 
-return { sections: good, merged: merged || null, dissent: merged ? merged.dissent : [], records, failed_lenses: failedLenses };
+const synthesisRecords = modelArgs && merged ? [{
+  id: `R-${String(records.length + 1).padStart(4, '0')}`,
+  stage: 'spec',
+  agent: 'spine:synthesis',
+  provider: 'spine:synthesis',
+  claim: `synthesis merged ${good.length} lens section(s)`,
+  evidence: [{ kind: 'doc', ref: 'intent.md:1' }],
+  confidence: 0.8,
+  severity: 'INFO',
+  dissent: null,
+  resolution: null,
+  alternatives: [],
+  model: modelBlocks.synthesis
+}] : [];
+const allRecords = [
+  ...records,
+  ...synthesisRecords,
+  ...didNotRunRecords('spec', (label) => (label === 'synthesis' ? 'spine:synthesis' : 'spine:lens'), records.length + synthesisRecords.length)
+];
+
+return { sections: good, merged: merged || null, dissent: merged ? merged.dissent : [], records: allRecords, failed_lenses: failedLenses };

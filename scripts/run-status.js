@@ -2,6 +2,8 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { readJson } = require('./lib/state');
+const { listRecords } = require('./lib/records');
+const { computeMix, mixLine } = require('./lib/model-mix');
 
 const HOSTS = ['cursor', 'claude-code'];
 const LINE = /^(\S+) (\S+) (\S+)(.*)$/;
@@ -27,7 +29,14 @@ function runStatus(runDir) {
     if (m[2] === 'Stop' && m[3] === 'cap-reached') capReached = true;
     lastHook = m[1];
   }
-  return { host: HOSTS.includes(state.host) ? state.host : 'unknown', hooks, cap_reached: capReached, last_hook: lastHook };
+  const mix = computeMix(listRecords(runDir).map((r) => r.record));
+  return {
+    host: HOSTS.includes(state.host) ? state.host : 'unknown',
+    hooks,
+    cap_reached: capReached,
+    last_hook: lastHook,
+    ...(mix ? { model_mix: { ...mix, line: mixLine(mix) } } : {})
+  };
 }
 
 if (require.main === module) {

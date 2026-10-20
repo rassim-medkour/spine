@@ -16,14 +16,20 @@ and the manual Cursor smoke test is pending (checklist in
 - [both] Reading map (`scripts/reading-map.js`): read-yourself, skim and skip with reasons and reading times, summarised in the G3 block.
 - [both] PR description generator (`scripts/pr-body.js`) and `.github/pull_request_template.md`.
 - [claude-code] The review workflow passes the change tier and trunk files to finders.
+- [both] Model routing: `scripts/select-model.js` picks a model per role and change tier (Balanced table), writes `<run>/models.json`, and records stamp the requested model.
+- [cursor] Read-only Cursor model discovery from local app state (experimental).
+- [both] Model mix in the PR description and `run-status.js`.
 
 ### Changed
 
 - [both] `review.json` may carry `tier` and `missing_proof`; `class.json` may carry `tier`. Every 0.2.0 file still validates.
+- [both] Model routing is on by default (Balanced); this is a behaviour change. Set `"model_policy": "inherit"` to keep every agent on the session model.
+- [claude-code] The three workflows accept `args.models`; without it every `agent()` call is unchanged (claude-baseline.json entries for the workflows regenerated).
 
 ### Turning it off
 
 - [both] Set `"risk_tiers": false` in `~/.spine/config.json` or the repo config to get 0.2.0 behaviour back. Pin `v0.2.0` to stay on the previous version.
+- [both] `"model_policy": "inherit"` turns model routing off.
 
 ### Fixed
 
@@ -36,6 +42,9 @@ and the manual Cursor smoke test is pending (checklist in
 - [both] An older spine install does not know the `UNPROVEN` verdict: its validator reports a review.json carrying it as a schema problem and asks for a fix, so it can hold up the review step until the file is edited by hand. Pin one version per repo.
 - [both] tree.json is not always reproducible: when `tree_budget_ms` is exceeded the tree is partial (unknown fan-in, never leaf), so a re-run on the same revision can produce a different tree.json.
 - [both] Seven baseline-pinned test files still leak temporary directories.
+- [cursor] Whether Cursor's Task tool accepts a per-call model is unverified; spine passes a model only when the tool exposes the parameter.
+- [claude-code] What the Workflow tool's `agent()` does with an unknown model id (throw, `null` or silent substitution) is unverified; spine retries once on the session model.
+- [both] Records hold the requested model, not the model that ran; no Cursor hook reads the observed model in this release.
 
 ## 0.2.0
 

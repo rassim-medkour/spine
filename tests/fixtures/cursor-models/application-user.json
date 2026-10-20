@@ -1,0 +1,15 @@
+{
+  "availableDefaultModels2": [
+    { "name": "default", "defaultOn": true, "supportsAgent": true },
+    { "name": "claude-opus-4-8", "defaultOn": true, "supportsAgent": true },
+    { "name": "claude-opus-4-10", "defaultOn": true, "supportsAgent": true },
+    { "name": "claude-sonnet-4-6", "defaultOn": true, "supportsAgent": true },
+    { "name": "claude-haiku-4-5", "defaultOn": false, "supportsAgent": true },
+    { "name": "gpt-5.4", "defaultOn": true, "supportsAgent": true },
+    { "name": "bad id; rm -rf /", "defaultOn": true },
+    { "name": "no-agent-model", "defaultOn": true, "supportsAgent": false }
+  ],
+  "aiSettings": { "modelOverrideEnabled": ["claude-haiku-4-5"], "modelOverrideDisabled": ["gpt-5.4"], "teamIds": [123] },
+  "accessToken": "tok_FAKE_SHOULD_NEVER_APPEAR",
+  "email": "someone@example.invalid"
+}

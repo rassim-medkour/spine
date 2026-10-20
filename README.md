@@ -71,6 +71,9 @@ Known limits in Cursor:
   own message in chat approves G1, G2 or G3.
 - There is no Workflow-tool fan-out. Spine fans out to parallel subagents by
   prompt instead.
+- Spine reads the models your Cursor install lists from local app state,
+  read-only, and falls back to the session model when it cannot; a Cursor
+  subagent may still run on the session model.
 - How imported Claude skills are named in Cursor is unverified, so spine falls
   back to generic subagents when it cannot resolve a provider.
 - Hook behavior was cross-checked against the Cursor 3.23.12 app bundle (a
@@ -350,6 +353,55 @@ written by hand.
 
 "Not verified" is never left out when it has content, at any tier.
 
+## Model routing
+
+Spine picks a model for every agent it dispatches. A script,
+`scripts/select-model.js`, decides from the agent's role and the change tier,
+so the choice is deterministic and written down in `<run>/models.json`. The
+default policy is **Balanced**:
+
+| Role | leaf | branch | trunk |
+|---|---|---|---|
+| implementer | mid | mid | mid |
+| finder (also the spec and quality reviewers) | mid | mid | top |
+| verifier | mid | top | top |
+| devils advocate | mid | top | top |
+| spec lens | mid | mid | top |
+| synthesis | cheap | mid | mid |
+| boundary checker | cheap | cheap | mid |
+
+The three model classes are `cheap`, `mid` and `top`. On Claude Code they map
+to `haiku`, `sonnet` and `opus`. The tier comes from `<run>/tree.json`; when
+tree.json is absent, stale or invalid, the run size decides (S leaf, M branch,
+L trunk) and the plan says so.
+
+- **Policy.** `model_policy` in either config file is `"inherit"`, a class name,
+  a host model id, or an object of `{ role: { tier: class | "inherit" } }`. A
+  repo cell wins over the same global cell; a string replaces the whole table.
+  An invalid key in either layer gives one message, the whole policy is
+  ignored and Balanced is used. That includes a valid global `"inherit"`: if
+  the repo layer's `model_policy` is invalid, the global kill switch stops
+  applying too and agents get Balanced models, not the session model. The
+  message names the offending key; fix or remove it in the repo config to
+  restore `"inherit"`.
+- **Verifier floor.** The verifier floor applies to a trunk change: the verifier and the devils advocate
+  never run below the class of the agent that raised the finding. A lower
+  setting is raised and recorded as `floor-raised`. A verifier that ends up
+  below the finder (for example after a fallback to the session model) is not
+  counted as verified and the record carries "verifier below finder strength".
+- **If a model is unavailable** the agent is retried once on the session model
+  and the record says `session-fallback`. If the router itself fails, agents run
+  on the session model and records say `fallback-error`; a run never stops.
+- **Records** carry the model that was *requested*, stamped by the dispatcher.
+  The pull request description and `run-status.js` show the model mix as
+  `Models (requested): ...`.
+- **Turning it off.** Set `"model_policy": "inherit"` in `~/.spine/config.json`
+  or the repo config. Every agent then runs on the session model; this
+  rolls back to 0.3.0 dispatch behaviour with no downgrade.
+
+Model routing is on by default in this release; that is a behaviour change from
+earlier 0.3.0 builds, where every agent ran on the session model.
+
 ## Spine's own parts
 
 | Part | Kind | What it does |
@@ -368,6 +420,7 @@ written by hand.
 | `scripts/verdict.js` | script | Computes the verdict and writes it into review.json. |
 | `scripts/reading-map.js` | script | Writes the reading map and the G3 summary line. |
 | `scripts/pr-body.js` | script | Builds the PR description from the run after G3. |
+| `scripts/select-model.js` | script | Resolves the model for each role and writes `<run>/models.json`. |
 
 ## Configuration
 
@@ -382,6 +435,7 @@ written by hand.
   "critical_paths": ["src/payments/**"],
   "risk_tiers": true,
   "unproven_blocks": false,
+  "model_policy": "inherit",
   "tiers": {
     "fan_in_trunk": 8,
     "fan_in_branch": 2,
@@ -406,6 +460,14 @@ written by hand.
 - `unproven_blocks` (default false, shadow mode) makes G3 refuse an `UNPROVEN`
   review unless the human waives every proof gap. Off, G3 can approve and the
   approval is recorded as a waiver.
+- `model_policy` is optional; leave it out for the Balanced default. See
+  [Model routing](#model-routing). `"inherit"` is the kill switch.
+- `model_ids` overrides the model id behind a class per host, for example
+  `{ "claude-code": { "top": "claude-opus-4-8" } }`. Ids must match
+  `[A-Za-z0-9][A-Za-z0-9._:-]{0,63}`.
+- `cursor_models` lists extra Cursor model ids. They are always merged into the
+  list discovery finds, and are the whole list when discovery finds none.
+  `cursor_discovery` (default true) turns off reading Cursor's local app state.
 - `tiers.fan_in_trunk` and `tiers.fan_in_branch` are the importer counts at
   which a file becomes trunk or branch.
 - `tiers.flag_names` lists your feature-flag helper names so a flagged branch
@@ -433,6 +495,12 @@ Risk tiers are an estimate, not a call graph: fan-in is module-level only
 Python, TypeScript, JavaScript and Go; other languages use a line-pattern
 fallback. Reading times come from fixed rates. `UNPROVEN` is advisory (shadow
 mode) in 0.3.0 unless you set `"unproven_blocks": true`.
+
+Model routing records the model that was requested, not the model that ran:
+no Cursor hook reads the observed model in this release. Whether Cursor's Task
+tool accepts a per-call model, and what the Workflow tool's `agent()` does with
+an unknown model id, are unverified; spine retries once on the session model.
+Cursor model discovery needs `node:sqlite` (Node 22.13 or later).
 
 ## Reporting issues
 

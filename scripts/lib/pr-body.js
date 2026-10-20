@@ -1,6 +1,7 @@
 'use strict';
 const { maxTier } = require('./tier-config');
 const { planSection } = require('./proof');
+const { computeMix, mixLine } = require('./model-mix');
 
 const ALL = Object.freeze(['leaf', 'branch', 'trunk']);
 const SECTIONS = Object.freeze([
@@ -91,6 +92,7 @@ function genChecked(data) {
   const review = data.review || {};
   const findings = Array.isArray(review.findings) ? review.findings : [];
   const counts = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW'].map((s) => [s, findings.filter((f) => f.severity === s).length]).filter(([, n]) => n);
+  const mix = computeMix(data.records);
   const present = ((data.proof && data.proof.present) || []).map((p) => `${p.requirement}${p.record_ids.length ? ` (${p.record_ids.join(', ')})` : ''}`);
   return [
     `- Reviewers: ${(review.providers || []).join(', ') || 'none recorded'}`,
@@ -98,6 +100,7 @@ function genChecked(data) {
     `- Cross-author verification rounds: ${data.records.filter((r) => typeof r.verifies === 'string').length}`,
     `- Verdict: ${review.verdict || 'unknown'}${review.tier ? ` (change tier ${review.tier})` : ''}`,
     ...(present.length ? [`- Proof present: ${present.join(', ')}`] : []),
+    ...(mix ? [`- ${mixLine(mix)}`] : []),
   ];
 }
 
