@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.3.1
+
+Cursor support is still experimental and the live Cursor smoke test is pending.
+
+### Fixed
+
+- [both] The "instant rollback?" review question now reads a recorded rollback or flag plan: `yes (R-NNNN: ...)`, or `no plan` on a trunk change without one. Before, it always said "unknown".
+- [both] The test suite no longer leaves `spine*` temp folders behind. Older versions left dozens per run. To clean up existing ones on Windows, run `Remove-Item "$env:TEMP\spine*" -Recurse -Force`.
+
 ## 0.3.0
 
 Cursor support is still experimental: it is built from Cursor's documentation

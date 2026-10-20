@@ -20,10 +20,9 @@ test('README Cursor section mentions model discovery without the word tier', () 
   assert.doesNotMatch(section, /\btiers?\b/i);
 });
 
-test('the 0.3.0 CHANGELOG entry lists model routing as a behaviour change, versions stay 0.3.0', () => {
-  const pkg = JSON.parse(read('package.json'));
-  assert.equal(pkg.version, '0.3.0');
-  const entry = read('CHANGELOG.md').split('\n## ')[1];
+test('the 0.3.0 CHANGELOG entry lists model routing as a behaviour change', () => {
+  const entry = read('CHANGELOG.md').split(/\r?\n## /).find((e) => e.startsWith('0.3.0'));
+  assert.ok(entry, 'CHANGELOG has a 0.3.0 entry');
   assert.match(entry, /^0\.3\.0/);
   assert.match(entry, /### Changed[\s\S]*model routing[\s\S]*behaviour change/i);
   assert.match(entry, /model_policy.*inherit/);
