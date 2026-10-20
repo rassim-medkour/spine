@@ -10,6 +10,7 @@ const { DEFAULTS, loadConfigLayers, readJson } = require('./lib/state');
 const mp = require('./lib/model-policy');
 const { validateTree } = require('./lib/validate');
 const { tierConfig, tierConfigHash } = require('./lib/tier-config');
+const cm = require('./lib/cursor-models');
 
 const STAGES = ['intent', 'spec', 'plan', 'implement', 'review'];
 const FLAG_RULES = {
@@ -156,6 +157,55 @@ function classIdsFor(config, host) {
   return { classIds: { ...(mp.DEFAULT_CLASS_IDS[host] || {}), ...parsed.ids }, errors: parsed.errors };
 }
 
+const CLASS_NAMES = ['cheap', 'mid', 'top'];
+
+function cursorDbPath(env) {
+  const dir = cm.cursorUserDir(env);
+  return dir ? path.join(dir, 'User', 'globalStorage', 'state.vscdb') : null;
+}
+
+function cacheMatches(cache, dbPath) {
+  if (!isObj(cache) || !Array.isArray(cache.found) || !cache.found.every((id) => typeof id === 'string' && mp.MODEL_ID_RE.test(id))) return false;
+  if (!dbPath || cache.source !== 'state-db' || typeof cache.mtime_ms !== 'number') return false;
+  try {
+    return Math.trunc(fs.statSync(dbPath).mtimeMs) === cache.mtime_ms && cache.source_hash === sha256(dbPath);
+  } catch {
+    return false;
+  }
+}
+
+function withClassMap(found) {
+  return { class_map: cm.mapClasses(found) };
+}
+
+// Discovery runs only for --host cursor, only in run mode, and is cached in <run>/cursor-models.json
+// until the db mtime or path changes. Never reads anything but model ids (see cursor-models.js).
+function cursorDiscovery(runDir, config, env) {
+  if (config.cursor_discovery === false) {
+    return { source: 'none', found: [], reason: 'cursor_discovery disabled', mtime_ms: null, source_hash: null, cursor_version: null, ...withClassMap([]) };
+  }
+  const cacheFile = path.join(runDir, 'cursor-models.json');
+  const cached = readJson(cacheFile);
+  const dbPath = cursorDbPath(env);
+  if (cacheMatches(cached, dbPath)) return { ...cached, ...withClassMap(cached.found) };
+  const found = cm.discoverCursorModels({ userDir: cm.cursorUserDir(env), configModels: config.cursor_models });
+  const discovery = { ...found, cursor_version: null, ...withClassMap(found.found) };
+  fs.writeFileSync(cacheFile, `${JSON.stringify(discovery, null, 2)}
+`);
+  return discovery;
+}
+
+function cursorClassIds(config, discovery) {
+  const fromMap = {};
+  for (const cls of CLASS_NAMES) if (discovery.class_map[cls].model) fromMap[cls] = discovery.class_map[cls].model;
+  const parsed = mp.parseClassIds(config.model_ids, 'cursor');
+  return { classIds: { ...fromMap, ...parsed.ids }, errors: parsed.errors };
+}
+
+function cursorNoIdReason(discovery) {
+  return (cls) => `cursor: ${discovery.found.length ? discovery.class_map[cls].reason : discovery.reason}`;
+}
+
 function runMode(flags, ctx) {
   const runDir = path.resolve(ctx.cwd, flags.run);
   if (!fs.existsSync(path.join(runDir, 'state.json'))) throw new Error('run directory not found');
@@ -168,12 +218,13 @@ function runMode(flags, ctx) {
   if (existing && existing.host === host && stageReusable(existing.stages[flags.stage])) {
     return { ok: true, stage: flags.stage, host, ...existing.stages[flags.stage], policy: existing.policy || policy };
   }
-  const { classIds, errors } = classIdsFor(ctx.config, host);
+  const discovery = host === 'cursor' ? cursorDiscovery(runDir, ctx.config, ctx.env) : null;
+  const { classIds, errors } = discovery ? cursorClassIds(ctx.config, discovery) : classIdsFor(ctx.config, host);
   for (const e of errors) ctx.stderr(`spine: ${e}\n`);
   const tier = resolveTier({ runDir, size: flags.size, config: ctx.config });
-  const plan = buildStagePlan({ stage: flags.stage, ...tier, host, merged, classIds });
+  const plan = buildStagePlan({ stage: flags.stage, ...tier, host, merged, classIds, noIdReason: discovery ? cursorNoIdReason(discovery) : undefined });
   const keep = existing && existing.host === host ? existing.stages : {};
-  const next = { schema_version: 1, host, policy, discovery: null, stages: { ...keep, [flags.stage]: plan } };
+  const next = { schema_version: 1, host, policy, discovery, stages: { ...keep, [flags.stage]: plan } };
   fs.writeFileSync(file, `${JSON.stringify(next, null, 2)}\n`);
   return { ok: true, stage: flags.stage, host, ...plan, policy };
 }
@@ -186,7 +237,8 @@ function queryMode(flags, ctx) {
   for (const e of merged.errors) ctx.stderr(`spine: ${e}\n`);
   const { classIds, errors } = classIdsFor(ctx.config, host);
   for (const e of errors) ctx.stderr(`spine: ${e}\n`);
-  const plan = buildStagePlan({ stage: 'query', tier, tier_source: bySize ? 'size' : null, tier_reason: 'query', host, merged, classIds });
+  const noIdReason = host === 'cursor' ? () => 'cursor: no run directory' : undefined;
+  const plan = buildStagePlan({ stage: 'query', tier, tier_source: bySize ? 'size' : null, tier_reason: 'query', host, merged, classIds, noIdReason });
   return { ok: true, ...plan.roles[flags.role] };
 }
 
@@ -198,7 +250,7 @@ function main(argv, env = {}) {
     const home = env.home || process.env.SPINE_HOME || os.homedir();
     const layers = loadConfigLayers(cwd, home);
     const config = { ...DEFAULTS, ...layers.global, ...layers.repo, artifacts_dir: layers.artifactsDir };
-    const ctx = { cwd, home, layers, config, stderr };
+    const ctx = { cwd, home, layers, config, stderr, env: env.processEnv || process.env };
     const out = flags.mode === 'run' ? runMode(flags, ctx) : queryMode(flags, ctx);
     return { code: 0, out: flags.mode === 'run' && flags.role ? { ok: true, ...out.roles[flags.role] } : out };
   } catch (e) {
