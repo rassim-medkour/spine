@@ -195,6 +195,20 @@ test('implement: a reviewer that threw or returned nothing yields a did-not-run 
   }
 });
 
+test('under inherit no model was requested, so an agent that did not run gets no record (0.3.0 behaviour)', async () => {
+  const inherit = Object.fromEntries(['implementer', 'finder', 'verifier', 'devils_advocate', 'spec_lens', 'synthesis', 'boundary_checker'].map((r) => [r, { class: 'inherit', model: null, source: 'inherit' }]));
+  const none = { tier: 'trunk', tier_source: 'tree', kill_switch: false, class_ids: {}, roles: inherit };
+  const dnOf = (records) => records.filter((r) => /^agent did not run/.test(r.claim));
+  const r1 = recorder((opts) => (opts.label.startsWith('find:') ? null : reviewAnswer(opts)));
+  assert.equal(dnOf((await load('review')(r1.agent, parallel, pipeline, noop, noop, reviewArgs({ models: none }))).records).length, 0);
+  const r2 = recorder((opts) => { if (opts.label.endsWith('-review:T-1')) throw new Error('x'); return implAnswer(opts); });
+  assert.equal(dnOf((await load('implement')(r2.agent, parallel, pipeline, noop, noop, implArgs({ models: none }))).results[0].records).length, 0);
+  const r3 = recorder((opts) => (opts.label.startsWith('implement:') ? null : implAnswer(opts)));
+  assert.equal(dnOf((await load('implement')(r3.agent, parallel, pipeline, noop, noop, implArgs({ models: none }))).results[0].records).length, 0);
+  const r4 = recorder((opts) => (opts.label === 'synthesis' ? null : specAnswer(opts)));
+  assert.equal(dnOf((await load('spec')(r4.agent, parallel, pipeline, noop, noop, { intentText: 'i', lenses: ['domain'], models: none })).records).length, 0);
+});
+
 const specAnswer = (opts) => (opts.label.startsWith('lens:')
   ? { requirements: ['r'], risks: [], questions: [], assumptions: [] }
   : { summary: 's', requirements: [], error_paths: [], data_and_migrations: [], test_anchors: [], assumptions: [], out_of_scope: [], dissent: [] });

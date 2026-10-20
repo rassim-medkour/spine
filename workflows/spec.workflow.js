@@ -19,7 +19,8 @@ const modelArgs = args.models && typeof args.models === 'object' && !Array.isArr
 const modelBlocks = {};
 const notRun = [];
 function markNotRun(label) {
-  if (modelArgs && !notRun.includes(label)) notRun.push(label);
+  const requested = modelBlocks[label] && modelBlocks[label].requested;
+  if (modelArgs && requested && !notRun.includes(label)) notRun.push(label);
 }
 function plannedFor(role) {
   const r = modelArgs ? modelArgs.roles[role] : null;
