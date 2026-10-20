@@ -55,6 +55,13 @@ const SAMPLE = [
   'tests/cursor-io.test.js',
   'tests/write-record.test.js',
   'tests/tree-contract.test.js',
+  'tests/churn.test.js',
+  'tests/find-verify.test.js',
+  'tests/session-start.test.js',
+  'tests/state.test.js',
+  'tests/stop-gate.test.js',
+  'tests/subagent-gate.test.js',
+  'tests/validate-artifact-hook.test.js',
 ];
 
 test('a sample of hook tests leaves no spine-* temp dirs behind', () => {

@@ -1,10 +1,10 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
-const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 const { writeState, setActive, loadConfig } = require('../scripts/lib/state');
+const { tmpDir } = require('./helpers/tmp');
 
 const SCRIPT = path.join(__dirname, '..', 'scripts', 'stop-gate.js');
 const FIX = path.join(__dirname, 'fixtures');
@@ -14,8 +14,8 @@ function run(payload, env = {}) {
 }
 
 function repo(state, globalConfig = {}) {
-  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'spine-'));
-  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'spine-home-'));
+  const cwd = tmpDir('spine-');
+  const home = tmpDir('spine-home-');
   fs.mkdirSync(path.join(home, '.spine'));
   fs.writeFileSync(path.join(home, '.spine', 'config.json'), JSON.stringify(globalConfig));
   const cfg = loadConfig(cwd, home);
@@ -42,7 +42,7 @@ test('exits 0 when stop_hook_active', () => {
 });
 
 test('exits 0 when no active run', () => {
-  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'spine-'));
+  const cwd = tmpDir('spine-');
   const r = run({ cwd, stop_hook_active: false });
   assert.equal(r.status, 0);
 });
@@ -120,8 +120,8 @@ test('exits 0 when stage is done', () => {
 });
 
 test('fails open with a spine: message when config is malformed', () => {
-  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'spine-'));
-  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'spine-home-'));
+  const cwd = tmpDir('spine-');
+  const home = tmpDir('spine-home-');
   fs.mkdirSync(path.join(home, '.spine'));
   fs.writeFileSync(path.join(home, '.spine', 'config.json'), JSON.stringify({ artifacts_dir: 5 }));
   const r = run({ cwd, stop_hook_active: false }, { SPINE_HOME: home });

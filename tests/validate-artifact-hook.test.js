@@ -1,10 +1,10 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
-const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 const { writeState, setActive, loadConfig } = require('../scripts/lib/state');
+const { tmpDir } = require('./helpers/tmp');
 
 const SCRIPT = path.join(__dirname, '..', 'scripts', 'validate-artifact.js');
 
@@ -13,8 +13,8 @@ function runHook(payload, env = {}) {
 }
 
 function repoWithRun() {
-  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'spine-'));
-  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'spine-home-'));
+  const cwd = tmpDir('spine-');
+  const home = tmpDir('spine-home-');
   const cfg = loadConfig(cwd, home);
   const dir = path.join(cwd, '.spine', '20260920-demo');
   writeState(dir, { id: '20260920-demo', stage: 'intent', status: 'active', awaiting: null, size: 'S', updated: '2026-09-20T10:00:00Z' });
@@ -23,7 +23,7 @@ function repoWithRun() {
 }
 
 test('exits 0 silently when no active run', () => {
-  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'spine-'));
+  const cwd = tmpDir('spine-');
   const r = runHook({ hook_event_name: 'PostToolUse', cwd, tool_name: 'Write', tool_input: { file_path: path.join(cwd, 'x.md') } });
   assert.equal(r.status, 0);
   assert.equal(r.stdout, '');
@@ -59,8 +59,8 @@ test('ignores files outside the run dir', () => {
 });
 
 test('fails open with a spine: message when config is malformed', () => {
-  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'spine-'));
-  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'spine-home-'));
+  const cwd = tmpDir('spine-');
+  const home = tmpDir('spine-home-');
   fs.mkdirSync(path.join(home, '.spine'));
   fs.writeFileSync(path.join(home, '.spine', 'config.json'), JSON.stringify({ artifacts_dir: 5 }));
   const r = runHook({ hook_event_name: 'PostToolUse', cwd, tool_name: 'Write', tool_input: { file_path: path.join(cwd, 'x.md') } }, { SPINE_HOME: home });
