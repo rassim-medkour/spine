@@ -148,3 +148,53 @@ test('review: did-not-run records name a real agent and carry a valid model bloc
     assert.deepEqual(validateModelBlock(r.model), []);
   }
 });
+
+const implArgs = (extra) => ({ tickets: [{ id: 'T-1', title: 't', spec_section: 's', acceptance: ['REQ-1'], files: [] }], specText: 's', planText: 'p', runId: 'r',
+  implementProviders: [], reviewProviders: PROVIDERS, ...extra });
+const implAnswer = (opts) => (opts.label.startsWith('implement:')
+  ? { implemented: true, summary: 's', commits: ['abc'], tests_run: 't', blockers: [] }
+  : { pass: false, issues: [{ claim: 'x', severity: 'MEDIUM', evidence: [{ kind: 'file', ref: 'a.js:1' }] }] });
+
+test('implement: without args.models options and return equal 0.3.0 (REQ-24)', async () => {
+  const a = recorder(implAnswer);
+  const out = await load('implement')(a.agent, parallel, pipeline, noop, noop, implArgs({}));
+  assert.deepEqual(a.calls.map((c) => [c.label, Object.keys(c.opts).sort()]), [
+    ['implement:T-1', ['agentType', 'label', 'phase', 'schema']],
+    ['spec-review:T-1', ['agentType', 'label', 'phase', 'schema']],
+    ['quality-review:T-1', ['agentType', 'label', 'phase', 'schema']],
+  ]);
+  assert.ok(out.results[0].records.every((r) => !('model' in r)));
+});
+
+test('implement: implementer and both reviewers get their role models (REQ-10, REQ-24)', async () => {
+  const a = recorder(implAnswer);
+  const out = await load('implement')(a.agent, parallel, pipeline, noop, noop, implArgs({ models: MODELS() }));
+  assert.deepEqual(Object.fromEntries(a.calls.map((c) => [c.label, c.opts.model])), { 'implement:T-1': 'sonnet', 'spec-review:T-1': 'opus', 'quality-review:T-1': 'opus' });
+  assert.ok(out.results[0].records.every((r) => r.model.role === 'finder' && r.model.requested === 'opus'));
+});
+
+test('implement: an implementer that never ran yields a did-not-run record (REQ-36)', async () => {
+  const a = recorder((opts) => (opts.label.startsWith('implement:') ? null : implAnswer(opts)));
+  const out = await load('implement')(a.agent, parallel, pipeline, noop, noop, implArgs({ models: MODELS() }));
+  assert.equal(out.results[0].records.filter((r) => r.claim === 'agent did not run: implement:T-1').length, 1);
+});
+
+const specAnswer = (opts) => (opts.label.startsWith('lens:')
+  ? { requirements: ['r'], risks: [], questions: [], assumptions: [] }
+  : { summary: 's', requirements: [], error_paths: [], data_and_migrations: [], test_anchors: [], assumptions: [], out_of_scope: [], dissent: [] });
+
+test('spec: without args.models options and return equal 0.3.0 (REQ-24)', async () => {
+  const a = recorder(specAnswer);
+  const out = await load('spec')(a.agent, parallel, pipeline, noop, noop, { intentText: 'i', lenses: ['domain', 'security'] });
+  assert.deepEqual(a.calls.map((c) => [c.label, Object.keys(c.opts).sort()]), [
+    ['lens:domain', ['label', 'phase', 'schema']], ['lens:security', ['label', 'phase', 'schema']], ['synthesis', ['label', 'phase', 'schema']],
+  ]);
+  assert.equal(out.records.length, 2);
+});
+
+test('spec: lenses use spec_lens, the merge uses synthesis (REQ-10)', async () => {
+  const a = recorder(specAnswer);
+  const out = await load('spec')(a.agent, parallel, pipeline, noop, noop, { intentText: 'i', lenses: ['domain'], models: MODELS() });
+  assert.deepEqual(Object.fromEntries(a.calls.map((c) => [c.label, c.opts.model])), { 'lens:domain': 'opus', synthesis: 'sonnet' });
+  assert.deepEqual(out.records.map((r) => r.model.role), ['spec_lens', 'synthesis']);
+});
