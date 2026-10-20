@@ -164,11 +164,11 @@ function cursorDbPath(env) {
   return dir ? path.join(dir, 'User', 'globalStorage', 'state.vscdb') : null;
 }
 
-function cacheMatches(cache, dbPath) {
+function cacheMatches(cache, dbPath, env) {
   if (!isObj(cache) || !Array.isArray(cache.found) || !cache.found.every((id) => typeof id === 'string' && mp.MODEL_ID_RE.test(id))) return false;
   if (!dbPath || cache.source !== 'state-db' || typeof cache.mtime_ms !== 'number') return false;
   try {
-    return Math.trunc(fs.statSync(dbPath).mtimeMs) === cache.mtime_ms && cache.source_hash === sha256(dbPath);
+    return Math.trunc(fs.statSync(dbPath).mtimeMs) === cache.mtime_ms && cache.source_default === cm.isDefaultUserDir(cm.cursorUserDir(env), env);
   } catch {
     return false;
   }
@@ -182,12 +182,12 @@ function withClassMap(found) {
 // until the db mtime or path changes. Never reads anything but model ids (see cursor-models.js).
 function cursorDiscovery(runDir, config, env) {
   if (config.cursor_discovery === false) {
-    return { source: 'none', found: [], reason: 'cursor_discovery disabled', mtime_ms: null, source_hash: null, cursor_version: null, ...withClassMap([]) };
+    return { source: 'none', found: [], reason: 'cursor_discovery disabled', mtime_ms: null, source_default: null, cursor_version: null, ...withClassMap([]) };
   }
   const cacheFile = path.join(runDir, 'cursor-models.json');
   const cached = readJson(cacheFile);
   const dbPath = cursorDbPath(env);
-  if (cacheMatches(cached, dbPath)) return { ...cached, ...withClassMap(cached.found) };
+  if (cacheMatches(cached, dbPath, env)) return { ...cached, ...withClassMap(cached.found) };
   const found = cm.discoverCursorModels({ userDir: cm.cursorUserDir(env), configModels: config.cursor_models });
   const discovery = { ...found, cursor_version: null, ...withClassMap(found.found) };
   fs.writeFileSync(cacheFile, `${JSON.stringify(discovery, null, 2)}

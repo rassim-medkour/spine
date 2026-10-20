@@ -25,7 +25,7 @@ function main() {
   let db;
   try {
     db = new DatabaseSync(dbPath, { readOnly: true });
-    const sized = db.prepare('SELECT length(value) AS n FROM ItemTable WHERE key = ?').get(KEY);
+    const sized = db.prepare('SELECT length(CAST(value AS BLOB)) AS n FROM ItemTable WHERE key = ?').get(KEY);
     if (!sized) return say({ error: 'model list key not found' });
     if (!(sized.n <= cap)) return say({ error: 'model list over size cap' });
     const row = db.prepare('SELECT value FROM ItemTable WHERE key = ?').get(KEY);

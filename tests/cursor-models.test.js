@@ -36,21 +36,23 @@ test('mapClasses picks the highest version per family and inherits otherwise (RE
   });
 });
 
-test('captured db: found list, source state-db, mtime, hashed source path (REQ-39, REQ-43)', needsSqlite, (t) => {
+test('captured db: found list, source state-db, mtime, no path-derived value (REQ-39, REQ-43)', needsSqlite, (t) => {
   const dir = tmpDir('spine-cm-', t);
   makeDb(dir, FIXTURE);
   const r = cm.discoverCursorModels({ userDir: dir });
   assert.equal(r.source, 'state-db');
   assert.equal(r.reason, null);
   assert.deepEqual(r.found, ['claude-haiku-4-5', 'claude-opus-4-10', 'claude-opus-4-8', 'claude-sonnet-4-6', 'default']);
-  assert.match(r.source_hash, /^[0-9a-f]{64}$/);
+  assert.equal(r.source_default, false); // tmp dir is not the default Cursor location
+  assert.ok(!('source_hash' in r));
+  assert.ok(!/[0-9a-f]{64}/.test(JSON.stringify(r)));
   assert.equal(typeof r.mtime_ms, 'number');
   assert.ok(!JSON.stringify(r).includes(dir));
 });
 
 test('missing db: found [], reason "state.vscdb not found" (REQ-40)', (t) => {
   const r = cm.discoverCursorModels({ userDir: tmpDir('spine-cm-', t) });
-  assert.deepEqual(r, { found: [], source: 'none', reason: 'state.vscdb not found', mtime_ms: null, source_hash: null });
+  assert.deepEqual(r, { found: [], source: 'none', reason: 'state.vscdb not found', mtime_ms: null, source_default: null });
 });
 
 test('empty db (no key): found [], reason "model list key not found"', needsSqlite, (t) => {
@@ -78,6 +80,21 @@ test('oversized value: found [], reason "model list over size cap"', needsSqlite
   const r = cm.discoverCursorModels({ userDir: dir, valueCapBytes: 100 });
   assert.deepEqual(r.found, []);
   assert.equal(r.reason, 'model list over size cap');
+});
+
+test('the size cap counts bytes, not characters', needsSqlite, (t) => {
+  const dir = tmpDir('spine-cm-', t);
+  makeDb(dir, { pad: 'é'.repeat(600) });
+  const r = cm.discoverCursorModels({ userDir: dir, valueCapBytes: 1000 });
+  assert.deepEqual(r.found, []);
+  assert.equal(r.reason, 'model list over size cap');
+});
+
+test('isDefaultUserDir is true only for the per-platform default location', () => {
+  assert.equal(cm.isDefaultUserDir(path.join('/h', '.config', 'Cursor'), {}, 'linux', '/h'), true);
+  assert.equal(cm.isDefaultUserDir('/elsewhere', {}, 'linux', '/h'), false);
+  assert.equal(cm.isDefaultUserDir(path.join('/h', '.config', 'Cursor'), { SPINE_CURSOR_HOME: '/h/.config/Cursor' }, 'linux', '/h'), true);
+  assert.equal(cm.isDefaultUserDir(null, {}, 'win32', '/h'), false);
 });
 
 test('slow reader is killed at the time budget (REQ-40, Review Focus 5)', needsSqlite, (t) => {

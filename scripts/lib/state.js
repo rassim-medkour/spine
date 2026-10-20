@@ -20,10 +20,27 @@ function readJson(file) {
   }
 }
 
+// Config files only: a file that exists but is not valid JSON is reported once (name, never content), then ignored.
+function readConfigJson(file) {
+  let text;
+  try {
+    text = fs.readFileSync(file, 'utf8');
+  } catch {
+    return null;
+  }
+  try {
+    return JSON.parse(text);
+  } catch {
+    process.stderr.write(`spine: ignoring ${file}: not valid JSON
+`);
+    return null;
+  }
+}
+
 function loadConfig(cwd, homeDir = process.env.SPINE_HOME || os.homedir()) {
-  const global = readJson(path.join(homeDir, '.spine', 'config.json')) || {};
+  const global = readConfigJson(path.join(homeDir, '.spine', 'config.json')) || {};
   const artifactsDir = global.artifacts_dir || DEFAULTS.artifacts_dir;
-  const repo = readJson(path.join(cwd, artifactsDir, 'config.json')) || {};
+  const repo = readConfigJson(path.join(cwd, artifactsDir, 'config.json')) || {};
   return { ...DEFAULTS, ...global, ...repo, artifacts_dir: artifactsDir };
 }
 
@@ -31,9 +48,9 @@ const asObject = (v) => (v && typeof v === 'object' && !Array.isArray(v) ? v : {
 
 // The two config layers, unmerged, for callers that merge a key themselves (select-model.js). loadConfig is unchanged.
 function loadConfigLayers(cwd, homeDir = process.env.SPINE_HOME || os.homedir()) {
-  const global = asObject(readJson(path.join(homeDir, '.spine', 'config.json')));
+  const global = asObject(readConfigJson(path.join(homeDir, '.spine', 'config.json')));
   const artifactsDir = global.artifacts_dir || DEFAULTS.artifacts_dir;
-  const repo = asObject(readJson(path.join(cwd, artifactsDir, 'config.json')));
+  const repo = asObject(readConfigJson(path.join(cwd, artifactsDir, 'config.json')));
   return { global, repo, artifactsDir };
 }
 

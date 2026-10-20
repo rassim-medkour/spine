@@ -2,7 +2,6 @@
 // Local, read-only, time-boxed discovery of the models a Cursor install offers.
 // Reads ONLY model ids from Cursor's state.vscdb through a child process; no
 // network, no writes, nothing else from that database is copied or returned.
-const crypto = require('node:crypto');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
@@ -25,6 +24,12 @@ function cursorUserDir(env = process.env, platform = process.platform, home = os
   if (platform === 'win32') return env.APPDATA ? path.join(env.APPDATA, 'Cursor') : null;
   if (platform === 'darwin') return path.join(home, 'Library', 'Application Support', 'Cursor');
   return path.join(home, '.config', 'Cursor');
+}
+
+// True when userDir is the per-platform default location (SPINE_CURSOR_HOME ignored). Stored in the cache in place of a path hash.
+function isDefaultUserDir(userDir, env = process.env, platform = process.platform, home = os.homedir()) {
+  const expected = cursorUserDir({ ...env, SPINE_CURSOR_HOME: undefined }, platform, home);
+  return Boolean(userDir) && expected === userDir;
 }
 
 const validId = (v) => (typeof v === 'string' && MODEL_ID_RE.test(v) ? v : null);
@@ -90,10 +95,8 @@ function mapClasses(found) {
   return out;
 }
 
-const sha256 = (s) => crypto.createHash('sha256').update(s).digest('hex');
-
 function result(found, source, reason, extra = {}) {
-  return { found, source, reason, mtime_ms: null, source_hash: null, ...extra };
+  return { found, source, reason, mtime_ms: null, source_default: null, ...extra };
 }
 
 function fromConfig(configModels, reason) {
@@ -127,9 +130,9 @@ function discoverCursorModels({ userDir, configModels, timeoutMs = DEFAULT_TIMEO
   } catch {
     mtime = null;
   }
-  return result(found, 'state-db', null, { mtime_ms: mtime, source_hash: sha256(dbPath) });
+  return result(found, 'state-db', null, { mtime_ms: mtime, source_default: isDefaultUserDir(userDir) });
 }
 
 module.exports = {
-  CLASS_FAMILIES, cursorUserDir, parseApplicationUser, availableModels, mapClasses, discoverCursorModels,
+  CLASS_FAMILIES, cursorUserDir, isDefaultUserDir, parseApplicationUser, availableModels, mapClasses, discoverCursorModels,
 };
