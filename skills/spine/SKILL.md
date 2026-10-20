@@ -298,8 +298,8 @@ downstream artifact and re-run. The Stop hook enforces this.
    `name: "spine:spine-review"` and
    `args: { diff, changedFiles, language, providers, devilsAdvocate: class.devils_advocate, runId, stage: "review", tree: { tier, files: [{ path, tier }] }, models }`,
    where `models` is `workflow_args` from select-model.js (`args.models`). The workflow
-   dispatches the devils advocate itself (role `devils_advocate`); run it inline
-   with `--model-role devils_advocate`.
+   dispatches the devils advocate itself (role `devils_advocate`, its model stamped on
+   its records); do not run it again inline.
    `tree` comes from `<run>/tree.json` (its `tier` and each file's `path` and `tier`); leave it out when tree.json is absent.
    Write the returned records.
 6. Run [live verification](#live-verification) when the code under review is

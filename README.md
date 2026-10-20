@@ -379,7 +379,11 @@ L trunk) and the plan says so.
   a host model id, or an object of `{ role: { tier: class | "inherit" } }`. A
   repo cell wins over the same global cell; a string replaces the whole table.
   An invalid key in either layer gives one message, the whole policy is
-  ignored and Balanced is used.
+  ignored and Balanced is used. That includes a valid global `"inherit"`: if
+  the repo layer's `model_policy` is invalid, the global kill switch stops
+  applying too and agents get Balanced models, not the session model. The
+  message names the offending key; fix or remove it in the repo config to
+  restore `"inherit"`.
 - **Verifier floor.** The verifier floor applies to a trunk change: the verifier and the devils advocate
   never run below the class of the agent that raised the finding. A lower
   setting is raised and recorded as `floor-raised`. A verifier that ends up
@@ -461,7 +465,8 @@ earlier 0.3.0 builds, where every agent ran on the session model.
 - `model_ids` overrides the model id behind a class per host, for example
   `{ "claude-code": { "top": "claude-opus-4-8" } }`. Ids must match
   `[A-Za-z0-9][A-Za-z0-9._:-]{0,63}`.
-- `cursor_models` lists Cursor model ids to use when discovery finds none, and
+- `cursor_models` lists extra Cursor model ids. They are always merged into the
+  list discovery finds, and are the whole list when discovery finds none.
   `cursor_discovery` (default true) turns off reading Cursor's local app state.
 - `tiers.fan_in_trunk` and `tiers.fan_in_branch` are the importer counts at
   which a file becomes trunk or branch.
