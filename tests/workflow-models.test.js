@@ -179,6 +179,22 @@ test('implement: an implementer that never ran yields a did-not-run record (REQ-
   assert.equal(out.results[0].records.filter((r) => r.claim === 'agent did not run: implement:T-1').length, 1);
 });
 
+test('implement: a reviewer that threw or returned nothing yields a did-not-run record (REQ-36, REQ-37)', async () => {
+  const { validateRecord } = require('../scripts/lib/validate');
+  const { validateModelBlock } = require('../scripts/lib/model-policy');
+  for (const fail of [() => null, () => { throw new Error('boom'); }]) {
+    const a = recorder((opts) => (opts.label === 'spec-review:T-1' || opts.label === 'quality-review:T-1' ? fail() : implAnswer(opts)));
+    const out = await load('implement')(a.agent, parallel, pipeline, noop, noop, implArgs({ models: MODELS() }));
+    const dn = out.results[0].records.filter((r) => /^agent did not run/.test(r.claim));
+    assert.deepEqual(dn.map((r) => r.claim).sort(), ['agent did not run: quality-review:T-1', 'agent did not run: spec-review:T-1']);
+    assert.equal(new Set(dn.map((r) => r.id)).size, 2);
+    for (const r of dn) {
+      assert.deepEqual(validateRecord(r), []);
+      assert.deepEqual(validateModelBlock(r.model), []);
+    }
+  }
+});
+
 const specAnswer = (opts) => (opts.label.startsWith('lens:')
   ? { requirements: ['r'], risks: [], questions: [], assumptions: [] }
   : { summary: 's', requirements: [], error_paths: [], data_and_migrations: [], test_anchors: [], assumptions: [], out_of_scope: [], dissent: [] });

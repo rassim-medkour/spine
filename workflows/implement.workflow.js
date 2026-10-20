@@ -211,6 +211,12 @@ function issuesToRecords(ticket, spec, quality) {
   return records;
 }
 
+function ticketDidNotRun(ticket, labels, agentFor) {
+  return didNotRunRecords('implement', agentFor, 0)
+    .filter((r) => labels.some((label) => r.claim === `agent did not run: ${label}`))
+    .map((r) => ({ ...r, id: `R-${ticket.id}-dn-${r.claim.split(': ')[1].split(':')[0]}` }));
+}
+
 const failedTickets = [];
 
 phase('Implement');
@@ -240,9 +246,7 @@ const results = await pipeline(
         blockers: result ? result.blockers : ['no result'],
         spec_review: null,
         quality_review: null,
-        records: didNotRunRecords('implement', () => 'spine:implementer', 0)
-          .filter((r) => r.claim === `agent did not run: implement:${ticket.id}`)
-          .map((r) => ({ ...r, id: `R-${ticket.id}-dn` }))
+        records: ticketDidNotRun(ticket, [`implement:${ticket.id}`], () => 'spine:implementer')
       };
     }
     return parallel([
@@ -266,7 +270,10 @@ const results = await pipeline(
       blockers: result.blockers,
       spec_review: spec,
       quality_review: quality,
-      records: issuesToRecords(ticket, spec, quality)
+      records: [
+        ...issuesToRecords(ticket, spec, quality),
+        ...ticketDidNotRun(ticket, [`spec-review:${ticket.id}`, `quality-review:${ticket.id}`], (label) => (label.startsWith('spec-review') ? 'spine:spec-compliance' : 'spine:quality'))
+      ]
     }));
   }
 );
