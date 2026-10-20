@@ -3,6 +3,8 @@
 const STRONG = new Set(['CRITICAL', 'HIGH']);
 const SEVERITY_ORDER = ['INFO', 'LOW', 'MEDIUM', 'HIGH', 'CRITICAL'];
 const NO_AUTHOR_NOTE = 'no independent author available';
+// Kept as a literal so this module stays dependency-free; tests/workflow-model-parity.test.js pins it to model-policy.js.
+const WEAK_VERIFIER_NOTE = 'verifier below finder strength';
 
 // Same rule as workflows/review.workflow.js evidenceKey.
 function evidenceKey(f) {
@@ -58,7 +60,7 @@ function daGateOpen(records, devilsAdvocate) {
   const refuted = groups.filter((g) => STRONG.has(g.severity)).filter((g) => {
     const v = latestVerification(records, g.records.map((r) => r.id));
     if (!v) return true;
-    return v.verified !== true && v.verifier_note !== NO_AUTHOR_NOTE;
+    return (v.verified !== true || v.model_note === WEAK_VERIFIER_NOTE) && v.verifier_note !== NO_AUTHOR_NOTE;
   });
   if (refuted.length) return { open: false, reason: `${refuted.length} strong finding(s) refuted or unverified` };
   const kinds = new Set(groups.flatMap((g) => g.records.flatMap((r) => r.evidence.map((e) => e.kind))).filter((k) => k !== 'unverified'));
@@ -78,6 +80,10 @@ function checkCrossAuthor(records, authorOf = () => null) {
     }
     if (v.verified === true && v.verifier_note === NO_AUTHOR_NOTE) {
       violations.push(`${v.id} counts ${target.id} as verified without an independent author`);
+      continue;
+    }
+    if (v.verified === true && v.model_note === WEAK_VERIFIER_NOTE) {
+      violations.push(`${v.id} counts ${target.id} as verified with a verifier below finder strength`);
       continue;
     }
     if (v.verifier_note === NO_AUTHOR_NOTE) continue;
@@ -101,4 +107,4 @@ function authorIndex(registries) {
   };
 }
 
-module.exports = { NO_AUTHOR_NOTE, evidenceKey, isFinding, groupFindings, pickVerifier, verifierPlan, daGateOpen, checkCrossAuthor, authorIndex, latestVerification };
+module.exports = { NO_AUTHOR_NOTE, WEAK_VERIFIER_NOTE, evidenceKey, isFinding, groupFindings, pickVerifier, verifierPlan, daGateOpen, checkCrossAuthor, authorIndex, latestVerification };

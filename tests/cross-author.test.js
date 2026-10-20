@@ -60,3 +60,31 @@ test('finding with no independent author is unverified but not refuted', () => {
   const none = { ...f('R-0002', 'spine', 'INFO', 'a.py:1'), verifies: 'R-0001', verified: false, verifier_note: 'no independent author available' };
   assert.equal(ca.daGateOpen([hi, none], true).open, true);
 });
+
+const WEAK = 'verifier below finder strength';
+const modelFinding = { id: 'R-0001', stage: 'review', agent: 'ecc:code-review', provider: 'ecc:code-review', author: 'ecc', claim: 'c', severity: 'HIGH', confidence: 0.9, evidence: [{ kind: 'file', ref: 'a.js:1' }, { kind: 'test', ref: 't' }], model: { role: 'finder', tier: 'trunk', tier_source: 'tree', class: 'top', requested: 'opus', source: 'requested' } };
+const modelVerification = (extra) => ({ id: 'R-0002', stage: 'review', agent: 'mattpocock-skills:code-review', provider: 'mattpocock-skills:code-review', author: 'mattpocock', verifies: 'R-0001', verified: true, claim: 'v', evidence: [{ kind: 'file', ref: 'a.js:1' }], confidence: 1, severity: 'INFO', ...extra });
+
+test('a weak verifier does not open the devils advocate gate (REQ-28)', () => {
+  assert.equal(ca.daGateOpen([modelFinding, modelVerification({})], true).open, true);
+  assert.equal(ca.daGateOpen([modelFinding, modelVerification({ model_note: WEAK })], true).open, false);
+});
+
+test('checkCrossAuthor flags a weak verifier counted as verified (REQ-28)', () => {
+  assert.deepEqual(ca.checkCrossAuthor([modelFinding, modelVerification({ model_note: WEAK })]), ['R-0002 counts R-0001 as verified with a verifier below finder strength']);
+  assert.deepEqual(ca.checkCrossAuthor([modelFinding, modelVerification({ model_note: WEAK, verified: false })]), []);
+  assert.equal(ca.WEAK_VERIFIER_NOTE, WEAK);
+});
+
+test('model fields never change pickVerifier, verifierPlan or checkCrossAuthor (REQ-29)', () => {
+  const strip = (r) => { const { model, verifier_model, ...rest } = r; return rest; };
+  const records = [modelFinding, modelVerification({ model: { ...modelFinding.model, role: 'verifier', class: 'cheap', requested: 'haiku' } })];
+  assert.deepEqual(ca.checkCrossAuthor(records), ca.checkCrossAuthor(records.map(strip)));
+  assert.deepEqual(ca.verifierPlan(records, P), ca.verifierPlan(records.map(strip), P));
+  assert.deepEqual(ca.daGateOpen(records, true), ca.daGateOpen(records.map(strip), true));
+});
+
+test('same author on different models is still rejected (REQ-29)', () => {
+  const same = modelVerification({ author: 'ecc', agent: 'ecc:other', provider: 'ecc:other', model: { role: 'verifier', tier: 'trunk', tier_source: 'tree', class: 'top', requested: 'opus', source: 'requested' } });
+  assert.deepEqual(ca.checkCrossAuthor([modelFinding, same]), ['R-0002 verifies R-0001 with the same author ecc']);
+});
