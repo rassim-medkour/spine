@@ -9,6 +9,7 @@ const { parseDiff } = require('./lib/diff');
 const { validateTree } = require('./lib/validate');
 const { buildReadingMap, renderReadingMap, summarize } = require('./lib/reading-map');
 const { checkProof } = require('./check-proof');
+const { rollbackAnswer } = require('./lib/proof');
 
 const sha = (buf) => crypto.createHash('sha256').update(buf).digest('hex');
 
@@ -16,6 +17,12 @@ function rollbackLine(proof, tier) {
   if (!proof.required.includes('rollback_or_flag_plan')) return `not required for tier ${tier}`;
   const gap = proof.missing.find((m) => m.requirement === 'rollback_or_flag_plan');
   return gap ? `missing: ${gap.reason}` : 'passed the mechanical check; confirm it in review.md ## Rollback';
+}
+
+function withRollbackAnswer(tree, proof, records) {
+  const knob = tree.knobs && tree.knobs.instant_rollback;
+  if (!knob) return tree.knobs;
+  return { ...tree.knobs, instant_rollback: { ...knob, answer: rollbackAnswer(tree, proof, records) } };
 }
 
 function readingMap({ runDir, root, tc }) {
@@ -35,7 +42,7 @@ function readingMap({ runDir, root, tc }) {
   const meta = {
     runId: path.basename(runDir), diffSha: sha(diffBuf), treeSha: sha(treeBuf),
     stale: sha(diffBuf) !== tree.inputs.diff_sha256, tier: tree.tier, verdict: review.verdict,
-    knobs: tree.knobs, rollback: rollbackLine(proof, tree.tier),
+    knobs: withRollbackAnswer(tree, proof, records), rollback: rollbackLine(proof, tree.tier),
     relPath: path.relative(fs.realpathSync(root), path.join(fs.realpathSync(runDir), 'reading-map.md')).replace(/\\/g, '/'),
   };
   fs.writeFileSync(path.join(runDir, 'reading-map.md'), renderReadingMap(map, meta));

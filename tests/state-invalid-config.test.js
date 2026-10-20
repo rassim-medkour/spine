@@ -6,7 +6,8 @@ const os = require('node:os');
 const path = require('node:path');
 const { loadConfig, loadConfigLayers } = require('../scripts/lib/state');
 
-const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'spine-cfg-'));
+const { tmpDir } = require('./helpers/tmp');
+const tmp = () => tmpDir('spine-cfg-');
 
 function captureStderr(fn) {
   const lines = [];

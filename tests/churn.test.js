@@ -3,12 +3,12 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { execFileSync } = require('node:child_process');
 const fs = require('node:fs');
-const os = require('node:os');
 const path = require('node:path');
 const { churn, churnCounts } = require('../scripts/lib/churn');
+const { tmpDir } = require('./helpers/tmp');
 
 function initRepo() {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'spine-churn-'));
+  const dir = tmpDir('spine-churn-');
   const git = (...args) => execFileSync('git', args, { cwd: dir, encoding: 'utf8' });
   git('init', '-q');
   git('config', 'user.email', 'test@example.com');

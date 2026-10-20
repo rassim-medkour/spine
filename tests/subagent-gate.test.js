@@ -1,10 +1,10 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
-const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 const { writeState, setActive, loadConfig } = require('../scripts/lib/state');
+const { tmpDir } = require('./helpers/tmp');
 
 const SCRIPT = path.join(__dirname, '..', 'scripts', 'subagent-gate.js');
 const FIX = path.join(__dirname, 'fixtures', 'transcripts');
@@ -14,8 +14,8 @@ function run(payload, env = {}) {
 }
 
 function repo() {
-  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'spine-'));
-  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'spine-home-'));
+  const cwd = tmpDir('spine-');
+  const home = tmpDir('spine-home-');
   const cfg = loadConfig(cwd, home);
   writeState(path.join(cwd, '.spine', '20260920-demo'), { id: '20260920-demo', stage: 'review', status: 'active', awaiting: null, size: 'M', updated: '2026-09-20T10:00:00Z' });
   setActive(cwd, cfg, '20260920-demo');
@@ -29,7 +29,7 @@ test('exits 0 without agent_transcript_path', () => {
 
 test('exits 0 when transcript has no spine-record block', () => {
   const { cwd, home } = repo();
-  const t = path.join(os.tmpdir(), `spine-t-${process.pid}.jsonl`);
+  const t = path.join(tmpDir('spine-t-'), 'transcript.jsonl');
   fs.writeFileSync(t, '{"type":"assistant","message":{"content":[{"type":"text","text":"plain answer"}]}}\n');
   assert.equal(run({ cwd, agent_transcript_path: t }, { SPINE_HOME: home }).status, 0);
 });
@@ -47,14 +47,14 @@ test('blocks for an invalid record', () => {
 });
 
 test('exits 0 when no active run', () => {
-  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'spine-'));
-  const r = run({ cwd, agent_transcript_path: path.join(cwd, 'none.jsonl') }, { SPINE_HOME: fs.mkdtempSync(path.join(os.tmpdir(), 'spine-home-')) });
+  const cwd = tmpDir('spine-');
+  const r = run({ cwd, agent_transcript_path: path.join(cwd, 'none.jsonl') }, { SPINE_HOME: tmpDir('spine-home-') });
   assert.equal(r.status, 0);
 });
 
 test('fails open with a spine: message when config is malformed', () => {
-  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'spine-'));
-  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'spine-home-'));
+  const cwd = tmpDir('spine-');
+  const home = tmpDir('spine-home-');
   fs.mkdirSync(path.join(home, '.spine'));
   fs.writeFileSync(path.join(home, '.spine', 'config.json'), JSON.stringify({ artifacts_dir: 5 }));
   const r = run({ cwd, agent_transcript_path: path.join(cwd, 'none.jsonl') }, { SPINE_HOME: home });
