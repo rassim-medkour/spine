@@ -36,7 +36,7 @@ function readingMap({ runDir, root, tc }) {
     runId: path.basename(runDir), diffSha: sha(diffBuf), treeSha: sha(treeBuf),
     stale: sha(diffBuf) !== tree.inputs.diff_sha256, tier: tree.tier, verdict: review.verdict,
     knobs: tree.knobs, rollback: rollbackLine(proof, tree.tier),
-    relPath: path.relative(root, path.join(runDir, 'reading-map.md')).replace(/\\/g, '/'),
+    relPath: path.relative(fs.realpathSync(root), path.join(fs.realpathSync(runDir), 'reading-map.md')).replace(/\\/g, '/'),
   };
   fs.writeFileSync(path.join(runDir, 'reading-map.md'), renderReadingMap(map, meta));
   fs.writeFileSync(path.join(runDir, 'reading-map.json'), `${JSON.stringify({ meta, groups: map.groups, totals: map.totals }, null, 2)}\n`);

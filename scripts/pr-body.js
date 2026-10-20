@@ -33,7 +33,7 @@ function loadData(runDir, root, tc) {
   const records = listRecords(runDir).map((r) => r.record);
   return {
     tier: (tree && tree.tier) || review.tier || 'branch',
-    runRel: path.relative(root, runDir).replace(/\\/g, '/'),
+    runRel: path.relative(fs.realpathSync(root), fs.realpathSync(runDir)).replace(/\\/g, '/'),
     diffFiles: parseDiff(readText(path.join(runDir, 'diff.patch'))),
     tree, review, records,
     proof: tree ? checkProof({ runDir, root, tree, records, tc }) : null,
@@ -50,7 +50,7 @@ function main(argv, root = process.cwd()) {
   const writtenPath = at('--written') ? path.resolve(root, at('--written')) : path.join(runDir, 'pr-written.md');
   const result = buildPrBody(loadData(runDir, root, tierConfig(loadConfig(root))), readText(writtenPath));
   if (result.ok) fs.writeFileSync(path.join(runDir, 'pr-body.md'), result.body);
-  return { ok: result.ok, tier: result.tier, sections: result.sections, errors: result.errors, path: result.ok ? path.relative(root, path.join(runDir, 'pr-body.md')).replace(/\\/g, '/') : null };
+  return { ok: result.ok, tier: result.tier, sections: result.sections, errors: result.errors, path: result.ok ? path.relative(fs.realpathSync(root), path.join(fs.realpathSync(runDir), 'pr-body.md')).replace(/\\/g, '/') : null };
 }
 
 if (require.main === module) {

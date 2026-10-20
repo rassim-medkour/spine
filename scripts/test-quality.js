@@ -20,7 +20,7 @@ function hollowRecords({ runDir, root }) {
     }
     return findHollowTests(f.path, text, f.status === 'added' ? null : addedLineSet(f)).map((x) => ({ ...x, path: f.path }));
   });
-  const command = `node scripts/test-quality.js --run ${path.relative(root, runDir).replace(/\\/g, '/')}`;
+  const command = `node scripts/test-quality.js --run ${path.relative(fs.realpathSync(root), fs.realpathSync(runDir)).replace(/\\/g, '/')}`;
   const proof = {
     stage: 'review', agent: 'spine:test-quality', claim: `test-quality check: ${flags.length} hollow test(s) in ${files.length} changed test file(s)`,
     evidence: [{ kind: 'command', ref: command }], confidence: 1, severity: 'INFO',
