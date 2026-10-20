@@ -27,6 +27,16 @@ function loadConfig(cwd, homeDir = process.env.SPINE_HOME || os.homedir()) {
   return { ...DEFAULTS, ...global, ...repo, artifacts_dir: artifactsDir };
 }
 
+const asObject = (v) => (v && typeof v === 'object' && !Array.isArray(v) ? v : {});
+
+// The two config layers, unmerged, for callers that merge a key themselves (select-model.js). loadConfig is unchanged.
+function loadConfigLayers(cwd, homeDir = process.env.SPINE_HOME || os.homedir()) {
+  const global = asObject(readJson(path.join(homeDir, '.spine', 'config.json')));
+  const artifactsDir = global.artifacts_dir || DEFAULTS.artifacts_dir;
+  const repo = asObject(readJson(path.join(cwd, artifactsDir, 'config.json')));
+  return { global, repo, artifactsDir };
+}
+
 const RUN_ID_RE = /^\d{8}-[a-z0-9-]+$/;
 
 function findActiveRun(cwd, config) {
@@ -50,4 +60,4 @@ function setActive(cwd, config, id) {
   fs.writeFileSync(path.join(base, 'active.json'), JSON.stringify({ id }, null, 2) + '\n');
 }
 
-module.exports = { DEFAULTS, RUN_ID_RE, loadConfig, findActiveRun, writeState, setActive, readJson };
+module.exports = { DEFAULTS, RUN_ID_RE, loadConfig, loadConfigLayers, findActiveRun, writeState, setActive, readJson };
