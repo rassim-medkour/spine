@@ -34,6 +34,8 @@ const DEFAULT_CLASS_IDS = Object.freeze({ 'claude-code': Object.freeze({ cheap: 
 const DISPATCH_ROLES = Object.freeze({
   find: 'finder',
   verify: 'verifier',
+  'verify-da': 'verifier',
+  merge: 'synthesis',
   'devils-advocate': 'devils_advocate',
   implement: 'implementer',
   'spec-review': 'finder',
