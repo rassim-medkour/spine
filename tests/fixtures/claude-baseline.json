@@ -29,7 +29,7 @@
     "tests/workflows-smoke.test.js": "edb3176e8341241c3da970446519e1ab9c6e929cd03cc76945ca4869ca1842ec",
     "tests/workflows.test.js": "6e25d22e546647f3ee324b687b7139935a07a840ac65cf7da2b6d4446ad802a4",
     "workflows/implement.workflow.js": "3d58f01e882b3d2054e04bd038208413c291874899db957d56596b4b94437798",
-    "workflows/review.workflow.js": "1a2639249e311efe58b4fbf7a9c232d4e4b7dbb44364a1b5dc3efd8cc5e812c9",
+    "workflows/review.workflow.js": "57590afee7a9a40cf890279bebfd77102b3cf0319db4ff114cf238b927d7a4c3",
     "workflows/spec.workflow.js": "600c01ebf045e507450e4a486e9bbd576eead618cd2a1c587247f1bb9b21125a"
   }
 }

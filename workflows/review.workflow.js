@@ -259,9 +259,12 @@ function mergeGroup(members) {
   const top = members.reduce((a, b) => (SEVERITY_ORDER.indexOf(b.severity) > SEVERITY_ORDER.indexOf(a.severity) ? b : a));
   const refs = new Set();
   const evidence = members.flatMap((m) => m.evidence).filter((e) => (refs.has(e.ref) ? false : refs.add(e.ref)));
+  // Every member's claim stays on the record, so a grouping never hides one.
+  const others = members.filter((m) => m !== top).map((m) => `${m.severity} (${m.providers.join(', ')}): ${oneLine(m.claim)}`);
   return {
     ...top,
     evidence,
+    alternatives: [...(top.alternatives || []), ...others],
     providers: [...new Set(members.flatMap((m) => m.providers))],
     authors: [...new Set(members.flatMap((m) => m.authors))],
     corroboration: members.reduce((n, m) => n + m.corroboration, 0)
@@ -281,8 +284,11 @@ async function mergeSameClaims(list) {
     return null;
   });
   if (!reply || !validGroups(reply.groups, list.length)) return list;
-  const grouped = new Set(reply.groups.flat());
-  return [...list.filter((_, i) => !grouped.has(i)), ...reply.groups.map((g) => mergeGroup(g.map((i) => list[i])))];
+  // Two CRITICAL/HIGH claims are never folded together: each must reach its own verifier.
+  const strongCount = (g) => g.filter((i) => list[i].severity === 'CRITICAL' || list[i].severity === 'HIGH').length;
+  const groups = reply.groups.filter((g) => strongCount(g) <= 1);
+  const grouped = new Set(groups.flat());
+  return [...list.filter((_, i) => !grouped.has(i)), ...groups.map((g) => mergeGroup(g.map((i) => list[i])))];
 }
 
 const findings = await mergeSameClaims([...merged.values()]);

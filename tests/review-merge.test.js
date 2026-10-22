@@ -48,3 +48,20 @@ test('a failed or malformed merge reply keeps the findings as they were', async 
     assert.equal(result.findings.length, 4, JSON.stringify(reply));
   }
 });
+
+test('merging keeps every member claim, and never folds one CRITICAL or HIGH into another', async () => {
+  const { result } = await run({ groups: [[0, 1, 3]] });
+  const merged = result.findings.find((f) => f.corroboration === 3);
+  for (const claim of ['test_edge.py skips the whole module in CI', 'workflow does not check out sylvia-fleet, so tests skip']) {
+    assert.ok(merged.alternatives.some((a) => a.includes(claim)), `kept: ${claim}`);
+  }
+  const twoHigh = { ...FOUND, 'find:a': [{ ...FOUND['find:a'][0], severity: 'CRITICAL' }] };
+  const saved = FOUND['find:a'];
+  FOUND['find:a'] = twoHigh['find:a'];
+  try {
+    const again = await run({ groups: [[0, 1, 3]] });
+    assert.equal(again.result.findings.length, 4, 'a group with two CRITICAL/HIGH members is not merged');
+  } finally {
+    FOUND['find:a'] = saved;
+  }
+});
