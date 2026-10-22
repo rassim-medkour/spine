@@ -10,6 +10,7 @@ const { writeRecords } = require('./lib/record-writer');
 const { KINDS, PLAN_KINDS, parseCounts, parseScope, proofRecord, planRecord } = require('./lib/record-proof');
 const { saveEvidence } = require('./save-evidence');
 const { hollowRecords } = require('./test-quality');
+const { activeWorktree } = require('./lib/worktree');
 
 const USAGE = 'usage: record-proof.js --run <run dir> --kind <proof_kind> [--command "<cmd>"] [--from <file>] [--scope a,b] [--exit-code N] [--target <t>]';
 const MAX_OUTPUT_BYTES = 64 * 1024 * 1024;
@@ -88,10 +89,12 @@ function main(argv, root = process.cwd()) {
   const { tree, revision } = revisionOf(runDir);
   const scope = parseScope(flag(argv, '--scope'));
   const tc = tierConfig(loadConfig(root));
+  // Proof runs against the reviewed code: the review worktree when one exists.
+  const codeRoot = activeWorktree(runDir) || root;
   let built;
-  if (kind === 'test_quality') built = { records: hollowRecords({ runDir, root }), passed: true };
+  if (kind === 'test_quality') built = { records: hollowRecords({ runDir, root: codeRoot }), passed: true };
   else if (PLAN_KINDS.includes(kind)) built = planRecords({ argv, tree, kind, revision, scope });
-  else built = commandRecord({ argv, runDir, root, kind, revision, scope, tc });
+  else built = commandRecord({ argv, runDir, root: codeRoot, kind, revision, scope, tc });
   return { ids: writeRecords(runDir, built.records), revision, passed: built.passed };
 }
 

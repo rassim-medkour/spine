@@ -346,8 +346,25 @@ downstream artifact and re-run. The Stop hook enforces this.
    `command gh pr diff <n>`. Take `date -u +%s` before and after it and keep
    the difference as `live_verify_seconds` (0 when skipped).
 7. Collect required proof. Skip this step when tree.json is absent.
+   0. When the code under review is not checked out (a PR, or a branch other
+      than the current one), create a review worktree first:
+      `node <root>/scripts/review-worktree.js --run <run> --pr <n>` (or
+      `--branch <name>`). It checks the reviewed commit out, detached, in the
+      temp folder and writes `<run>/worktree.json`; `record-proof.js` then runs
+      every proof command and the test-quality check inside it, so never ask
+      the human to check the branch out. The worktree has no installed
+      dependencies: run the repo's install step in it first (for example
+      `npm ci` or `uv sync --frozen`, with the worktree `path` as the working
+      directory), or point the command at the main checkout's environment (for
+      example `<repo>/.venv/bin/python -m pytest`). A command that fails only
+      because a dependency is missing is not proof that the code fails; fix
+      the setup and run it again. Do not pass `--no-checkout` below once the
+      worktree exists. Only when the worktree cannot be created (no access to
+      the remote) fall back to `--no-checkout`, and say why in DONE. After the
+      last proof step, remove it:
+      `node <root>/scripts/review-worktree.js --run <run> --remove`.
    1. Run `node <root>/scripts/check-proof.js --run <run>` (add
-      `--no-checkout` for a PR reviewed through `gh pr diff`). It writes
+      `--no-checkout` only for a PR with no review worktree). It writes
       `<run>/proof.json` and lists `required`, `present`, `missing` (each
       with a `hint`) and `info`. For each `info` entry write one `INFO`
       record from `spine:orchestrator`, claim
@@ -392,7 +409,7 @@ downstream artifact and re-run. The Stop hook enforces this.
    "providers": [ids], "findings": [ { "record_id", "severity",
    "corroboration", "verified" } ], "dissent": [record ids],
    "elapsed_seconds", "live_verify_seconds" }`. Then run `node <root>/scripts/verdict.js --run <run> --write` (add
-   `--no-checkout` for a PR not checked out). It sets `verdict`, `tier` and
+   `--no-checkout` only for a PR with no review worktree). It sets `verdict`, `tier` and
    `missing_proof` in review.json; never write `verdict`, `tier` or
    `missing_proof` by hand. Verdict is `FAIL` when any verified CRITICAL or HIGH
    remains, `UNPROVEN` when required proof is missing, `PASS_WITH_ADVISORIES`
@@ -415,7 +432,7 @@ downstream artifact and re-run. The Stop hook enforces this.
     reading map's `g3` string in STATE, for example
     `STATE: stage 5/5 review · run <id> · tier trunk · verdict UNPROVEN · read yourself 4 hunks, 12 min (whole diff 40 min) · .spine/<id>/reading-map.md`.
     When the verdict is UNPROVEN, DONE lists every proof gap as
-    `<requirement> · <files> · <hint>`; for a PR not checked out the hint is
+    `<requirement> · <files> · <hint>`; for a PR with no review worktree the hint is
     "check out the branch to collect proof". Ask the human to confirm the
     rollback or flag plan listed under "Confirm at G3". Run `node <root>/scripts/run-status.js <run>`;
     when it prints `model_mix`, add `model_mix.line` to DONE. Stop. On approval of an
