@@ -4,10 +4,9 @@ const { hunkLineCount } = require('./diff');
 const { DOCS_RE } = require('./tiers');
 const { TEST_FILE } = require('./graph');
 
-const REASON_ORDER = Object.freeze(['one-way door', 'open dissent', 'finding', 'no proof', 'trunk', 'low-confidence finding', 'hollow test']);
+const REASON_ORDER = Object.freeze(['one-way door', 'open dissent', 'serious finding', 'finding', 'no proof', 'trunk', 'low-confidence finding', 'hollow test']);
 // Never moved to read-if-time, whatever the budget.
-const MUST_READ = Object.freeze(['one-way door', 'open dissent']);
-const CITED_SEVERITIES = Object.freeze(['CRITICAL', 'HIGH', 'MEDIUM']);
+const MUST_READ = Object.freeze(['one-way door', 'open dissent', 'serious finding']);
 const TOUCHES = Object.freeze([['shared_state', 'state/config/schema'], ['one_way_door', 'one-way door'], ['public_interface', 'public interface'], ['security_path', 'security path']]);
 const KNOB_LABELS = Object.freeze({
   is_trunk: 'Is this trunk code?',
@@ -36,7 +35,8 @@ function citeReason(r, tc) {
   if (r.agent === 'spine:devils-advocate' || (typeof r.dissent === 'string' && r.dissent)) return 'open dissent';
   if (isFinding(r) && typeof r.confidence === 'number' && r.confidence < tc.low_confidence) return 'low-confidence finding';
   if (r.agent === 'spine:test-quality' && r.severity === 'MEDIUM') return 'hollow test';
-  if (isFinding(r) && CITED_SEVERITIES.includes(r.severity)) return 'finding';
+  if (isFinding(r) && (r.severity === 'CRITICAL' || r.severity === 'HIGH')) return 'serious finding';
+  if (isFinding(r) && r.severity === 'MEDIUM') return 'finding';
   return null;
 }
 

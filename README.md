@@ -492,8 +492,8 @@ earlier 0.3.0 builds, where every agent ran on the session model.
   whole diff; they only change the minutes shown in the reading map.
 - `tiers.read_budget_minutes` (default 20) is how long the read-yourself list
   may take. The riskiest hunks fill it first; the rest are listed in the same
-  order under "Read if you have time". One-way doors and open dissent always
-  stay in read-yourself.
+  order under "Read if you have time". One-way doors, open dissent and hunks
+  cited by an open CRITICAL or HIGH finding always stay in read-yourself.
 - `tiers.evidence_cap_bytes` caps each saved proof file;
   `tiers.proof_timeout_seconds` is the longest a proof command may run.
 - `npm test` is `node --test "tests/**/*.test.js"` (not `node --test tests/`)

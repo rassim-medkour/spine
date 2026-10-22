@@ -109,3 +109,28 @@ test('both skills create the review worktree before proof and remove it after', 
     assert.ok(text.includes('never ask\n      the human to check the branch out'), `${rel} does not hand checkout to the human`);
   }
 });
+
+test('remove never deletes a path that is not a spine review worktree', (t) => {
+  const s = setup(t);
+  const victim = tmpDir('spine-victim-', t);
+  fs.writeFileSync(path.join(victim, 'keep.txt'), 'x');
+  fs.writeFileSync(path.join(s.runDir, 'worktree.json'), JSON.stringify({ path: victim, sha: s.prSha, ref: 'pull/7/head', removed: false }));
+  assert.throws(() => removeWorktree({ root: s.clone, runDir: s.runDir }), /not a spine review worktree/);
+  assert.ok(fs.existsSync(path.join(victim, 'keep.txt')));
+  assert.equal(activeWorktree(s.runDir), null, 'a tampered path is never handed out as a cwd');
+});
+
+test('a remote name that is not plain is rejected', (t) => {
+  const s = setup(t);
+  for (const remote of ['--upload-pack=touch x', '-o', 'a b']) assert.throws(() => prepareWorktree({ root: s.clone, runDir: s.runDir, pr: '7', remote, tmpRoot: s.tmpRoot }), /remote name/);
+});
+
+test('record-proof refuses to fall back to the main checkout when the review worktree is gone', (t) => {
+  const s = setup(t);
+  prepareWorktree({ root: s.clone, runDir: s.runDir, pr: '7', tmpRoot: s.tmpRoot });
+  removeWorktree({ root: s.clone, runDir: s.runDir });
+  fs.writeFileSync(path.join(s.runDir, 'tree.json'), JSON.stringify({ tier: 'leaf', files: [], inputs: { head_sha: 'a'.repeat(40), diff_sha256: 'b'.repeat(64) } }));
+  const r = spawnSync(process.execPath, [path.join(ROOT, 'scripts', 'record-proof.js'), '--run', s.runDir, '--kind', 'test_run', '--command', 'node -e "0"'], { cwd: s.clone, encoding: 'utf8', env: cleanEnv() });
+  assert.equal(r.status, 1);
+  assert.match(r.stderr, /review worktree .*removed|review worktree .*missing/);
+});

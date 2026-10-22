@@ -68,3 +68,15 @@ test('the G3 line and the reading map show the read-if-time remainder', () => {
   assert.equal(s.counts.read_if_time, 6);
   assert.match(renderReadingMap(map, meta), /## Read if you have time\n\n1\. `src\/core\.ts:/);
 });
+
+test('a hunk cited by an open CRITICAL or HIGH finding is never moved out of read-yourself', () => {
+  const tc = tierConfig({ tiers: { read_budget_minutes: 1 } });
+  const out = classifyTree([input('src/core.ts', { fanIn: resolved(tc.fan_in_trunk) })], null, tc, () => ({ value: 0, rule: 'commits in 90 days' }));
+  const tree = { schema_version: 1, tier: out.tier, inputs: { head_sha: 'a'.repeat(40), diff_sha256: 'b'.repeat(64) }, knobs: out.knobs, files: out.files };
+  const high = { ...FINDING, severity: 'HIGH', evidence: [{ kind: 'file', ref: 'src/core.ts:1401' }] };
+  const high2 = { ...FINDING, id: 'R-0002', severity: 'CRITICAL', evidence: [{ kind: 'file', ref: 'src/core.ts:201' }] };
+  const runDir = tmpDir('spine-budget-');
+  const proof = checkProof({ runDir, root: runDir, tree, records: [high, high2], tc, findVerify: () => [] });
+  const map = buildReadingMap({ diffFiles: parseDiff(diff()).filter((f) => f.path === 'src/core.ts'), tree, records: [high, high2], proof, tc });
+  assert.deepEqual(map.groups.read_yourself.map((e) => e.ref).sort(), ['src/core.ts:1401-1500', 'src/core.ts:201-300'], 'both CRITICAL/HIGH-cited hunks stay, nothing else');
+});
