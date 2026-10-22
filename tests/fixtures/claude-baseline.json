@@ -20,16 +20,16 @@
     "tests/providers.test.js": "88a00380650a6f248fb7ecad5ea16026080a62d85c403720d7ae0e33d9eaa319",
     "tests/release.test.js": "264072e49ba17f61b69fb1cb641cfd8dbb9e72a6e9dc1c218fd378938288519a",
     "tests/session-start.test.js": "95a76ecf2866875207c9cc0b2c74fba3a1baaeceac0a3185298bb53acee78867",
-    "tests/skills.test.js": "864dbe58fcf5d5874da49e960be276d39656a44740629bbfa6b8a09db7873884",
+    "tests/skills.test.js": "de25ee24851d029858092c3f09f06eed7ef5623479230a3843e3fe6fd24e7687",
     "tests/state.test.js": "aae4f5406f62555cbab999ad06136123c3d10869ec2d32e57adb9c2598dd2393",
     "tests/stop-gate.test.js": "d1a6e2bbee910ced6e368ac22a44709f4f1a8e1e31c8d078fb7aa7981721eebd",
     "tests/subagent-gate.test.js": "37b12dc6c4c78c77da9dfdd668e53046e28d9f35c9fe8999a5336cf4c08c2296",
     "tests/validate-artifact-hook.test.js": "67753c1568aa06e8ef083672f44125b1ef2f96d44e1cd875c1206413667bef4f",
     "tests/validate.test.js": "0818ea202e27be78dc4960287daad32dac338d34d4584835c058aa4be4b17d4c",
     "tests/workflows-smoke.test.js": "edb3176e8341241c3da970446519e1ab9c6e929cd03cc76945ca4869ca1842ec",
-    "tests/workflows.test.js": "5caac1615cf38ab69543b88710316ebd050a40c31743f1a8cc0504f1913587f5",
-    "workflows/implement.workflow.js": "52e8cafda022fafad24f03194b050771d98882260c51a0cad62dc80c4d4e27e6",
-    "workflows/review.workflow.js": "6dd8fd33fa1b68275779b49d59181fd4db39078977b3d3047915864937ac0648",
-    "workflows/spec.workflow.js": "6580e46a08e04bc145f680a902ff6f9291ff34703fba8d46f75e573af4289a57"
+    "tests/workflows.test.js": "6e25d22e546647f3ee324b687b7139935a07a840ac65cf7da2b6d4446ad802a4",
+    "workflows/implement.workflow.js": "3d58f01e882b3d2054e04bd038208413c291874899db957d56596b4b94437798",
+    "workflows/review.workflow.js": "0c30faa6d4eec23a9f2f4cb6f03acb5aac77369e5724db5b23612dcac42e8d21",
+    "workflows/spec.workflow.js": "600c01ebf045e507450e4a486e9bbd576eead618cd2a1c587247f1bb9b21125a"
   }
 }

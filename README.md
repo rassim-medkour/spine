@@ -1,7 +1,7 @@
 # spine
 
-> **Status: alpha (0.3.1).** Commands, artifact shapes and gate behaviour may
-> change between minor versions. `master` is the alpha channel; pin `v0.3.1`
+> **Status: alpha (0.3.2).** Commands, artifact shapes and gate behaviour may
+> change between minor versions. `master` is the alpha channel; pin `v0.3.2`
 > for a fixed version.
 
 A gated, evidence-first engineering process for Claude Code. One plugin that
@@ -35,7 +35,7 @@ the [releases page](https://github.com/rassim-medkour/spine/releases) for
 what changed.
 
 Pin a version instead with
-`claude plugin marketplace add https://github.com/rassim-medkour/spine.git#v0.3.1`.
+`claude plugin marketplace add https://github.com/rassim-medkour/spine.git#v0.3.2`.
 Remove spine with `claude plugin uninstall spine@spine` and
 `claude plugin marketplace remove spine`.
 
@@ -163,6 +163,18 @@ the claim `workflow tool unavailable, ran inline`, and keeps the gate chain.
 /spine:spine status
 /spine:spine resume <run-id>
 ```
+
+Shortcuts for the three stages people start most:
+
+```
+/spine:spine-review <pr# | branch | --diff>   same as /spine:spine review
+/spine:spine-spec "<what you want>"           same as /spine:spine intent
+/spine:spine-implement [<run-id | T-3>]       same as /spine:spine implement
+```
+
+The `/` menu also lists `spine-internal-review`, `spine-internal-spec` and
+`spine-internal-implement`. Those are the workflows the skill calls between
+gates; started on their own they stop and point you to the command above.
 
 ## How a run works
 
@@ -407,9 +419,10 @@ earlier 0.3.0 builds, where every agent ran on the session model.
 | Part | Kind | What it does |
 |---|---|---|
 | `/spine:spine` | skill, entry point | Starts or resumes a run, classifies, picks providers, writes each stage file, stops at gates. |
-| `spine-spec` | workflow | Fans the request out to lenses (domain, architecture, security, ops, testability) and merges their requirements, risks and disagreements. |
-| `spine-implement` | workflow | Per ticket: a fresh implementer writes the failing test first, then a spec reviewer and a quality reviewer from a different author check the commit. |
-| `spine-review` | workflow | The find, merge, verify and push-back pipeline above. |
+| `/spine:spine-review`, `/spine:spine-spec`, `/spine:spine-implement` | commands | Shortcuts that start `/spine:spine review`, `intent` and `implement`. |
+| `spine-internal-spec` | workflow | Fans the request out to lenses (domain, architecture, security, ops, testability) and merges their requirements, risks and disagreements. |
+| `spine-internal-implement` | workflow | Per ticket: a fresh implementer writes the failing test first, then a spec reviewer and a quality reviewer from a different author check the commit. |
+| `spine-internal-review` | workflow | The find, merge, verify and push-back pipeline above. |
 | `gap-check` | skill | Asks what is missing: acceptance criteria, error paths, migrations with rollback, limits, test anchors, scope edges. |
 | `record-contract` | skill | The record shape every agent must return. |
 | `boundary-checker` | agent | Compares a stage file with the one before it and reports PASS or drift with line numbers. Never fixes. |

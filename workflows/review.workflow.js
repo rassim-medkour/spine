@@ -1,5 +1,5 @@
 export const meta = {
-  name: 'spine-review',
+  name: 'spine-internal-review',
   description: 'Cross-provider review: each selected provider finds, findings are merged by evidence, CRITICAL and HIGH are verified by a different author, then the devils advocate runs if the gate allows.',
   phases: [
     { title: 'Find', detail: 'one reviewer per provider, in parallel' },
@@ -9,8 +9,8 @@ export const meta = {
 };
 
 // args: { diff, changedFiles, language, providers, devilsAdvocate, runId, stage, tree? }
-if (!args || typeof args.diff !== 'string' || !args.diff.trim()) throw new Error('spine-review: args.diff is required');
-if (!Array.isArray(args.providers) || !args.providers.length) throw new Error('spine-review: args.providers is required');
+if (!args || typeof args.diff !== 'string' || !args.diff.trim()) throw new Error('spine-internal-review: args.diff is required. This is an internal step of the spine skill; run /spine:spine-review <pr|branch|--diff> instead.');
+if (!Array.isArray(args.providers) || !args.providers.length) throw new Error('spine-internal-review: args.providers is required');
 const changedFiles = Array.isArray(args.changedFiles) ? args.changedFiles : [];
 const oneLine = (s) => String(s).replace(/[\r\n]+/g, '');
 const tree = args.tree && typeof args.tree.tier === 'string' && Array.isArray(args.tree.files) ? args.tree : null;
@@ -234,7 +234,7 @@ for (const f of raw.filter(Boolean).flat()) {
   }
 }
 const findings = [...merged.values()];
-log(`spine-review: ${raw.filter(Boolean).flat().length} raw findings, ${findings.length} unique`);
+log(`spine-internal-review: ${raw.filter(Boolean).flat().length} raw findings, ${findings.length} unique`);
 
 const strong = findings.filter((f) => f.severity === 'CRITICAL' || f.severity === 'HIGH');
 const advisory = findings.filter((f) => !strong.includes(f));
@@ -284,7 +284,7 @@ const survivors = checked.filter((f) => f.verified && !f.model_note);
 const refuted = checked.filter((f) => !f.verified || f.model_note);
 const kinds = new Set(findings.flatMap((f) => f.evidence.map((e) => e.kind)).filter((k) => k !== 'unverified'));
 const gateOpen = Boolean(args.devilsAdvocate) && refuted.length === 0 && kinds.size >= 2;
-log(`spine-review: ${survivors.length} verified, ${refuted.length} refuted, devils advocate ${gateOpen ? 'ON' : 'off'}`);
+log(`spine-internal-review: ${survivors.length} verified, ${refuted.length} refuted, devils advocate ${gateOpen ? 'ON' : 'off'}`);
 
 let dissent = [];
 if (gateOpen) {

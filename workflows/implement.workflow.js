@@ -1,5 +1,5 @@
 export const meta = {
-  name: 'spine-implement',
+  name: 'spine-internal-implement',
   description: 'Per ticket: a fresh implementer follows TDD against the spec and plan, then a spec-compliance reviewer and a quality reviewer check the result in parallel.',
   phases: [
     { title: 'Implement', detail: 'one fresh implementer per ticket, test first' },
@@ -8,9 +8,9 @@ export const meta = {
 };
 
 // args: { tickets, specText, planText, runId, implementProviders, reviewProviders, providers, parallel }
-if (!args || !Array.isArray(args.tickets) || !args.tickets.length) throw new Error('spine-implement: args.tickets is required');
-if (typeof args.specText !== 'string' || !args.specText.trim()) throw new Error('spine-implement: args.specText is required');
-if (typeof args.planText !== 'string' || !args.planText.trim()) throw new Error('spine-implement: args.planText is required');
+if (!args || !Array.isArray(args.tickets) || !args.tickets.length) throw new Error('spine-internal-implement: args.tickets is required. This is an internal step of the spine skill; run /spine:spine-implement instead.');
+if (typeof args.specText !== 'string' || !args.specText.trim()) throw new Error('spine-internal-implement: args.specText is required');
+if (typeof args.planText !== 'string' || !args.planText.trim()) throw new Error('spine-internal-implement: args.planText is required');
 
 const implementProviders = Array.isArray(args.implementProviders)
   ? args.implementProviders
@@ -280,5 +280,5 @@ const results = await pipeline(
 );
 
 const done = results.filter(Boolean);
-log(`spine-implement: ${done.filter((r) => r.implemented).length}/${args.tickets.length} tickets implemented`);
+log(`spine-internal-implement: ${done.filter((r) => r.implemented).length}/${args.tickets.length} tickets implemented`);
 return { results: done, failed_tickets: failedTickets };

@@ -72,7 +72,11 @@ words joined by dashes. You are the only writer of:
 This keys on whether the entry point starts a new run, not on its name.
 There are three groups.
 
-- Starting: `intent`, `adopt`, `review`. The FIRST actions of the turn,
+- Starting: `intent`, `adopt`, `review`. When the entry is missing its
+  argument (`review` with no target, `intent` with no text), there is no target
+  yet: ask for it and end the turn without creating anything. If `active.json`
+  points at a run whose `status` is `active`, set that run's `awaiting` to
+  `human` before asking, so the Stop hook lets the turn end. Otherwise the FIRST actions of the turn,
   before reading any diff, classifying, or selecting providers, are: create
   the run directory, write `state.json` (stage set to the entry stage,
   status `active`, awaiting `null`), write `active.json`. If `active.json`
@@ -503,7 +507,10 @@ arguments.
   that ticket. Never bootstrap here; if `active.json` is missing, stop and
   ask for `adopt` or `intent`, or `resume <id>` if a run already exists.
 - `review <pr|branch|--diff>`: create a run whose intent is "review <target>",
-  stage `review`, no upstream artifacts. Spec axis providers get the linked
+  stage `review`, no upstream artifacts. With no target, ask which PR, branch
+  or `--diff` to review and end the turn; create nothing until the target is
+  known. Name the run after the target: `20261022-pr-885`,
+  `20261022-branch-<branch>` or `20261022-local-diff`. Spec axis providers get the linked
   issue body if the PR or branch names one; otherwise standards axis only.
 - `status`: read `state.json`, `class.json`, `tickets.json`, the latest
   records, and the output of `node <root>/scripts/run-status.js <run>`;

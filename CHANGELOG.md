@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.3.2
+
+Cursor support is still experimental and the live Cursor smoke test is pending.
+
+### Fixed
+
+- [claude-code] `/spine:spine-review`, `/spine:spine-spec` and `/spine:spine-implement` now start the full spine run (`review`, `intent` and `implement`). Before, these names ran the internal workflow with no input: it failed at once, and the review that followed had no run folder, risk tiers, proof, verdict or reading map.
+- [claude-code] The three workflows are renamed `spine-internal-review`, `spine-internal-spec` and `spine-internal-implement`. Started with no input, each one stops with a message that names the command to use instead.
+- [both] `review` with no target asks for one before it creates anything, and the run folder is named after the target (`20261022-pr-885`), not `target-pending`.
+
 ## 0.3.1
 
 Cursor support is still experimental and the live Cursor smoke test is pending.
