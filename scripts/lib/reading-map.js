@@ -4,7 +4,10 @@ const { hunkLineCount } = require('./diff');
 const { DOCS_RE } = require('./tiers');
 const { TEST_FILE } = require('./graph');
 
-const REASON_ORDER = Object.freeze(['one-way door', 'open dissent', 'no proof', 'trunk', 'low-confidence finding', 'hollow test']);
+const REASON_ORDER = Object.freeze(['one-way door', 'open dissent', 'finding', 'no proof', 'trunk', 'low-confidence finding', 'hollow test']);
+// Never moved to read-if-time, whatever the budget.
+const MUST_READ = Object.freeze(['one-way door', 'open dissent']);
+const CITED_SEVERITIES = Object.freeze(['CRITICAL', 'HIGH', 'MEDIUM']);
 const TOUCHES = Object.freeze([['shared_state', 'state/config/schema'], ['one_way_door', 'one-way door'], ['public_interface', 'public interface'], ['security_path', 'security path']]);
 const KNOB_LABELS = Object.freeze({
   is_trunk: 'Is this trunk code?',
@@ -33,6 +36,7 @@ function citeReason(r, tc) {
   if (r.agent === 'spine:devils-advocate' || (typeof r.dissent === 'string' && r.dissent)) return 'open dissent';
   if (isFinding(r) && typeof r.confidence === 'number' && r.confidence < tc.low_confidence) return 'low-confidence finding';
   if (r.agent === 'spine:test-quality' && r.severity === 'MEDIUM') return 'hollow test';
+  if (isFinding(r) && CITED_SEVERITIES.includes(r.severity)) return 'finding';
   return null;
 }
 
@@ -94,12 +98,13 @@ const sumLines = (list) => list.reduce((n, e) => n + e.lines, 0);
 function totals(groups, tc) {
   const r = tc.reading_rates;
   const read = { hunks: groups.read_yourself.length, lines: sumLines(groups.read_yourself), minutes: minutes(sumLines(groups.read_yourself), r.read_yourself) };
+  const later = { hunks: groups.read_if_time.length, lines: sumLines(groups.read_if_time), minutes: minutes(sumLines(groups.read_if_time), r.read_yourself) };
   const skim = { hunks: groups.skim.length, lines: sumLines(groups.skim), minutes: minutes(sumLines(groups.skim), r.skim) };
   const skip = { hunks: groups.skip.length, lines: sumLines(groups.skip), minutes: 0 };
-  const lines = read.lines + skim.lines + skip.lines;
+  const lines = read.lines + later.lines + skim.lines + skip.lines;
   const raw = minutes(lines, r.whole);
-  const floor = read.minutes + skim.minutes;
-  return { read_yourself: read, skim, skip, whole: { hunks: read.hunks + skim.hunks + skip.hunks, lines, minutes: Math.max(raw, floor), clamped: raw < floor } };
+  const floor = read.minutes + later.minutes + skim.minutes;
+  return { read_yourself: read, read_if_time: later, skim, skip, whole: { hunks: read.hunks + later.hunks + skim.hunks + skip.hunks, lines, minutes: Math.max(raw, floor), clamped: raw < floor } };
 }
 
 function place(h, file, ctx, groups) {
@@ -115,6 +120,25 @@ function place(h, file, ctx, groups) {
   return groups.read_yourself.push(readEntry(h, ref, file, ['no proof'], cited, proofIds));
 }
 
+// Keep the riskiest hunks within the reading budget; the rest stay listed, in
+// the same order, as read-if-time. A must-read hunk is kept even over budget.
+function withinBudget(ranked, tc) {
+  const read = [];
+  const later = [];
+  let used = 0;
+  for (const e of ranked) {
+    const cost = e.lines / tc.reading_rates.read_yourself;
+    const must = e.reasons.some((r) => MUST_READ.includes(r));
+    if (must || read.length === 0 || used + cost <= tc.read_budget_minutes) {
+      read.push(e);
+      used += cost;
+    } else {
+      later.push(e);
+    }
+  }
+  return { read, later };
+}
+
 function buildReadingMap({ diffFiles, tree, records, proof, tc }) {
   const files = new Map(((tree && tree.files) || []).map((f) => [f.path, f]));
   const ctx = {
@@ -124,7 +148,8 @@ function buildReadingMap({ diffFiles, tree, records, proof, tc }) {
   };
   const groups = { read_yourself: [], skim: [], skip: [] };
   for (const h of hunksOf(diffFiles)) place(h, files.get(h.path) || null, ctx, groups);
-  const sorted = { read_yourself: [...groups.read_yourself].sort(byRank), skim: [...groups.skim].sort(byPathStart), skip: [...groups.skip].sort(byPathStart) };
+  const budgeted = withinBudget([...groups.read_yourself].sort(byRank), tc);
+  const sorted = { read_yourself: budgeted.read, read_if_time: budgeted.later, skim: [...groups.skim].sort(byPathStart), skip: [...groups.skip].sort(byPathStart) };
   return { groups: sorted, totals: totals(sorted, tc) };
 }
 
@@ -142,25 +167,27 @@ function renderReadingMap(map, meta) {
   const stale = meta.stale ? ['> STALE: the diff changed after tree.json was written. Re-run tree.js, then this map.', ''] : [];
   const sums = [
     `Change tier: ${meta.tier || 'unknown'} · verdict: ${meta.verdict || 'pending'}`, '',
-    `Read yourself: ${t.read_yourself.hunks} hunks, ${t.read_yourself.minutes} min · Skim: ${t.skim.hunks} hunks, ${t.skim.minutes} min · Skip: ${t.skip.hunks} hunks · Whole diff: ${t.whole.minutes} min${t.whole.clamped ? ' (raised to cover read + skim)' : ''}`, '',
+    `Read yourself: ${t.read_yourself.hunks} hunks, ${t.read_yourself.minutes} min${t.read_if_time.hunks ? ` · Read if you have time: ${t.read_if_time.hunks} hunks, ${t.read_if_time.minutes} min` : ''} · Skim: ${t.skim.hunks} hunks, ${t.skim.minutes} min · Skip: ${t.skip.hunks} hunks · Whole diff: ${t.whole.minutes} min${t.whole.clamped ? ' (raised to cover read + skim)' : ''}`, '',
   ];
   const knobs = Object.entries(meta.knobs || {}).map(([k, v]) => `- ${KNOB_LABELS[k] || k} ${v.answer}`);
   const confirm = ['## Confirm at G3', '', ...knobs, `- Rollback or flag plan: ${meta.rollback || 'not required'}`, ''];
   const read = ['## Read yourself', '', ...map.groups.read_yourself.map(readLine), ''];
+  const later = map.groups.read_if_time.length ? ['## Read if you have time', '', ...map.groups.read_if_time.map(readLine), ''] : [];
   const skim = ['## Skim', '', ...map.groups.skim.map((e) => `- \`${clean(e.ref)}\` · ${e.reason}`), ''];
   const skip = ['## Skip', '', ...map.groups.skip.map((e) => `- \`${clean(e.ref)}\` · covered by ${e.evidence.join(', ')}`)];
-  return `${[...head, ...stale, ...sums, ...confirm, ...read, ...skim, ...skip].join('\n')}\n`;
+  return `${[...head, ...stale, ...sums, ...confirm, ...read, ...later, ...skim, ...skip].join('\n')}\n`;
 }
 
 function summarize(map, meta) {
   const t = map.totals;
+  const later = t.read_if_time.hunks > 0;
   return {
     ok: true,
     stale: Boolean(meta.stale),
     path: meta.relPath,
-    counts: { read_yourself: t.read_yourself.hunks, skim: t.skim.hunks, skip: t.skip.hunks, total: t.whole.hunks },
-    minutes: { read_yourself: t.read_yourself.minutes, skim: t.skim.minutes, whole: t.whole.minutes },
-    g3: `tier ${meta.tier || 'unknown'} · verdict ${meta.verdict || 'pending'} · read yourself ${t.read_yourself.hunks} hunks, ${t.read_yourself.minutes} min (whole diff ${t.whole.minutes} min) · ${meta.relPath}`,
+    counts: { read_yourself: t.read_yourself.hunks, ...(later ? { read_if_time: t.read_if_time.hunks } : {}), skim: t.skim.hunks, skip: t.skip.hunks, total: t.whole.hunks },
+    minutes: { read_yourself: t.read_yourself.minutes, ...(later ? { read_if_time: t.read_if_time.minutes } : {}), skim: t.skim.minutes, whole: t.whole.minutes },
+    g3: `tier ${meta.tier || 'unknown'} · verdict ${meta.verdict || 'pending'} · read yourself ${t.read_yourself.hunks} hunks, ${t.read_yourself.minutes} min${later ? `, then ${t.read_if_time.hunks} more hunks, ${t.read_if_time.minutes} min if you have time` : ''} (whole diff ${t.whole.minutes} min) · ${meta.relPath}`,
   };
 }
 

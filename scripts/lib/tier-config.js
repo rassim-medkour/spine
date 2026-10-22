@@ -20,6 +20,7 @@ const TIER_DEFAULTS = Object.freeze({
   tree_budget_ms: 20000,
   tree_max_files: 20000,
   low_confidence: 0.6,
+  read_budget_minutes: 20,
 });
 
 const isObj = (v) => Boolean(v) && typeof v === 'object' && !Array.isArray(v);
@@ -69,6 +70,7 @@ function tierConfig(config = {}) {
     tree_budget_ms: posInt(t.tree_budget_ms, TIER_DEFAULTS.tree_budget_ms),
     tree_max_files: posInt(t.tree_max_files, TIER_DEFAULTS.tree_max_files),
     low_confidence: confidence < 1 ? confidence : TIER_DEFAULTS.low_confidence,
+    read_budget_minutes: posInt(t.read_budget_minutes, TIER_DEFAULTS.read_budget_minutes),
   });
 }
 

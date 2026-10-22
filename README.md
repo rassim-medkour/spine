@@ -271,7 +271,9 @@ for the repo's own `.claude/skills/verify/` skill nearest the changed files
 (`scripts/find-verify.js`), runs it to drive the touched features in the real
 app, and records the evidence. No verify skill means one `INFO` record
 suggesting `/pstack:create-verification-skill`; spine never generates or edits
-that skill. PR reviews via `gh pr diff` skip it, since the code is not on disk.
+that skill. PR reviews via `gh pr diff` skip it, since the code is not on disk. Proof
+for a PR or a branch that is not checked out runs in a temporary worktree
+(`scripts/review-worktree.js`), so you never have to check it out yourself.
 
 ## Risk tiers, proof and the reading map
 
@@ -295,7 +297,7 @@ Agents run the proof commands and record them; `scripts/check-proof.js`
 checks the records against the change tier, `scripts/verdict.js` computes the
 verdict (`FAIL` > `UNPROVEN` > `PASS_WITH_ADVISORIES` > `PASS`) and
 `scripts/reading-map.js` writes `.spine/<run>/reading-map.md`: every hunk is
-sorted into read-yourself, skim or skip, with reasons, importers, the evidence
+sorted into read-yourself, read-if-you-have-time, skim or skip, with reasons, importers, the evidence
 that covers it, and reading times next to the time for the whole diff. After
 G3, `scripts/pr-body.js` turns the run into a PR description.
 
@@ -454,6 +456,7 @@ earlier 0.3.0 builds, where every agent ran on the session model.
     "fan_in_branch": 2,
     "flag_names": ["FEATURE_FLAGS"],
     "reading_rates": { "read_yourself": 20, "skim": 80, "whole": 40 },
+    "read_budget_minutes": 20,
     "evidence_cap_bytes": 1048576,
     "proof_timeout_seconds": 600
   }
@@ -487,6 +490,10 @@ earlier 0.3.0 builds, where every agent ran on the session model.
   file can be lowered to leaf.
 - `tiers.reading_rates` are lines per minute for read-yourself, skim and the
   whole diff; they only change the minutes shown in the reading map.
+- `tiers.read_budget_minutes` (default 20) is how long the read-yourself list
+  may take. The riskiest hunks fill it first; the rest are listed in the same
+  order under "Read if you have time". One-way doors and open dissent always
+  stay in read-yourself.
 - `tiers.evidence_cap_bytes` caps each saved proof file;
   `tiers.proof_timeout_seconds` is the longest a proof command may run.
 - `npm test` is `node --test "tests/**/*.test.js"` (not `node --test tests/`)
