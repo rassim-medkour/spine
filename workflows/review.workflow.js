@@ -1,5 +1,5 @@
 export const meta = {
-  name: 'spine-review',
+  name: 'spine-internal-review',
   description: 'Cross-provider review: each selected provider finds, findings are merged by evidence, CRITICAL and HIGH are verified by a different author, then the devils advocate runs if the gate allows.',
   phases: [
     { title: 'Find', detail: 'one reviewer per provider, in parallel' },
@@ -9,8 +9,8 @@ export const meta = {
 };
 
 // args: { diff, changedFiles, language, providers, devilsAdvocate, runId, stage, tree? }
-if (!args || typeof args.diff !== 'string' || !args.diff.trim()) throw new Error('spine-review: args.diff is required');
-if (!Array.isArray(args.providers) || !args.providers.length) throw new Error('spine-review: args.providers is required');
+if (!args || typeof args.diff !== 'string' || !args.diff.trim()) throw new Error('spine-internal-review: args.diff is required. This is an internal step of the spine skill; run /spine:spine-review <pr|branch|--diff> instead.');
+if (!Array.isArray(args.providers) || !args.providers.length) throw new Error('spine-internal-review: args.providers is required');
 const changedFiles = Array.isArray(args.changedFiles) ? args.changedFiles : [];
 const oneLine = (s) => String(s).replace(/[\r\n]+/g, '');
 const tree = args.tree && typeof args.tree.tier === 'string' && Array.isArray(args.tree.files) ? args.tree : null;
@@ -233,8 +233,66 @@ for (const f of raw.filter(Boolean).flat()) {
     if (SEVERITY_ORDER.indexOf(f.severity) > SEVERITY_ORDER.indexOf(seen.severity)) seen.severity = f.severity;
   }
 }
-const findings = [...merged.values()];
-log(`spine-review: ${raw.filter(Boolean).flat().length} raw findings, ${findings.length} unique`);
+// Exact file:line keys miss reviewers who cite the same problem at different
+// lines, so one cheap agent groups same-claim findings. Any doubt about its
+// reply keeps the findings as they were.
+const MERGE = {
+  type: 'object',
+  properties: { groups: { type: 'array', items: { type: 'array', items: { type: 'integer' } } } },
+  required: ['groups']
+};
+
+function validGroups(groups, size) {
+  if (!Array.isArray(groups)) return false;
+  const seen = new Set();
+  for (const g of groups) {
+    if (!Array.isArray(g) || g.length < 2) return false;
+    for (const i of g) {
+      if (!Number.isInteger(i) || i < 0 || i >= size || seen.has(i)) return false;
+      seen.add(i);
+    }
+  }
+  return true;
+}
+
+function mergeGroup(members) {
+  const top = members.reduce((a, b) => (SEVERITY_ORDER.indexOf(b.severity) > SEVERITY_ORDER.indexOf(a.severity) ? b : a));
+  const refs = new Set();
+  const evidence = members.flatMap((m) => m.evidence).filter((e) => (refs.has(e.ref) ? false : refs.add(e.ref)));
+  // Every member's claim stays on the record, so a grouping never hides one.
+  const others = members.filter((m) => m !== top).map((m) => `${m.severity} (${m.providers.join(', ')}): ${oneLine(m.claim)}`);
+  return {
+    ...top,
+    evidence,
+    alternatives: [...(top.alternatives || []), ...others],
+    providers: [...new Set(members.flatMap((m) => m.providers))],
+    authors: [...new Set(members.flatMap((m) => m.authors))],
+    corroboration: members.reduce((n, m) => n + m.corroboration, 0)
+  };
+}
+
+async function mergeSameClaims(list) {
+  if (list.length < 2) return list;
+  const numbered = list.map((f, i) => ({ i, claim: oneLine(f.claim).slice(0, 300), at: f.evidence.map((e) => e.ref).slice(0, 3), severity: f.severity }));
+  const reply = await routed(
+    'synthesis',
+    `These review findings come from different reviewers. Group the ones that describe the same underlying problem, even when they cite different lines or files. Group only findings you are sure are the same problem; leave the rest out. Return { "groups": [[i, j, ...]] } using the i values below; each i in at most one group, every group with two or more.\n\n${JSON.stringify(numbered)}`,
+    { label: 'merge', phase: 'Find', schema: MERGE }
+  ).catch((e) => {
+    markNotRun('merge');
+    log(`merge failed: ${e && e.message}`);
+    return null;
+  });
+  if (!reply || !validGroups(reply.groups, list.length)) return list;
+  // Two CRITICAL/HIGH claims are never folded together: each must reach its own verifier.
+  const strongCount = (g) => g.filter((i) => list[i].severity === 'CRITICAL' || list[i].severity === 'HIGH').length;
+  const groups = reply.groups.filter((g) => strongCount(g) <= 1);
+  const grouped = new Set(groups.flat());
+  return [...list.filter((_, i) => !grouped.has(i)), ...groups.map((g) => mergeGroup(g.map((i) => list[i])))];
+}
+
+const findings = await mergeSameClaims([...merged.values()]);
+log(`spine-internal-review: ${raw.filter(Boolean).flat().length} raw findings, ${findings.length} unique`);
 
 const strong = findings.filter((f) => f.severity === 'CRITICAL' || f.severity === 'HIGH');
 const advisory = findings.filter((f) => !strong.includes(f));
@@ -284,7 +342,7 @@ const survivors = checked.filter((f) => f.verified && !f.model_note);
 const refuted = checked.filter((f) => !f.verified || f.model_note);
 const kinds = new Set(findings.flatMap((f) => f.evidence.map((e) => e.kind)).filter((k) => k !== 'unverified'));
 const gateOpen = Boolean(args.devilsAdvocate) && refuted.length === 0 && kinds.size >= 2;
-log(`spine-review: ${survivors.length} verified, ${refuted.length} refuted, devils advocate ${gateOpen ? 'ON' : 'off'}`);
+log(`spine-internal-review: ${survivors.length} verified, ${refuted.length} refuted, devils advocate ${gateOpen ? 'ON' : 'off'}`);
 
 let dissent = [];
 if (gateOpen) {
@@ -300,6 +358,22 @@ if (gateOpen) {
     return null;
   });
   dissent = da ? da.findings.map((f) => ({ ...f, provider: 'spine:devils-advocate', author: 'spine' })) : [];
+  // The devils advocate's own CRITICAL and HIGH claims get a verifier too; one
+  // the verifier does not confirm drops to MEDIUM, so it never stands as HIGH unchecked.
+  const daVerifier = [...args.providers].sort((a, b) => a.rank - b.rank)[0] || null;
+  dissent = await pipeline(dissent, (f, _item, i) => {
+    if (f.severity !== 'CRITICAL' && f.severity !== 'HIGH') return f;
+    const label = `verify-da:${i}`;
+    return routed('verifier', verifierPromptFor(daVerifier, f), { label, phase: 'Dissent', schema: VERDICT, agentType: verifierAgentTypeFor(daVerifier) }, ['devils-advocate'])
+      .catch((e) => {
+        markNotRun(label);
+        log(`${label} failed: ${e && e.message}`);
+        return null;
+      })
+      .then((v) => (v && !v.refuted
+        ? { ...f, verified: true, verify_label: label }
+        : { ...f, severity: 'MEDIUM', verified: false, verifier_note: `devils advocate ${f.severity} not confirmed by a verifier${v && v.reason ? `: ${oneLine(v.reason)}` : ''}` }));
+  });
 }
 
 function modelFields(f, role) {
@@ -335,11 +409,11 @@ function toRecord(f, index, agentName, role) {
 const findingRecords = [
   ...checked.map((f, i) => toRecord(f, i, f.providers[0], 'finder')),
   ...advisory.map((f, i) => toRecord(f, checked.length + i, f.providers[0], 'finder')),
-  ...dissent.map((f, i) => toRecord({ ...f, verified: false }, checked.length + advisory.length + i, 'spine:devils-advocate', 'devils_advocate'))
+  ...dissent.map((f, i) => toRecord({ ...f, verified: Boolean(f.verified) }, checked.length + advisory.length + i, 'spine:devils-advocate', 'devils_advocate'))
 ];
 const records = [
   ...findingRecords,
-  ...didNotRunRecords(args.stage || 'review', (label) => (label === 'devils-advocate' ? 'spine:devils-advocate' : label.startsWith('verify:') ? 'spine:verifier' : label.replace(/^find:/, '')), findingRecords.length)
+  ...didNotRunRecords(args.stage || 'review', (label) => (label === 'devils-advocate' ? 'spine:devils-advocate' : label === 'merge' ? 'spine:synthesis' : label.startsWith('verify') ? 'spine:verifier' : label.replace(/^find:/, '')), findingRecords.length)
 ];
 
 return {
