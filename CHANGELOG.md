@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.3.2
+
+Cursor support is still experimental and the live Cursor smoke test is pending.
+
+### Added
+
+- [both] `scripts/review-comment.js` writes a review comment for a PR you review (`<run>/review-comment.md`): verdict, read-yourself list, findings by severity, proof and what is not verified. Spine asks before posting it and never posts on its own.
+
+### Fixed
+
+- [claude-code] `/spine:spine-review`, `/spine:spine-spec` and `/spine:spine-implement` now start the full spine run (`review`, `intent` and `implement`). Before, these names ran the internal workflow with no input: it failed at once, and the review that followed had no run folder, risk tiers, proof, verdict or reading map.
+- [claude-code] The three workflows are renamed `spine-internal-review`, `spine-internal-spec` and `spine-internal-implement`. Started with no input, each one stops with a message that names the command to use instead.
+- [both] `review` with no target asks for one before it creates anything, and the run folder is named after the target (`20261022-pr-885`), not `target-pending`.
+- [both] Proof for a PR or branch that is not checked out now runs in a temporary git worktree (`scripts/review-worktree.js`), which spine removes afterwards. Before, every proof requirement was a gap, so the verdict was always `UNPROVEN` and every hunk was marked read-yourself.
+- [both] The reading map has a time budget (`tiers.read_budget_minutes`, default 20). The riskiest hunks fill read-yourself first; the rest are listed in the same order under "Read if you have time". One-way doors, open dissent and hunks cited by an open CRITICAL or HIGH finding are never moved out; hunks cited by an open MEDIUM finding rank right after them. The PR description counts the read-if-time hunks.
+- [claude-code] A CRITICAL or HIGH raised by the devils advocate now goes to a verifier. One the verifier does not confirm drops to MEDIUM with a note. Before, it stood as an unverified HIGH.
+- [claude-code] After the finders, one small-model agent merges findings that describe the same problem at different lines or files; the merged finding keeps the highest severity, every cited location and every member's claim (in `alternatives`). Two CRITICAL or HIGH findings are never merged, so each still reaches its own verifier. If its reply is missing or malformed, the findings stay as they were.
+
 ## 0.3.1
 
 Cursor support is still experimental and the live Cursor smoke test is pending.

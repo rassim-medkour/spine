@@ -135,3 +135,9 @@ test('the body never links gitignored .spine/ paths', () => {
   assert.ok(!out.body.includes('.spine/'), 'no .spine/ path in the body');
   assert.match(out.body, /src\/f0\.ts:1-2/);
 });
+
+test('the PR body counts the read-if-time hunks the reading budget moved out', () => {
+  const rm = { totals: { read_yourself: { hunks: 1, minutes: 1 }, read_if_time: { hunks: 3, minutes: 12 }, whole: { minutes: 20 } }, groups: { read_yourself: [{ ref: 'src/lib/math.ts:1-2', reasons: ['trunk'] }], read_if_time: [] } };
+  const out = buildPrBody(data('trunk', { readingMap: rm }), WRITTEN);
+  assert.match(out.body, /Then, if you have time: 3 more hunks, about 12 min/);
+});

@@ -42,7 +42,7 @@ for (const name of WF) {
     assert.deepEqual(lintWorkflow(text), []);
     const metaSrc = /export const meta = (\{[\s\S]*?\n\});/.exec(text)[1];
     const meta = new Function(`return ${metaSrc}`)();
-    assert.equal(meta.name, `spine-${name}`);
+    assert.equal(meta.name, `spine-internal-${name}`);
     for (const p of meta.phases) {
       assert.ok(text.includes(`phase('${p.title}')`) || text.includes(`phase: '${p.title}'`), `phase ${p.title} not used`);
     }

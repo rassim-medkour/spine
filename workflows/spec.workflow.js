@@ -1,5 +1,5 @@
 export const meta = {
-  name: 'spine-spec',
+  name: 'spine-internal-spec',
   description: 'Spec drafting fan-out: each lens reads the intent through its own concern and proposes requirements, risks, and questions; a synthesis pass merges them and surfaces where lenses disagree.',
   phases: [
     { title: 'Lenses', detail: 'domain, architecture, data, security, ops, testability' },
@@ -8,7 +8,7 @@ export const meta = {
 };
 
 // args: { intentText, lenses, providers, runId }
-if (!args || typeof args.intentText !== 'string' || !args.intentText.trim()) throw new Error('spine-spec: args.intentText is required');
+if (!args || typeof args.intentText !== 'string' || !args.intentText.trim()) throw new Error('spine-internal-spec: args.intentText is required. This is an internal step of the spine skill; run /spine:spine-spec "<request>" instead.');
 const lenses = Array.isArray(args.lenses) && args.lenses.length ? args.lenses : ['domain', 'architecture', 'data', 'security', 'ops', 'testability'];
 const providers = Array.isArray(args.providers) ? args.providers : [];
 
@@ -185,7 +185,7 @@ const sections = await parallel(lenses.map((lens, i) => () =>
     })
 ));
 const good = sections.filter(Boolean);
-log(`spine-spec: ${good.length}/${lenses.length} lenses returned`);
+log(`spine-internal-spec: ${good.length}/${lenses.length} lenses returned`);
 
 phase('Synthesis');
 const merged = await routed(

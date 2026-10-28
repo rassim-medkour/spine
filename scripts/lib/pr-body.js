@@ -68,6 +68,9 @@ function genReadingMap(data) {
     ...head,
     `- Read yourself: ${rm.totals.read_yourself.hunks} hunks, about ${rm.totals.read_yourself.minutes} min (whole diff ${rm.totals.whole.minutes} min).`,
     ...rm.groups.read_yourself.map((e, i) => `${i + 1}. \`${e.ref}\` · ${e.reasons.join(', ')}`),
+    ...(rm.totals.read_if_time && rm.totals.read_if_time.hunks
+      ? [`- Then, if you have time: ${rm.totals.read_if_time.hunks} more hunks, about ${rm.totals.read_if_time.minutes} min (listed in the reading map).`]
+      : []),
   ];
 }
 

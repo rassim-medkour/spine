@@ -72,7 +72,11 @@ words joined by dashes. You are the only writer of:
 This keys on whether the entry point starts a new run, not on its name.
 There are three groups.
 
-- Starting: `intent`, `adopt`, `review`. The FIRST actions of the turn,
+- Starting: `intent`, `adopt`, `review`. When the entry is missing its
+  argument (`review` with no target, `intent` with no text), there is no target
+  yet: ask for it and end the turn without creating anything. If `active.json`
+  points at a run whose `status` is `active`, set that run's `awaiting` to
+  `human` before asking, so the Stop hook lets the turn end. Otherwise the FIRST actions of the turn,
   before reading any diff, classifying, or selecting providers, are: create
   the run directory, write `state.json` (stage set to the entry stage,
   status `active`, awaiting `null`), write `active.json`. If `active.json`
@@ -342,8 +346,25 @@ downstream artifact and re-run. The Stop hook enforces this.
    `command gh pr diff <n>`. Take `date -u +%s` before and after it and keep
    the difference as `live_verify_seconds` (0 when skipped).
 7. Collect required proof. Skip this step when tree.json is absent.
+   0. When the code under review is not checked out (a PR, or a branch other
+      than the current one), create a review worktree first:
+      `node <root>/scripts/review-worktree.js --run <run> --pr <n>` (or
+      `--branch <name>`). It checks the reviewed commit out, detached, in the
+      temp folder and writes `<run>/worktree.json`; `record-proof.js` then runs
+      every proof command and the test-quality check inside it, so never ask
+      the human to check the branch out. The worktree has no installed
+      dependencies: run the repo's install step in it first (for example
+      `npm ci` or `uv sync --frozen`, with the worktree `path` as the working
+      directory), or point the command at the main checkout's environment (for
+      example `<repo>/.venv/bin/python -m pytest`). A command that fails only
+      because a dependency is missing is not proof that the code fails; fix
+      the setup and run it again. Do not pass `--no-checkout` below once the
+      worktree exists. Only when the worktree cannot be created (no access to
+      the remote) fall back to `--no-checkout`, and say why in DONE. After the
+      last proof step, remove it:
+      `node <root>/scripts/review-worktree.js --run <run> --remove`.
    1. Run `node <root>/scripts/check-proof.js --run <run>` (add
-      `--no-checkout` for a PR reviewed through `gh pr diff`). It writes
+      `--no-checkout` only for a PR with no review worktree). It writes
       `<run>/proof.json` and lists `required`, `present`, `missing` (each
       with a `hint`) and `info`. For each `info` entry write one `INFO`
       record from `spine:orchestrator`, claim
@@ -388,7 +409,7 @@ downstream artifact and re-run. The Stop hook enforces this.
    "providers": [ids], "findings": [ { "record_id", "severity",
    "corroboration", "verified" } ], "dissent": [record ids],
    "elapsed_seconds", "live_verify_seconds" }`. Then run `node <root>/scripts/verdict.js --run <run> --write` (add
-   `--no-checkout` for a PR not checked out). It sets `verdict`, `tier` and
+   `--no-checkout` only for a PR with no review worktree). It sets `verdict`, `tier` and
    `missing_proof` in review.json; never write `verdict`, `tier` or
    `missing_proof` by hand. Verdict is `FAIL` when any verified CRITICAL or HIGH
    remains, `UNPROVEN` when required proof is missing, `PASS_WITH_ADVISORIES`
@@ -411,9 +432,14 @@ downstream artifact and re-run. The Stop hook enforces this.
     reading map's `g3` string in STATE, for example
     `STATE: stage 5/5 review · run <id> · tier trunk · verdict UNPROVEN · read yourself 4 hunks, 12 min (whole diff 40 min) · .spine/<id>/reading-map.md`.
     When the verdict is UNPROVEN, DONE lists every proof gap as
-    `<requirement> · <files> · <hint>`; for a PR not checked out the hint is
+    `<requirement> · <files> · <hint>`; for a PR with no review worktree the hint is
     "check out the branch to collect proof". Ask the human to confirm the
-    rollback or flag plan listed under "Confirm at G3". Run `node <root>/scripts/run-status.js <run>`;
+    rollback or flag plan listed under "Confirm at G3". For a review of a PR, run
+    `node <root>/scripts/review-comment.js --run <run> --repo <owner/name>`; it writes
+    `<run>/review-comment.md` (verdict, read-yourself list, findings by severity,
+    proof, not verified). Mention the file in DONE and ask whether to post it as a PR
+    comment. Post only after an explicit yes, with
+    `gh pr comment <n> --body-file <run>/review-comment.md`; never post on your own. Run `node <root>/scripts/run-status.js <run>`;
     when it prints `model_mix`, add `model_mix.line` to DONE. Stop. On approval of an
     UNPROVEN review, write a waiver record from `spine:orchestrator`: claim
     `G3 waiver: UNPROVEN accepted`, evidence
@@ -503,7 +529,10 @@ arguments.
   that ticket. Never bootstrap here; if `active.json` is missing, stop and
   ask for `adopt` or `intent`, or `resume <id>` if a run already exists.
 - `review <pr|branch|--diff>`: create a run whose intent is "review <target>",
-  stage `review`, no upstream artifacts. Spec axis providers get the linked
+  stage `review`, no upstream artifacts. With no target, ask which PR, branch
+  or `--diff` to review and end the turn; create nothing until the target is
+  known. Name the run after the target: `20261022-pr-885`,
+  `20261022-branch-<branch>` or `20261022-local-diff`. Spec axis providers get the linked
   issue body if the PR or branch names one; otherwise standards axis only.
 - `status`: read `state.json`, `class.json`, `tickets.json`, the latest
   records, and the output of `node <root>/scripts/run-status.js <run>`;

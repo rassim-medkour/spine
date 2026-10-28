@@ -36,7 +36,7 @@ test('spine skill calls workflows by registered name, never by a <root> scriptPa
   for (const stage of ['spec', 'implement', 'review']) {
     const script = fs.readFileSync(path.join(__dirname, '..', 'workflows', `${stage}.workflow.js`), 'utf8');
     const metaName = script.match(/name:\s*'([^']+)'/)[1];
-    assert.equal(metaName, `spine-${stage}`);
+    assert.equal(metaName, `spine-internal-${stage}`);
     assert.ok(text.includes(`name: "spine:${metaName}"`), `SKILL.md must call spine:${metaName} by name`);
   }
 });

@@ -1,7 +1,7 @@
 # spine
 
-> **Status: alpha (0.3.1).** Commands, artifact shapes and gate behaviour may
-> change between minor versions. `master` is the alpha channel; pin `v0.3.1`
+> **Status: alpha (0.3.2).** Commands, artifact shapes and gate behaviour may
+> change between minor versions. `master` is the alpha channel; pin `v0.3.2`
 > for a fixed version.
 
 A gated, evidence-first engineering process for Claude Code. One plugin that
@@ -35,7 +35,7 @@ the [releases page](https://github.com/rassim-medkour/spine/releases) for
 what changed.
 
 Pin a version instead with
-`claude plugin marketplace add https://github.com/rassim-medkour/spine.git#v0.3.1`.
+`claude plugin marketplace add https://github.com/rassim-medkour/spine.git#v0.3.2`.
 Remove spine with `claude plugin uninstall spine@spine` and
 `claude plugin marketplace remove spine`.
 
@@ -164,6 +164,18 @@ the claim `workflow tool unavailable, ran inline`, and keeps the gate chain.
 /spine:spine resume <run-id>
 ```
 
+Shortcuts for the three stages people start most:
+
+```
+/spine:spine-review <pr# | branch | --diff>   same as /spine:spine review
+/spine:spine-spec "<what you want>"           same as /spine:spine intent
+/spine:spine-implement [<run-id | T-3>]       same as /spine:spine implement
+```
+
+The `/` menu also lists `spine-internal-review`, `spine-internal-spec` and
+`spine-internal-implement`. Those are the workflows the skill calls between
+gates; started on their own they stop and point you to the command above.
+
 ## How a run works
 
 A run moves a change through five stages. Each stage leaves a file under
@@ -259,7 +271,9 @@ for the repo's own `.claude/skills/verify/` skill nearest the changed files
 (`scripts/find-verify.js`), runs it to drive the touched features in the real
 app, and records the evidence. No verify skill means one `INFO` record
 suggesting `/pstack:create-verification-skill`; spine never generates or edits
-that skill. PR reviews via `gh pr diff` skip it, since the code is not on disk.
+that skill. PR reviews via `gh pr diff` skip it, since the code is not on disk. Proof
+for a PR or a branch that is not checked out runs in a temporary worktree
+(`scripts/review-worktree.js`), so you never have to check it out yourself.
 
 ## Risk tiers, proof and the reading map
 
@@ -283,7 +297,7 @@ Agents run the proof commands and record them; `scripts/check-proof.js`
 checks the records against the change tier, `scripts/verdict.js` computes the
 verdict (`FAIL` > `UNPROVEN` > `PASS_WITH_ADVISORIES` > `PASS`) and
 `scripts/reading-map.js` writes `.spine/<run>/reading-map.md`: every hunk is
-sorted into read-yourself, skim or skip, with reasons, importers, the evidence
+sorted into read-yourself, read-if-you-have-time, skim or skip, with reasons, importers, the evidence
 that covers it, and reading times next to the time for the whole diff. After
 G3, `scripts/pr-body.js` turns the run into a PR description.
 
@@ -353,6 +367,16 @@ written by hand.
 
 "Not verified" is never left out when it has content, at any tier.
 
+### The review comment
+
+When you review someone else's PR, spine writes `.spine/<run>/review-comment.md`
+at G3 (`scripts/review-comment.js`): verdict and tier, what to read yourself
+with minutes, then Blocking (verified CRITICAL and HIGH), Should fix (MEDIUM),
+Nits (LOW, collapsed), Proof (what ran and what is missing) and Not verified.
+Each finding is one line: location, claim, record id; locations link to the
+reviewed commit. Reviewer text is cleaned so it cannot mention people or carry
+HTML. Spine asks before posting it with `gh pr comment` and never posts on its own.
+
 ## Model routing
 
 Spine picks a model for every agent it dispatches. A script,
@@ -407,9 +431,10 @@ earlier 0.3.0 builds, where every agent ran on the session model.
 | Part | Kind | What it does |
 |---|---|---|
 | `/spine:spine` | skill, entry point | Starts or resumes a run, classifies, picks providers, writes each stage file, stops at gates. |
-| `spine-spec` | workflow | Fans the request out to lenses (domain, architecture, security, ops, testability) and merges their requirements, risks and disagreements. |
-| `spine-implement` | workflow | Per ticket: a fresh implementer writes the failing test first, then a spec reviewer and a quality reviewer from a different author check the commit. |
-| `spine-review` | workflow | The find, merge, verify and push-back pipeline above. |
+| `/spine:spine-review`, `/spine:spine-spec`, `/spine:spine-implement` | commands | Shortcuts that start `/spine:spine review`, `intent` and `implement`. |
+| `spine-internal-spec` | workflow | Fans the request out to lenses (domain, architecture, security, ops, testability) and merges their requirements, risks and disagreements. |
+| `spine-internal-implement` | workflow | Per ticket: a fresh implementer writes the failing test first, then a spec reviewer and a quality reviewer from a different author check the commit. |
+| `spine-internal-review` | workflow | The find, merge, verify and push-back pipeline above. |
 | `gap-check` | skill | Asks what is missing: acceptance criteria, error paths, migrations with rollback, limits, test anchors, scope edges. |
 | `record-contract` | skill | The record shape every agent must return. |
 | `boundary-checker` | agent | Compares a stage file with the one before it and reports PASS or drift with line numbers. Never fixes. |
@@ -441,6 +466,7 @@ earlier 0.3.0 builds, where every agent ran on the session model.
     "fan_in_branch": 2,
     "flag_names": ["FEATURE_FLAGS"],
     "reading_rates": { "read_yourself": 20, "skim": 80, "whole": 40 },
+    "read_budget_minutes": 20,
     "evidence_cap_bytes": 1048576,
     "proof_timeout_seconds": 600
   }
@@ -474,6 +500,10 @@ earlier 0.3.0 builds, where every agent ran on the session model.
   file can be lowered to leaf.
 - `tiers.reading_rates` are lines per minute for read-yourself, skim and the
   whole diff; they only change the minutes shown in the reading map.
+- `tiers.read_budget_minutes` (default 20) is how long the read-yourself list
+  may take. The riskiest hunks fill it first; the rest are listed in the same
+  order under "Read if you have time". One-way doors, open dissent and hunks
+  cited by an open CRITICAL or HIGH finding always stay in read-yourself.
 - `tiers.evidence_cap_bytes` caps each saved proof file;
   `tiers.proof_timeout_seconds` is the longest a proof command may run.
 - `npm test` is `node --test "tests/**/*.test.js"` (not `node --test tests/`)

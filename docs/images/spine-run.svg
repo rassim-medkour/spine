@@ -51,10 +51,10 @@
   </g>
   <g class="mu m" font-size="11" text-anchor="middle">
     <text x="69" y="118">gap-check</text><text x="69" y="133">classify.js</text>
-    <text x="227" y="118">spine-spec</text><text x="227" y="133">lenses → spec.md</text>
+    <text x="227" y="118">spec workflow</text><text x="227" y="133">lenses → spec.md</text>
     <text x="385" y="118">writing-plans</text><text x="385" y="133">tickets.json</text>
-    <text x="543" y="118">spine-implement</text><text x="543" y="133">TDD per ticket</text>
-    <text x="701" y="118">spine-review</text><text x="701" y="133">review.json</text>
+    <text x="543" y="118">implement workflow</text><text x="543" y="133">TDD per ticket</text>
+    <text x="701" y="118">review workflow</text><text x="701" y="133">review.json</text>
     <text x="911" y="118">run closed</text>
   </g>
   <rect class="ln" x="10" y="160" width="960" height="58" rx="6" stroke-dasharray="5 4" stroke-width="1.2"/>
