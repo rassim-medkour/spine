@@ -9,6 +9,7 @@ const REPO_RE = /^[\w.-]+\/[\w.-]+$/;
 const SHA_RE = /^[0-9a-f]{40}$/;
 
 // Reviewer text is untrusted: one line, no code-span breakout, no HTML, no @-mentions.
+// Used as is inside code spans; prose() also stops links, images and formatting.
 function clean(s, n = 300) {
   const t = String(s == null ? '' : s)
     .replace(/[\r\n]+/g, ' ')
@@ -20,6 +21,12 @@ function clean(s, n = 300) {
   return t.length > n ? `${t.slice(0, n - 3)}...` : t;
 }
 
+// Escapes Markdown and breaks autolinks (a zero-width space after "://" and "www.").
+const prose = (s, n) => clean(s, n)
+  .replace(/[\\[\]()!*_~|#]/g, (c) => `\\${c}`)
+  .replace(/:\/\//g, ':​//')
+  .replace(/\bwww\./gi, (w) => `${w.slice(0, 3)}​.`);
+
 function loc(ref, ctx) {
   const m = /^(.+?):(\d+)(?:-\d+)?$/.exec(String(ref || ''));
   const label = `\`${clean(ref, 200)}\``;
@@ -29,7 +36,7 @@ function loc(ref, ctx) {
 }
 
 const firstRef = (r) => (Array.isArray(r.evidence) && r.evidence[0] ? r.evidence[0].ref : '');
-const line = (r, ctx, prefix = '') => `- ${prefix}${loc(firstRef(r), ctx)} · ${clean(r.claim)} · ${r.id}`;
+const line = (r, ctx, prefix = '') => `- ${prefix}${loc(firstRef(r), ctx)} · ${prose(r.claim)} · ${r.id}`;
 
 function capped(lines) {
   return lines.length > MAX_LINES ? [...lines.slice(0, MAX_LINES), `- ... ${lines.length - MAX_LINES} more (truncated; see the run's records)`] : lines;
@@ -53,7 +60,7 @@ function proofLines(records, proof) {
     const counts = res.counts ? `${res.counts.pass} pass${res.counts.fail ? `, ${res.counts.fail} fail` : ''}` : `exit ${res.exit_code}`;
     return `- ran: ${r.proof_kind} ${ok ? '✓' : '✗'} ${counts}${res.command ? ` (\`${clean(res.command, 120)}\`)` : ''}`;
   });
-  const missing = ((proof && proof.missing) || []).map((m) => `- missing: ${m.requirement} · ${(m.files || []).map((f) => clean(f, 120)).join(', ') || 'whole change'}`);
+  const missing = ((proof && proof.missing) || []).map((m) => `- missing: ${m.requirement} · ${(m.files || []).map((f) => prose(f, 120)).join(', ') || 'whole change'}`);
   return [...ran, ...missing];
 }
 
@@ -69,11 +76,11 @@ function buildReviewComment({ review, records, readingMap, proof, repo, sha }) {
   const nits = listed.filter((r) => r.severity === 'LOW').map((r) => line(r, ctx));
   const notVerified = [
     ...listed.filter((r) => strong(r) && r.verified !== true).map((r) => line(r, ctx, `${r.severity} not verified: `)),
-    ...listed.filter((r) => typeof r.verifier_note === 'string' && r.verifier_note).map((r) => `- ${clean(r.verifier_note)} · ${r.id}`),
+    ...listed.filter((r) => typeof r.verifier_note === 'string' && r.verifier_note).map((r) => `- ${prose(r.verifier_note)} · ${r.id}`),
   ];
   const proofs = proofLines(records, proof);
 
-  const out = [`## Spine review · verdict ${clean(review.verdict || 'pending', 40)} · tier ${clean(review.tier || 'unknown', 20)}`, ''];
+  const out = [`## Spine review · verdict ${prose(review.verdict || 'pending', 40)} · tier ${prose(review.tier || 'unknown', 20)}`, ''];
   const reading = readingLines(readingMap);
   if (reading.length) out.push(...reading, '');
   if (!listed.length) out.push('No findings.', '');

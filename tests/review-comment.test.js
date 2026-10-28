@@ -120,3 +120,14 @@ test('both skills build the review comment at G3 and post it only after an expli
     assert.match(text, /never post on your own/, rel);
   }
 });
+
+test('reviewer text cannot render links, images or formatting in the posted comment', () => {
+  const evil = data();
+  evil.records[2] = finding('R-0003', 'MEDIUM', 'edge.py:793', 'see [log in](https://evil.example/x) ![i](https://evil.example/i.png) **bold** visit https://evil.example now');
+  evil.records[4] = { ...evil.records[4], verifier_note: '[fix here](https://evil.example)' };
+  const body = buildReviewComment(evil);
+  assert.doesNotMatch(body, /\]\(https:\/\/evil/);
+  assert.doesNotMatch(body, /https:\/\/evil/);
+  assert.doesNotMatch(body, /(^|[^\\])\*\*bold/);
+  assert.match(body, /`edge\.py:793`/, 'code spans are left readable');
+});
