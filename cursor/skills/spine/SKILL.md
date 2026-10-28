@@ -434,7 +434,12 @@ downstream artifact and re-run. The Stop hook enforces this.
     When the verdict is UNPROVEN, DONE lists every proof gap as
     `<requirement> · <files> · <hint>`; for a PR with no review worktree the hint is
     "check out the branch to collect proof". Ask the human to confirm the
-    rollback or flag plan listed under "Confirm at G3". Run `node <root>/scripts/run-status.js <run>`;
+    rollback or flag plan listed under "Confirm at G3". For a review of a PR, run
+    `node <root>/scripts/review-comment.js --run <run> --repo <owner/name>`; it writes
+    `<run>/review-comment.md` (verdict, read-yourself list, findings by severity,
+    proof, not verified). Mention the file in DONE and ask whether to post it as a PR
+    comment. Post only after an explicit yes, with
+    `gh pr comment <n> --body-file <run>/review-comment.md`; never post on your own. Run `node <root>/scripts/run-status.js <run>`;
     when it prints `model_mix`, add `model_mix.line` to DONE. Stop. On approval of an
     UNPROVEN review, write a waiver record from `spine:orchestrator`: claim
     `G3 waiver: UNPROVEN accepted`, evidence

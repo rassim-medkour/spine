@@ -4,6 +4,10 @@
 
 Cursor support is still experimental and the live Cursor smoke test is pending.
 
+### Added
+
+- [both] `scripts/review-comment.js` writes a review comment for a PR you review (`<run>/review-comment.md`): verdict, read-yourself list, findings by severity, proof and what is not verified. Spine asks before posting it and never posts on its own.
+
 ### Fixed
 
 - [claude-code] `/spine:spine-review`, `/spine:spine-spec` and `/spine:spine-implement` now start the full spine run (`review`, `intent` and `implement`). Before, these names ran the internal workflow with no input: it failed at once, and the review that followed had no run folder, risk tiers, proof, verdict or reading map.

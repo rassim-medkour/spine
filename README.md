@@ -367,6 +367,16 @@ written by hand.
 
 "Not verified" is never left out when it has content, at any tier.
 
+### The review comment
+
+When you review someone else's PR, spine writes `.spine/<run>/review-comment.md`
+at G3 (`scripts/review-comment.js`): verdict and tier, what to read yourself
+with minutes, then Blocking (verified CRITICAL and HIGH), Should fix (MEDIUM),
+Nits (LOW, collapsed), Proof (what ran and what is missing) and Not verified.
+Each finding is one line: location, claim, record id; locations link to the
+reviewed commit. Reviewer text is cleaned so it cannot mention people or carry
+HTML. Spine asks before posting it with `gh pr comment` and never posts on its own.
+
 ## Model routing
 
 Spine picks a model for every agent it dispatches. A script,
