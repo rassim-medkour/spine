@@ -67,3 +67,30 @@ test('fails open with a spine: message when config is malformed', () => {
   assert.equal(r.status, 0);
   assert.match(r.stderr, /^spine: validate-artifact error: /m);
 });
+
+const PRODUCT_HEADINGS = '## Users\n## Goals\n## Glossary\n## Invariants\n## Key flows\n## UX principles\n';
+
+test('product.md with a missing heading warns with the heading name only and exits 0, with and without an active run', () => {
+  const secret = 'SECRET-BODY-LINE-xyz';
+  for (const withRun of [false, true]) {
+    const { cwd, home } = withRun ? repoWithRun() : { cwd: tmpDir('spine-'), home: tmpDir('spine-home-') };
+    fs.mkdirSync(path.join(cwd, '.spine'), { recursive: true });
+    const file = path.join(cwd, '.spine', 'product.md');
+    fs.writeFileSync(file, '## Users\n' + secret + '\n## Goals\n## Glossary\n## Key flows\n## UX principles\n');
+    const r = runHook({ hook_event_name: 'PostToolUse', cwd, tool_name: 'Write', tool_input: { file_path: file } }, { SPINE_HOME: home });
+    assert.equal(r.status, 0);
+    const ctx = JSON.parse(r.stdout).hookSpecificOutput.additionalContext;
+    assert.match(ctx, /missing heading "## Invariants"/);
+    assert.ok(!ctx.includes(secret), 'hook output must not echo the body');
+  }
+});
+
+test('a valid product.md produces no output', () => {
+  const cwd = tmpDir('spine-');
+  fs.mkdirSync(path.join(cwd, '.spine'), { recursive: true });
+  const file = path.join(cwd, '.spine', 'product.md');
+  fs.writeFileSync(file, PRODUCT_HEADINGS);
+  const r = runHook({ hook_event_name: 'PostToolUse', cwd, tool_name: 'Write', tool_input: { file_path: file } });
+  assert.equal(r.status, 0);
+  assert.equal(r.stdout, '');
+});

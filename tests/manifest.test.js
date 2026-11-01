@@ -55,3 +55,16 @@ test('versions agree across manifests', () => {
   assert.equal(readJson('package.json').version, v);
   assert.equal(readJson('.claude-plugin/marketplace.json').plugins[0].version, v);
 });
+
+test('schemaFor maps only the exact product.md path to product', () => {
+  const { schemaFor } = require('../scripts/lib/validate');
+  assert.equal(schemaFor('.spine/product.md'), 'product');
+  assert.equal(schemaFor('docs/product.md'), null);
+  assert.equal(schemaFor('.spine/run/product.md'), null);
+});
+
+test('an empty frontmatter list skips the frontmatter error', () => {
+  const { validateMarkdown } = require('../scripts/lib/validate');
+  assert.deepEqual(validateMarkdown('## A\n', { frontmatter: [], headings: ['## A'] }), []);
+  assert.ok(validateMarkdown('## A\n', { frontmatter: ['id'], headings: ['## A'] }).length > 0);
+});

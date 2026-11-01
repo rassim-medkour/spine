@@ -60,7 +60,8 @@ function parseFrontmatter(text) {
 function validateMarkdown(text, schema) {
   const errors = [];
   const fm = parseFrontmatter(text);
-  if (!fm) errors.push('missing frontmatter block');
+  const needsFm = !(Array.isArray(schema.frontmatter) && schema.frontmatter.length === 0);
+  if (!fm && needsFm) errors.push('missing frontmatter block');
   for (const key of schema.frontmatter || []) {
     if (!fm || !(key in fm) || fm[key] === '') errors.push(`missing frontmatter key ${key}`);
   }
@@ -140,7 +141,8 @@ function validateTree(obj) {
   return errors;
 }
 
-function schemaFor(relPath) {
+function schemaFor(relPath, artifactsDir = '.spine') {
+  if (String(relPath).replace(/\\/g, '/') === `${artifactsDir}/product.md`) return 'product';
   const base = path.basename(relPath);
   const parent = path.basename(path.dirname(relPath));
   if (parent === 'records' && /^R-\d+\.json$/.test(base)) return 'record';
@@ -168,8 +170,8 @@ function validateReview(obj) {
   return errors;
 }
 
-function validateArtifactFile(absPath, relPath = absPath) {
-  const name = schemaFor(relPath);
+function validateArtifactFile(absPath, relPath = absPath, ctx = {}) {
+  const name = schemaFor(relPath, ctx.artifactsDir);
   if (!name) return [];
   let text;
   try {
