@@ -1,6 +1,6 @@
 export const meta = {
   name: 'spine-internal-implement',
-  description: 'Per ticket: a fresh implementer follows TDD against the spec and plan, then a spec-compliance reviewer and a quality reviewer check the result in parallel.',
+  description: 'Per ticket, one at a time unless parallel: a fresh implementer follows TDD against the spec and plan, then a spec-compliance reviewer and a quality reviewer check the result in parallel.',
   phases: [
     { title: 'Implement', detail: 'one fresh implementer per ticket, test first' },
     { title: 'Review', detail: 'spec compliance and quality, different authors' }
@@ -221,7 +221,15 @@ function ticketDidNotRun(ticket, labels, agentFor) {
 const failedTickets = [];
 
 phase('Implement');
-const results = await pipeline(
+// parallel false: tickets share one checkout, so each implementer and its two reviews finish before the next
+// implementer starts. pipeline() has no barrier between items, so the serial path is an explicit loop.
+async function serial(items, stage1, stage2) {
+  const out = [];
+  for (const item of items) out.push(await stage2(await stage1(item)));
+  return out;
+}
+const runTickets = args.parallel ? pipeline : serial;
+const results = await runTickets(
   args.tickets,
   (t) => routed('implementer', implementPrompt(t), {
     label: `implement:${t.id}`,

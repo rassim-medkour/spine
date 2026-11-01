@@ -228,3 +228,32 @@ test('spec: lenses use spec_lens, the merge uses synthesis (REQ-10)', async () =
   assert.deepEqual(Object.fromEntries(a.calls.map((c) => [c.label, c.opts.model])), { 'lens:domain': 'opus', synthesis: 'sonnet' });
   assert.deepEqual(out.records.map((r) => r.model.role), ['spec_lens', 'synthesis']);
 });
+
+// Serial execution: with parallel false every ticket's implementer and both reviews finish before the
+// next implementer starts, because all implementers share one checkout. pipeline() has no barrier.
+const tick = () => new Promise((r) => setImmediate(r));
+function slowRecorder(answer) {
+  const calls = [];
+  const agent = async (prompt, opts) => { calls.push(opts.label); await tick(); await tick(); return answer(opts, calls); };
+  return { agent, calls };
+}
+const twoTickets = { tickets: [{ id: 'T-1', title: 't', spec_section: 's', acceptance: [], files: [] }, { id: 'T-2', title: 't', spec_section: 's', acceptance: [], files: [] }] };
+
+test('implement: parallel false runs tickets one at a time, implementer then both reviews', async () => {
+  const a = slowRecorder(implAnswer);
+  const out = await load('implement')(a.agent, parallel, pipeline, noop, noop, implArgs({ ...twoTickets, parallel: false }));
+  assert.deepEqual(a.calls.slice(0, 3).sort(), ['implement:T-1', 'quality-review:T-1', 'spec-review:T-1']);
+  assert.equal(a.calls[0], 'implement:T-1');
+  assert.equal(a.calls[3], 'implement:T-2');
+  assert.deepEqual(out.results.map((r) => r.ticket_id), ['T-1', 'T-2']);
+  assert.ok(a.calls.every((l) => !l.includes('worktree')));
+});
+
+test('implement: parallel true overlaps tickets in isolated worktrees', async () => {
+  const a = slowRecorder(implAnswer);
+  const calls = [];
+  const agent = async (p, opts) => { calls.push(opts); return a.agent(p, opts); };
+  await load('implement')(agent, parallel, pipeline, noop, noop, implArgs({ ...twoTickets, parallel: true }));
+  assert.deepEqual(a.calls.slice(0, 2), ['implement:T-1', 'implement:T-2']);
+  assert.ok(calls.filter((o) => o.label.startsWith('implement:')).every((o) => o.isolation === 'worktree'));
+});
