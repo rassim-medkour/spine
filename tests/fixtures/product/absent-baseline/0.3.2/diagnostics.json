@@ -1,0 +1,16 @@
+{
+  "files_scanned": 8,
+  "parsed": {
+    "typescript": 7,
+    "none": 1
+  },
+  "parse_failures": 0,
+  "unresolved_specifiers": 0,
+  "dynamic_non_literal": 1,
+  "cache": "missing",
+  "cache_hits": 0,
+  "budget_exceeded": false,
+  "graph": "ok",
+  "elapsed_ms": 148,
+  "cache_saved": "saved"
+}

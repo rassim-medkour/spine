@@ -1,0 +1,125 @@
+{
+  "meta": {
+    "runId": "20261101-absent-baseline",
+    "diffSha": "0268b920e56dcae18ec954c4c32c0bbceac6f788e1c3ada2a8429eb49e7a7241",
+    "treeSha": "3e3cf3a9459aee43d0900383a4d7460ff3fa6a77b3a8e2f95307501db5c34454",
+    "stale": false,
+    "tier": "trunk",
+    "knobs": {
+      "is_trunk": {
+        "answer": "yes",
+        "evidence": [
+          "src/app.ts"
+        ]
+      },
+      "wide_downstream": {
+        "answer": "no",
+        "evidence": [
+          "signal:fan_in",
+          "src/app.ts",
+          "src/lib/math.ts"
+        ]
+      },
+      "gated": {
+        "answer": "no",
+        "evidence": [
+          "signal:gated",
+          "src/app.ts",
+          "src/lib/math.ts"
+        ]
+      },
+      "severe_if_broken": {
+        "answer": "yes",
+        "evidence": [
+          "signal:security_path",
+          "src/app.ts"
+        ]
+      },
+      "instant_rollback": {
+        "answer": "no plan",
+        "evidence": [
+          "signal:one_way_door",
+          "signal:gated"
+        ]
+      }
+    },
+    "rollback": "missing: no ## Rollback section; looked in review.md, plan.md and rollback_plan records of this run; add one or run scripts/record-proof.js --run <run> --kind rollback_plan --from <file.md>",
+    "relPath": ".spine/20261101-absent-baseline/reading-map.md"
+  },
+  "groups": {
+    "read_yourself": [
+      {
+        "ref": "src/lib/math.ts:1-2",
+        "path": "src/lib/math.ts",
+        "start": 1,
+        "lines": 1,
+        "reasons": [
+          "no proof"
+        ],
+        "importers": [
+          "src/lib/index.ts",
+          "src/math.test.ts",
+          "src/page.tsx"
+        ],
+        "more": 0,
+        "touches": [
+          "public interface"
+        ],
+        "evidence": [
+          "none"
+        ],
+        "records": [],
+        "fan_in": 3
+      },
+      {
+        "ref": "src/app.ts:2-5",
+        "path": "src/app.ts",
+        "start": 2,
+        "lines": 1,
+        "reasons": [
+          "no proof",
+          "trunk"
+        ],
+        "importers": [],
+        "more": 0,
+        "touches": [],
+        "evidence": [
+          "none"
+        ],
+        "records": [],
+        "fan_in": 0
+      }
+    ],
+    "read_if_time": [],
+    "skim": [],
+    "skip": []
+  },
+  "totals": {
+    "read_yourself": {
+      "hunks": 2,
+      "lines": 2,
+      "minutes": 1
+    },
+    "read_if_time": {
+      "hunks": 0,
+      "lines": 0,
+      "minutes": 0
+    },
+    "skim": {
+      "hunks": 0,
+      "lines": 0,
+      "minutes": 0
+    },
+    "skip": {
+      "hunks": 0,
+      "lines": 0,
+      "minutes": 0
+    },
+    "whole": {
+      "hunks": 2,
+      "lines": 2,
+      "minutes": 1,
+      "clamped": false
+    }
+  }
+}

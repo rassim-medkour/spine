@@ -1,0 +1,60 @@
+{
+  "head_sha": "5bd80dc2952d108b566ada1b80e4e1ec2433f14d",
+  "files": [
+    "src/lib/math.ts",
+    "src/app.ts"
+  ],
+  "artifacts": [
+    "classify.json",
+    "tree.json",
+    "diagnostics.json",
+    "reading-map.md",
+    "reading-map.json",
+    "pr-body.md"
+  ],
+  "records": [],
+  "outputs": {
+    "tree": {
+      "ok": true,
+      "tier": "trunk",
+      "files": 2,
+      "revision": "5bd80dc2952d108b566ada1b80e4e1ec2433f14d:0268b920e56dcae18ec954c4c32c0bbceac6f788e1c3ada2a8429eb49e7a7241",
+      "out": "tree.json"
+    },
+    "reading_map": {
+      "ok": true,
+      "stale": false,
+      "path": ".spine/20261101-absent-baseline/reading-map.md",
+      "counts": {
+        "read_yourself": 2,
+        "skim": 0,
+        "skip": 0,
+        "total": 2
+      },
+      "minutes": {
+        "read_yourself": 1,
+        "skim": 0,
+        "whole": 1
+      },
+      "g3": "tier trunk · verdict pending · read yourself 2 hunks, 1 min (whole diff 1 min) · .spine/20261101-absent-baseline/reading-map.md"
+    },
+    "pr_body": {
+      "ok": true,
+      "tier": "trunk",
+      "sections": [
+        "reading_map",
+        "tldr",
+        "problem",
+        "design",
+        "changed",
+        "rollout",
+        "decisions",
+        "checked",
+        "not_verified",
+        "how_to_test"
+      ],
+      "errors": [],
+      "path": ".spine/20261101-absent-baseline/pr-body.md"
+    }
+  }
+}
