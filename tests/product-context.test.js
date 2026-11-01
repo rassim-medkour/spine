@@ -73,3 +73,29 @@ test('non-UTF-8 is malformed and sha256 is over the raw bytes of a CRLF file', (
   const raw = fs.readFileSync(path.join(crlf, '.spine', 'product.md'));
   assert.equal(r.sha256, crypto.createHash('sha256').update(raw).digest('hex'));
 });
+
+test('CLI: malformed writes one MEDIUM naming the heading and no INFO', (t) => {
+  const { main } = require('../scripts/product-context');
+  const { writeState } = require('../scripts/lib/state');
+  const root = tmpDir('spine-pcli-', t);
+  const runDir = path.join(root, '.spine', '20261101-cli-test');
+  writeState(runDir, { id: '20261101-cli-test', stage: 'spec', status: 'active', awaiting: null, size: 'M', updated: '2026-11-01T00:00:00Z', host: 'claude-code', spine_version: '0.4.0' });
+  fs.writeFileSync(path.join(root, '.spine', 'product.md'), doc().replace('## Invariants\n', ''));
+  const out = main(['--run', runDir], root);
+  main(['--run', runDir], root);
+  assert.equal(out.state, 'malformed');
+  const recs = fs.readdirSync(path.join(runDir, 'records')).map((f) => JSON.parse(fs.readFileSync(path.join(runDir, 'records', f), 'utf8')));
+  assert.equal(recs.length, 1);
+  assert.equal(recs[0].severity, 'MEDIUM');
+  assert.match(recs[0].claim, /## Invariants/);
+});
+
+test('CLI: product-context.md equals loadProduct().text', (t) => {
+  const { main } = require('../scripts/product-context');
+  const { writeState } = require('../scripts/lib/state');
+  const root = repo(doc());
+  const runDir = path.join(root, '.spine', '20261101-cli-test');
+  writeState(runDir, { id: '20261101-cli-test', stage: 'spec', status: 'active', awaiting: null, size: 'M', updated: '2026-11-01T00:00:00Z', host: 'claude-code', spine_version: '0.4.0' });
+  main(['--run', runDir], root);
+  assert.equal(fs.readFileSync(path.join(runDir, 'product-context.md'), 'utf8'), loadProduct(root, { artifacts_dir: '.spine' }, []).text);
+});
