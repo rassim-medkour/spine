@@ -196,3 +196,76 @@ test('classify.js output keeps its six keys and gains no tier (REQ-2, REQ-3)', (
   const out = spawnSync(process.execPath, [path.join(ROOT, 'scripts', 'classify.js'), '--files', 'src/a.py'], { cwd: tmp('spine-cls-'), encoding: 'utf8', env: cleanEnv({ SPINE_HOME: home() }) });
   assert.deepEqual(Object.keys(JSON.parse(out.stdout)), ['size', 'blast_radius', 'signals', 'lenses', 'devils_advocate', 'workflows']);
 });
+
+// ---- T-3: product context in tree.json ----
+const crypto = require('node:crypto');
+const { SIGNAL_KEYS } = require('../scripts/lib/tiers');
+const { tierConfigHash } = require('../scripts/lib/tier-config');
+const { CACHE_FORMAT } = require('../scripts/lib/graph-cache');
+
+function productMd(flows) {
+  const blocks = flows.map((f, i) => `### ${f.name}\nweight: ${f.weight}\npaths: ${f.paths}\n1. step ${i}\n`).join('\n');
+  return `# Product\n\n## Users\nOwners.\n\n## Goals\nShip.\n\n## Glossary\n- term\n\n## Invariants\n- none\n\n## Key flows\n${blocks}\n## UX principles\n- clear\n`;
+}
+const writeProduct = (dir, flows) => {
+  fs.mkdirSync(path.join(dir, '.spine'), { recursive: true });
+  const text = productMd(flows);
+  fs.writeFileSync(path.join(dir, '.spine/product.md'), text);
+  return crypto.createHash('sha256').update(Buffer.from(text)).digest('hex');
+};
+
+test('tree.json has no product keys and no inputs.product_sha256 without product.md', () => {
+  const { dir } = gitRepo('typescript');
+  const { tree } = run(dir, ['src/lib/math.ts']);
+  assert.deepEqual(Object.keys(tree.files[0].signals), SIGNAL_KEYS);
+  assert.equal('product_sha256' in tree.inputs, false);
+  assert.equal(tree.inputs.config_sha256, tierConfigHash(tc));
+  assert.deepEqual(Object.keys(tree.inputs), ['base_sha', 'head_sha', 'diff_sha256', 'config_sha256', 'classifier_version', 'parser_version']);
+});
+
+test('with product.md the keys appear and inputs.product_sha256 equals the file hash', () => {
+  const { dir } = gitRepo('typescript');
+  const sha = writeProduct(dir, [{ name: 'Math', weight: 'critical', paths: 'src/lib/**' }]);
+  const { tree } = run(dir, ['src/lib/math.ts']);
+  assert.deepEqual(validateTree(tree), []);
+  assert.equal(tree.inputs.product_sha256, sha);
+  const f = fileOf(tree, 'src/lib/math.ts');
+  assert.equal(f.signals.key_flow.value, true);
+  assert.deepEqual(f.signals.key_flow.flows, [{ name: 'Math', weight: 'critical' }]);
+  assert.equal(f.tier, 'trunk');
+  assert.ok(f.reasons.includes('key flow Math (critical)'));
+});
+
+test('a malformed product.md adds no product keys', () => {
+  const { dir } = gitRepo('typescript');
+  fs.mkdirSync(path.join(dir, '.spine'), { recursive: true });
+  fs.writeFileSync(path.join(dir, '.spine/product.md'), '## Users\nonly\n');
+  const { tree } = run(dir, ['src/lib/math.ts']);
+  assert.deepEqual(Object.keys(tree.files[0].signals), SIGNAL_KEYS);
+  assert.equal('product_sha256' in tree.inputs, false);
+});
+
+test('warm cache plus changed flow paths changes key_flow; CACHE_FORMAT stays 1', () => {
+  const { dir } = gitRepo('typescript');
+  writeProduct(dir, [{ name: 'Math', weight: 'critical', paths: 'src/lib/**' }]);
+  const first = run(dir, ['src/lib/math.ts']);
+  assert.equal(fileOf(first.tree, 'src/lib/math.ts').signals.key_flow.value, true);
+  writeProduct(dir, [{ name: 'Math', weight: 'critical', paths: 'src/other/**' }]);
+  const second = run(dir, ['src/lib/math.ts']);
+  assert.notEqual(second.diagnostics.cache, 'miss', 'cache was warm');
+  assert.equal(fileOf(second.tree, 'src/lib/math.ts').signals.key_flow.value, false);
+  assert.notEqual(second.tree.inputs.product_sha256, first.tree.inputs.product_sha256);
+  assert.equal(CACHE_FORMAT, 1);
+  const cacheText = fs.readdirSync(path.join(dir, '.spine/cache')).map((n) => fs.readFileSync(path.join(dir, '.spine/cache', n), 'utf8')).join('');
+  assert.ok(!cacheText.includes('key_flow') && !cacheText.includes('user_facing'));
+});
+
+test('50-flow product.md stays within tree_budget_ms', () => {
+  const dir = tmp('spine-tree-bench-');
+  const paths = makeSyntheticRepo(dir, { files: 400, git: true });
+  const flows = Array.from({ length: 50 }, (_, i) => ({ name: `Flow${i}`, weight: 'minor', paths: `m${i}/**, m${i}/f*.ts` }));
+  writeProduct(dir, flows);
+  const out = run(dir, [paths[1], paths[2], paths[3]]);
+  assert.equal(out.diagnostics.budget_exceeded, false);
+  assert.ok(out.diagnostics.elapsed_ms < tc.tree_budget_ms, `${out.diagnostics.elapsed_ms}ms`);
+});

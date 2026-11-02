@@ -6,6 +6,7 @@ const { locateRun } = require('../lib/root');
 const { realPathInside } = require('../lib/paths');
 const { validateArtifactFile } = require('../lib/validate');
 const { stripQuotedValue } = require('../lib/safe-text');
+const { productContextFor } = require('../lib/product-context');
 
 const HOOK = 'cursor postToolUse';
 const EVENT = 'PostToolUse';
@@ -14,7 +15,8 @@ function decide(run, root, input) {
   if (!input.filePath) return '';
   const target = realPathInside(run.dir, path.resolve(root, input.filePath));
   if (!target) return '';
-  const errors = validateArtifactFile(target.abs, target.rel);
+  const ctx = productContextFor(run.dir);
+  const errors = [...validateArtifactFile(target.abs, target.rel, ctx), ...(ctx.unreadable ? ['product.json unreadable'] : [])];
   if (!errors.length) {
     appendCursorLog(run, EVENT, 'allow', input.conversationId);
     return '';

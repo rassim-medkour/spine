@@ -48,3 +48,20 @@ for (const name of WF) {
     }
   });
 }
+
+test('spec.workflow.js adds the product lens on role product_lens and keeps the domain focus (REQ-35)', () => {
+  const text = fs.readFileSync(path.join(__dirname, '..', 'workflows', 'spec.workflow.js'), 'utf8');
+  assert.ok(text.includes("routed('product_lens'"));
+  assert.ok(text.includes("label: 'product-lens'"));
+  assert.ok(text.includes('spine:product-lens'));
+  assert.deepEqual(require('../scripts/lib/workflow-lint').lintWorkflow(text), []);
+});
+
+test('review.workflow.js dispatches ux-find on role ux_finder, capped before verify (REQ-36)', () => {
+  const text = fs.readFileSync(path.join(__dirname, '..', 'workflows', 'review.workflow.js'), 'utf8');
+  assert.ok(text.includes("routed('ux_finder'"));
+  assert.ok(text.includes("label: 'ux-find'"));
+  assert.ok(text.includes('spine:ux-finder'));
+  assert.ok(text.indexOf('capProductRecord(') < text.indexOf("phase('Verify')"));
+  assert.deepEqual(require('../scripts/lib/workflow-lint').lintWorkflow(text), []);
+});

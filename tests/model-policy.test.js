@@ -12,6 +12,8 @@ const OWNER_TABLE = {
   spec_lens: ['sonnet', 'sonnet', 'opus'],
   synthesis: ['haiku', 'sonnet', 'sonnet'],
   boundary_checker: ['haiku', 'haiku', 'sonnet'],
+  product_lens: ['sonnet', 'sonnet', 'opus'],
+  ux_finder: ['sonnet', 'sonnet', 'opus'],
 };
 const ALIAS_CLASS = { haiku: 'cheap', sonnet: 'mid', opus: 'top' };
 const RANK = { cheap: 0, mid: 1, top: 2 }; // independent constant (REQ-27)
@@ -159,4 +161,42 @@ test('validateModelBlock accepts the frozen shape and names bad keys', () => {
   assert.deepEqual(mp.validateModelBlock({ role: 'finder', tier: null, tier_source: null, class: null, requested: null, source: 'fallback-error' }), []);
   assert.deepEqual(mp.validateModelBlock({ role: 'reviewer', tier: 'x', tier_source: 'guess', class: 'huge', requested: 'a b', source: 'self' }),
     ['model.role', 'model.tier', 'model.tier_source', 'model.class', 'model.requested', 'model.source'].map((k) => `${k} is invalid`));
+});
+
+test('ROLES has nine entries ending with product_lens, ux_finder; Balanced has 27 cells', () => {
+  assert.equal(mp.ROLES.length, 9);
+  assert.deepEqual(mp.ROLES.slice(-2), ['product_lens', 'ux_finder']);
+  const m = mp.mergePolicies(undefined, undefined);
+  let cells = 0;
+  for (const role of mp.ROLES) for (const tier of ['leaf', 'branch', 'trunk']) if (m.table[role][tier].class) cells += 1;
+  assert.equal(cells, 27);
+});
+
+test('a 0.3.2 model_policy that omits the new roles validates and gets the defaults', () => {
+  const m = mp.mergePolicies({ finder: { leaf: 'top' } }, undefined);
+  assert.equal(m.invalid, false);
+  assert.equal(m.table.finder.leaf.class, 'top');
+  assert.equal(m.table.product_lens.trunk.class, 'top');
+  assert.equal(m.table.ux_finder.leaf.class, 'mid');
+  assert.equal(m.table.ux_finder.leaf.policy_source, 'default');
+});
+
+test('inherit yields inherit for both new roles', () => {
+  const m = mp.mergePolicies('inherit', undefined);
+  for (const role of ['product_lens', 'ux_finder']) for (const tier of ['leaf', 'branch', 'trunk']) assert.equal(m.table[role][tier].class, 'inherit');
+});
+
+test('product-lens and ux-find resolve by exact match; lens still resolves to spec_lens', () => {
+  assert.equal(mp.DISPATCH_ROLES['product-lens'], 'product_lens');
+  assert.equal(mp.DISPATCH_ROLES['ux-find'], 'ux_finder');
+  assert.equal(mp.roleForLabel('product-lens'), 'product_lens');
+  assert.equal(mp.roleForLabel('ux-find'), 'ux_finder');
+  assert.equal(mp.roleForLabel('lens'), 'spec_lens');
+  assert.equal(mp.roleForLabel('lens:domain'), 'spec_lens');
+  assert.equal(mp.roleForLabel('find:x'), 'finder');
+  assert.equal(mp.roleForLabel('nope'), null);
+});
+
+test('the Balanced table hash is pinned after the two roles joined', () => {
+  assert.equal(mp.mergePolicies(undefined, undefined).hash, '75cc451618b190d5');
 });

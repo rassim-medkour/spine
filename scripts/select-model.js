@@ -11,6 +11,7 @@ const mp = require('./lib/model-policy');
 const { validateTree } = require('./lib/validate');
 const { tierConfig, tierConfigHash } = require('./lib/tier-config');
 const cm = require('./lib/cursor-models');
+const { loadProduct } = require('./lib/product-context');
 
 const STAGES = ['intent', 'spec', 'plan', 'implement', 'review'];
 const FLAG_RULES = {
@@ -52,7 +53,17 @@ function sizeTier(size, reason) {
   return { tier: mp.SIZE_TIER[size], tier_source: 'size', tier_reason: reason };
 }
 
-function resolveTier({ runDir, size, config }) {
+// product.md hash as tree.js records it: only a file that loaded counts (REQ-27).
+function currentProductSha(root, config) {
+  try {
+    const loaded = loadProduct(root, config, []);
+    return loaded.state === 'ok' || loaded.state === 'trimmed' ? loaded.sha256 : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function resolveTier({ runDir, size, config, root }) {
   const fromRun = (name) => { const j = readJson(path.join(runDir, name)); return isObj(j) ? sizeOk(j.size) : null; };
   const s = sizeOk(size) || fromRun('class.json') || fromRun('state.json') || 'M';
   const treeFile = path.join(runDir, 'tree.json');
@@ -69,6 +80,7 @@ function resolveTier({ runDir, size, config }) {
   if (tree.inputs.config_sha256 !== tierConfigHash(tierConfig(config))) return sizeTier(s, 'tree.json stale: tier config changed');
   const diffFile = path.join(runDir, 'diff.patch');
   if (fs.existsSync(diffFile) && sha256(fs.readFileSync(diffFile)) !== tree.inputs.diff_sha256) return sizeTier(s, 'tree.json stale: diff changed');
+  if (root && tree.inputs.product_sha256 !== currentProductSha(root, config)) return sizeTier(s, 'tree.json stale: product.md changed');
   return { tier: tree.tier, tier_source: 'tree', tier_reason: 'tree.json' };
 }
 
@@ -139,12 +151,31 @@ function policySummary(merged) {
   return { kind: merged.kind, source: policySource(merged), hash: merged.hash, invalid: merged.invalid, errors: [...merged.errors] };
 }
 
-function stageReusable(entry) {
+// Roles every 0.3.x plan holds; a plan with these is reusable and only gets the roles added since (REQ-18).
+const LEGACY_ROLES = mp.ROLES.slice(0, 7);
+
+const validRoleEntry = (e) => isObj(e) && (e.model === null || (typeof e.model === 'string' && mp.MODEL_ID_RE.test(e.model)));
+
+function rolesValid(entry, roles) {
   if (!isObj(entry) || !isObj(entry.roles) || !isObj(entry.workflow_args)) return false;
-  return mp.ROLES.every((role) => {
-    const e = entry.roles[role];
-    return isObj(e) && (e.model === null || (typeof e.model === 'string' && mp.MODEL_ID_RE.test(e.model)));
-  });
+  return roles.every((role) => validRoleEntry(entry.roles[role]));
+}
+
+const stageReusable = (entry) => rolesValid(entry, mp.ROLES);
+
+// Recorded entries are kept as written; only the roles the plan lacks come from the fresh plan.
+function appendMissingRoles(entry, fresh) {
+  // A role is re-planned when its entry is absent or malformed (not an object, or a model id that is not a string).
+  const missing = mp.ROLES.filter((role) => !validRoleEntry(entry.roles[role]));
+  const wfRoles = isObj(entry.workflow_args.roles) ? entry.workflow_args.roles : {};
+  const roles = { ...entry.roles };
+  const workflowRoles = { ...wfRoles };
+  for (const role of mp.ROLES) {
+    if (missing.includes(role)) roles[role] = fresh.roles[role];
+    if (missing.includes(role) || !validRoleEntry(wfRoles[role])) workflowRoles[role] = fresh.workflow_args.roles[role];
+  }
+  const ordered = (obj) => Object.fromEntries(mp.ROLES.map((role) => [role, obj[role]]));
+  return { ...entry, roles: ordered(roles), workflow_args: { ...entry.workflow_args, roles: ordered(workflowRoles) } };
 }
 
 function readModelsFile(file) {
@@ -221,12 +252,15 @@ function runMode(flags, ctx) {
   const discovery = host === 'cursor' ? cursorDiscovery(runDir, ctx.config, ctx.env) : null;
   const { classIds, errors } = discovery ? cursorClassIds(ctx.config, discovery) : classIdsFor(ctx.config, host);
   for (const e of errors) ctx.stderr(`spine: ${e}\n`);
-  const tier = resolveTier({ runDir, size: flags.size, config: ctx.config });
-  const plan = buildStagePlan({ stage: flags.stage, ...tier, host, merged, classIds, noIdReason: discovery ? cursorNoIdReason(discovery) : undefined });
+  const tier = resolveTier({ runDir, size: flags.size, config: ctx.config, root: ctx.cwd });
+  const fresh = buildStagePlan({ stage: flags.stage, ...tier, host, merged, classIds, noIdReason: discovery ? cursorNoIdReason(discovery) : undefined });
+  const legacy = Boolean(existing) && existing.host === host && rolesValid(existing.stages[flags.stage], LEGACY_ROLES);
+  const plan = legacy ? appendMissingRoles(existing.stages[flags.stage], fresh) : fresh;
   const keep = existing && existing.host === host ? existing.stages : {};
-  const next = { schema_version: 1, host, policy, discovery, stages: { ...keep, [flags.stage]: plan } };
+  const kept = legacy && existing.policy ? existing.policy : policy;
+  const next = { schema_version: 1, host, policy: kept, discovery: legacy ? existing.discovery : discovery, stages: { ...keep, [flags.stage]: plan } };
   fs.writeFileSync(file, `${JSON.stringify(next, null, 2)}\n`);
-  return { ok: true, stage: flags.stage, host, ...plan, policy };
+  return { ok: true, stage: flags.stage, host, ...plan, policy: kept };
 }
 
 function queryMode(flags, ctx) {

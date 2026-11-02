@@ -139,7 +139,28 @@ function withinBudget(ranked, tc) {
   return { read, later };
 }
 
-function buildReadingMap({ diffFiles, tree, records, proof, tc }) {
+// A flow counts as driven when a live-verification record names it: agent spine:live-verify or proof_kind live_verify,
+// severity INFO, a revision and payloads. The name is matched on word boundaries, case-insensitively, and literally.
+const WORD = '[\\p{L}\\p{N}_]';
+const escapeRegExp = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const isLiveVerification = (r) => Boolean(r) && (r.agent === 'spine:live-verify' || r.proof_kind === 'live_verify') && r.severity === 'INFO'
+  && r.revision !== undefined && Array.isArray(r.payloads) && r.payloads.length > 0;
+
+function drivenBy(name, records) {
+  const needle = new RegExp(`(?<!${WORD})${escapeRegExp(String(name))}(?!${WORD})`, 'iu');
+  const hit = records.find((r) => isLiveVerification(r)
+    && [r.claim, ...(Array.isArray(r.evidence) ? r.evidence.map((e) => e && e.note) : [])].some((t) => typeof t === 'string' && needle.test(t)));
+  return hit ? hit.id : null;
+}
+
+function clickThrough(product, records) {
+  const flows = product && Array.isArray(product.flows_touched) ? product.flows_touched : [];
+  return flows.filter((f) => f && typeof f.name === 'string').map((f) => ({
+    name: f.name, weight: f.weight, steps: Array.isArray(f.steps) ? f.steps.map(String) : [], evidence: drivenBy(f.name, records),
+  }));
+}
+
+function buildReadingMap({ diffFiles, tree, records, proof, tc, product = null }) {
   const files = new Map(((tree && tree.files) || []).map((f) => [f.path, f]));
   const ctx = {
     gapFiles: new Set(((proof && proof.missing) || []).flatMap((m) => m.files)),
@@ -150,7 +171,12 @@ function buildReadingMap({ diffFiles, tree, records, proof, tc }) {
   for (const h of hunksOf(diffFiles)) place(h, files.get(h.path) || null, ctx, groups);
   const budgeted = withinBudget([...groups.read_yourself].sort(byRank), tc);
   const sorted = { read_yourself: budgeted.read, read_if_time: budgeted.later, skim: [...groups.skim].sort(byPathStart), skip: [...groups.skip].sort(byPathStart) };
-  return { groups: sorted, totals: totals(sorted, tc) };
+  const flows = clickThrough(product, records);
+  if (!flows.length) return { groups: sorted, totals: totals(sorted, tc) };
+  return {
+    groups: { ...sorted, click_through: flows },
+    totals: { ...totals(sorted, tc), click_through: { flows: flows.length, minutes: flows.length * tc.click_through_minutes } },
+  };
 }
 
 const clean = (s) => String(s).replace(/[`\r\n]/g, '');
@@ -159,6 +185,11 @@ function readLine(e, i) {
   const importers = e.importers.length ? `${e.importers.map(clean).join(', ')}${e.more ? ` +${e.more} more` : ''}` : 'none';
   const records = e.records.length ? ` · records: ${e.records.join(', ')}` : '';
   return `${i + 1}. \`${clean(e.ref)}\` · ${e.reasons.join(', ')} · importers: ${importers} · touches: ${e.touches.join(', ') || 'nothing shared'} · evidence: ${e.evidence.join(', ')}${records}`;
+}
+
+function clickLines(e, i) {
+  const steps = e.steps.length ? e.steps.map((st, j) => `   ${j + 1}. ${clean(st)}`) : ['   steps unavailable'];
+  return [`${i + 1}. **${clean(e.name)}** (${clean(e.weight)}) · ${e.evidence || 'not driven'}`, ...steps];
 }
 
 function renderReadingMap(map, meta) {
@@ -173,9 +204,10 @@ function renderReadingMap(map, meta) {
   const confirm = ['## Confirm at G3', '', ...knobs, `- Rollback or flag plan: ${meta.rollback || 'not required'}`, ''];
   const read = ['## Read yourself', '', ...map.groups.read_yourself.map(readLine), ''];
   const later = map.groups.read_if_time.length ? ['## Read if you have time', '', ...map.groups.read_if_time.map(readLine), ''] : [];
+  const click = map.groups.click_through ? ['## Click through yourself', '', ...map.groups.click_through.flatMap(clickLines), ''] : [];
   const skim = ['## Skim', '', ...map.groups.skim.map((e) => `- \`${clean(e.ref)}\` · ${e.reason}`), ''];
   const skip = ['## Skip', '', ...map.groups.skip.map((e) => `- \`${clean(e.ref)}\` · covered by ${e.evidence.join(', ')}`)];
-  return `${[...head, ...stale, ...sums, ...confirm, ...read, ...later, ...skim, ...skip].join('\n')}\n`;
+  return `${[...head, ...stale, ...sums, ...confirm, ...read, ...later, ...click, ...skim, ...skip].join('\n')}\n`;
 }
 
 function summarize(map, meta) {
@@ -187,7 +219,7 @@ function summarize(map, meta) {
     path: meta.relPath,
     counts: { read_yourself: t.read_yourself.hunks, ...(later ? { read_if_time: t.read_if_time.hunks } : {}), skim: t.skim.hunks, skip: t.skip.hunks, total: t.whole.hunks },
     minutes: { read_yourself: t.read_yourself.minutes, ...(later ? { read_if_time: t.read_if_time.minutes } : {}), skim: t.skim.minutes, whole: t.whole.minutes },
-    g3: `tier ${meta.tier || 'unknown'} · verdict ${meta.verdict || 'pending'} · read yourself ${t.read_yourself.hunks} hunks, ${t.read_yourself.minutes} min${later ? `, then ${t.read_if_time.hunks} more hunks, ${t.read_if_time.minutes} min if you have time` : ''} (whole diff ${t.whole.minutes} min) · ${meta.relPath}`,
+    g3: `tier ${meta.tier || 'unknown'} · verdict ${meta.verdict || 'pending'} · read yourself ${t.read_yourself.hunks} hunks, ${t.read_yourself.minutes} min${later ? `, then ${t.read_if_time.hunks} more hunks, ${t.read_if_time.minutes} min if you have time` : ''} (whole diff ${t.whole.minutes} min) · ${meta.relPath}${t.click_through ? ` · click through ${t.click_through.flows} flows, ${t.click_through.minutes} min` : ''}`,
   };
 }
 

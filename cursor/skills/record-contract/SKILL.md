@@ -54,3 +54,13 @@ the synthesis agent renders them.
    Agents that return text end with one fenced block tagged
    `json spine-record` per record. Agents called through a workflow return
    structured output and never write files.
+10. Records from `spine:product-lens` and `spine:ux-finder` need a source for the
+    expectation they state. Only a `doc` evidence entry qualifies: `product.md:<line>`
+    on a non-blank, non-heading line, with the section in the note (for example
+    `§Invariants`); an existing repo documentation file (`.md`, `.rst`, `.txt`, or under
+    `docs/`) with an optional line; an issue reference (`#12`, `owner/repo#12`); or an
+    `http(s)` URL, which covers standards such as WCAG. `file`, `test` and `command`
+    entries record the observation and never qualify. A record with no qualifying entry is
+    capped when written: confidence at most 0.5, severity at most MEDIUM, and a
+    `resolution` of kind `question` whose text starts with `assumption to confirm:`.
+    The cap is mechanical, decided by evidence shape, never by reading the claim.

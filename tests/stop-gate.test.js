@@ -128,3 +128,38 @@ test('fails open with a spine: message when config is malformed', () => {
   assert.equal(r.status, 0);
   assert.match(r.stderr, /^spine: stop gate error: /m);
 });
+
+// T-15a
+function productGateRepo(productState) {
+  const r = repo({ ...base, stage: 'intent', spine_version: '0.4.0' });
+  fs.copyFileSync(path.join(FIX, 'artifacts', 'intent-valid.md'), path.join(r.dir, 'intent.md'));
+  passRecord(r.dir, 'intent');
+  if (productState) fs.writeFileSync(path.join(r.dir, 'product.json'), JSON.stringify({ state: productState }));
+  return r;
+}
+
+test('T-15a: product.json ok on a 0.4.0 run blocks an intent without the product headings', () => {
+  const { cwd, home } = productGateRepo('ok');
+  const r = run({ cwd, stop_hook_active: false }, { SPINE_HOME: home });
+  assert.equal(r.status, 2);
+  assert.match(r.stderr, /missing heading "## Who this is for"/);
+});
+
+test('T-15a: the same run with product.json absent is gate-clean', () => {
+  for (const state of ['absent', null]) {
+    const { cwd, home } = productGateRepo(state);
+    assert.equal(run({ cwd, stop_hook_active: false }, { SPINE_HOME: home }).status, 0);
+  }
+});
+
+test('T-15c: an unreadable product.json adds a note to the Stop reason but never blocks alone (R-0215)', () => {
+  const clean = productGateRepo(null);
+  fs.writeFileSync(path.join(clean.dir, 'product.json'), '{ not json');
+  assert.equal(run({ cwd: clean.cwd, stop_hook_active: false }, { SPINE_HOME: clean.home }).status, 0);
+  const dirty = repo({ ...base, stage: 'intent', spine_version: '0.4.0' });
+  fs.writeFileSync(path.join(dirty.dir, 'product.json'), '{ not json');
+  const r = run({ cwd: dirty.cwd, stop_hook_active: false }, { SPINE_HOME: dirty.home });
+  assert.equal(r.status, 2);
+  assert.match(r.stderr, /intent\.md is missing/);
+  assert.match(r.stderr, /product\.json unreadable/);
+});

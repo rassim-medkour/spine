@@ -8,11 +8,14 @@ export const meta = {
   ]
 };
 
-// args: { diff, changedFiles, language, providers, devilsAdvocate, runId, stage, tree? }
+// args: { diff, changedFiles, language, providers, devilsAdvocate, runId, stage, tree?, uxFinder?, productText?, productSections?, productPath?, repoDocs? }
 if (!args || typeof args.diff !== 'string' || !args.diff.trim()) throw new Error('spine-internal-review: args.diff is required. This is an internal step of the spine skill; run /spine:spine-review <pr|branch|--diff> instead.');
 if (!Array.isArray(args.providers) || !args.providers.length) throw new Error('spine-internal-review: args.providers is required');
 const changedFiles = Array.isArray(args.changedFiles) ? args.changedFiles : [];
 const oneLine = (s) => String(s).replace(/[\r\n]+/g, '');
+const productText = typeof args.productText === 'string' && args.productText.trim() ? args.productText : '';
+const uxFinder = args.uxFinder === true && Boolean(productText);
+const repoDocs = Array.isArray(args.repoDocs) ? args.repoDocs.map((d) => String(d).replaceAll('\\', '/')) : [];
 const tree = args.tree && typeof args.tree.tier === 'string' && Array.isArray(args.tree.files) ? args.tree : null;
 
 // --- spine model routing (identical in all three workflows; pinned by tests/workflow-model-parity.test.js) ---
@@ -195,6 +198,74 @@ function finderPrompt(p) {
   return `${how}\nYour strengths: ${p.strengths.join(', ')}.\n${CONTRACT}\nChanged files: ${changedFiles.join(', ')}\nLanguage: ${args.language || 'unknown'}${tierContext()}\n\nDIFF:\n${args.diff}`;
 }
 
+// --- ux_finder (REQ-36); the citation check and cap are self-contained copies of scripts/lib/cap-record.js,
+// pinned by a parity test (REQ-23). Section map and repo docs arrive from product.json via the orchestrator. ---
+const PRODUCT_CAP_PREFIX = 'assumption to confirm: ';
+const PRODUCT_CAP_CONFIDENCE = 0.5;
+const PRODUCT_DOC_FILE_RE = /(\.(md|markdown|rst|txt)$)|(^|\/)docs\//i;
+const PRODUCT_ISSUE_RE = /^(#\d+|[\w.-]+\/[\w.-]+#\d+)$/;
+const PRODUCT_URL_RE = /^https?:\/\//i;
+const PRODUCT_LINE_SPEC_RE = /:(\d+)(?:-(\d+))?$/;
+const PRODUCT_SECTION_NOTE_RE = /§\s*(.+?)\s*$/;
+const posixPath = (p) => String(p).replaceAll('\\', '/').replace(/^\.\//, '');
+const productFile = posixPath(typeof args.productPath === 'string' && args.productPath ? args.productPath : '.spine/product.md');
+// product.json.sections: { '## Invariants': { start, end, blank: [lines], headings: [lines] } }. Citations are checked against it, never against productText line numbers.
+const repoDocsTruncated = args.repoDocsTruncated === true;
+const flowsTouched = Array.isArray(args.flowsTouched) ? args.flowsTouched.filter((x) => x && typeof x.name === 'string') : [];
+// "key flows this change touches" (product.json.flows_touched); empty when the orchestrator passes none.
+const flowsBlock = flowsTouched.length
+  ? '\n\nThe key flows this change touches:\n' + flowsTouched.map((x) => '- ' + x.name + ' (' + x.weight + ')').join('\n')
+  : '';
+const productSectionMap = args.productSections && typeof args.productSections === 'object' && !Array.isArray(args.productSections) ? args.productSections : null;
+function productLineQualifies(line, section) {
+  return line > section.start && line <= section.end && !(section.blank || []).includes(line) && !(section.headings || []).includes(line);
+}
+function productCitationQualifies(spec, note) {
+  const m = PRODUCT_SECTION_NOTE_RE.exec(String(note || ''));
+  if (!spec || !m || !productSectionMap) return false;
+  const section = productSectionMap['## ' + m[1].replace(/^#+\s*/, '')];
+  if (!section) return false;
+  const from = Number(spec[1]);
+  const to = spec[2] === undefined ? from : Number(spec[2]);
+  if (!(to >= from) || to - from > 2000) return false;
+  for (let n = from; n <= to; n += 1) if (!productLineQualifies(n, section)) return false;
+  return true;
+}
+function productDocQualifies(ref, note) {
+  const value = String(ref || '').trim();
+  const file = posixPath(value.replace(PRODUCT_LINE_SPEC_RE, ''));
+  if (file === 'product.md' || file === productFile) return productCitationQualifies(PRODUCT_LINE_SPEC_RE.exec(value), note);
+  if (PRODUCT_ISSUE_RE.test(value) || PRODUCT_URL_RE.test(value)) return true;
+  // A truncated doc list cannot prove absence, so a doc file outside it qualifies (fail open toward the finding).
+  return PRODUCT_DOC_FILE_RE.test(file) && (repoDocs.includes(file) || repoDocsTruncated);
+}
+function capProductRecord(record) {
+  const cited = (Array.isArray(record.evidence) ? record.evidence : []).some((e) => e && e.kind === 'doc' && productDocQualifies(e.ref, e.note));
+  if (cited) return record;
+  const resolution = record.resolution || null;
+  const keep = resolution && resolution.kind === 'question' && typeof resolution.text === 'string' ? resolution.text : record.claim;
+  const text = String(keep).startsWith(PRODUCT_CAP_PREFIX) ? keep : PRODUCT_CAP_PREFIX + keep;
+  return {
+    ...record,
+    confidence: Math.min(Number(record.confidence), PRODUCT_CAP_CONFIDENCE),
+    severity: record.severity === 'CRITICAL' || record.severity === 'HIGH' ? 'MEDIUM' : record.severity,
+    resolution: { kind: 'question', text },
+  };
+}
+
+function uxFinderPrompt() {
+  return `You are the ux finder. Review the diff below for what the user sees: missing or changed UI states (loading, empty, error, partial, disabled, permission denied), copy that exposes internals or contradicts the glossary, inconsistency with a key flow's steps, accessibility regressions visible in code (labels, roles, focus handling, contrast values), and violations of the product invariants. Report each with file and line.
+${CONTRACT} The source of an expectation is a doc entry: product.md:<line> with the section heading in the note (for example §Invariants), a repo documentation file, an issue or a URL. A file entry only records where the problem is in the diff. Never state a business rule that has no source; an unsourced expectation is a question.
+Changed files: ${changedFiles.join(', ')}
+Language: ${args.language || 'unknown'}${tierContext()}
+
+PRODUCT CONTEXT:
+${productText}${flowsBlock}
+
+DIFF:
+${args.diff}`;
+}
+
 function agentTypeFor(p) {
   return p.kind === 'agent' ? p.id : 'general-purpose';
 }
@@ -220,9 +291,24 @@ const raw = await parallel(args.providers.map((p) => () =>
     .then((r) => (r ? r.findings.map((f) => ({ ...f, provider: p.id, author: p.author })) : []))
 ));
 
+// The cap runs here, before the merge and before any verifier is picked, so only cited CRITICAL/HIGH reach a verifier (REQ-31).
+let uxFindings = [];
+if (uxFinder) {
+  const ux = await routed('ux_finder', uxFinderPrompt(), { label: 'ux-find', phase: 'Find', schema: FINDINGS, agentType: 'spine:ux-finder' })
+    .catch((e) => {
+      markNotRun('ux-find');
+      failedProviders.push('ux-find');
+      log(`ux-find failed: ${e && e.message}`);
+      return null;
+    });
+  uxFindings = ux && Array.isArray(ux.findings) ? ux.findings.map((f) => ({ ...capProductRecord(f), provider: 'spine:ux-finder', author: 'spine' })) : [];
+}
+
+// A capped record is never merged with an uncapped one: the key and the grouping both keep them apart.
+const isCappedFinding = (f) => Boolean(f.resolution) && typeof f.resolution.text === 'string' && f.resolution.text.startsWith(PRODUCT_CAP_PREFIX);
 const merged = new Map();
-for (const f of raw.filter(Boolean).flat()) {
-  const key = evidenceKey(f);
+for (const f of [...raw.filter(Boolean).flat(), ...uxFindings]) {
+  const key = (isCappedFinding(f) ? 'capped|' : '') + evidenceKey(f);
   const seen = merged.get(key);
   if (!seen) {
     merged.set(key, { ...f, providers: [f.provider], authors: [f.author], corroboration: 1 });
@@ -286,16 +372,18 @@ async function mergeSameClaims(list) {
   if (!reply || !validGroups(reply.groups, list.length)) return list;
   // Two CRITICAL/HIGH claims are never folded together: each must reach its own verifier.
   const strongCount = (g) => g.filter((i) => list[i].severity === 'CRITICAL' || list[i].severity === 'HIGH').length;
-  const groups = reply.groups.filter((g) => strongCount(g) <= 1);
+  const groups = reply.groups.filter((g) => strongCount(g) <= 1 && new Set(g.map((i) => isCappedFinding(list[i]))).size === 1);
   const grouped = new Set(groups.flat());
   return [...list.filter((_, i) => !grouped.has(i)), ...groups.map((g) => mergeGroup(g.map((i) => list[i])))];
 }
 
 const findings = await mergeSameClaims([...merged.values()]);
-log(`spine-internal-review: ${raw.filter(Boolean).flat().length} raw findings, ${findings.length} unique`);
+log(`spine-internal-review: ${raw.filter(Boolean).flat().length + uxFindings.length} raw findings, ${findings.length} unique`);
 
 const strong = findings.filter((f) => f.severity === 'CRITICAL' || f.severity === 'HIGH');
 const advisory = findings.filter((f) => !strong.includes(f));
+
+const finderLabel = (id) => (id === 'spine:ux-finder' ? 'ux-find' : `find:${id}`);
 
 function pickVerifier(f) {
   const others = args.providers.filter((p) => !f.authors.includes(p.author)).sort((a, b) => a.rank - b.rank);
@@ -322,7 +410,7 @@ const verified = await pipeline(strong, (f, _item, i) => {
     'verifier',
     verifierPromptFor(verifier, f),
     { label: `verify:${i}`, phase: 'Verify', schema: VERDICT, agentType: verifierAgentTypeFor(verifier) },
-    f.providers.map((id) => `find:${id}`)
+    f.providers.map(finderLabel)
   )
     .catch((e) => {
       markNotRun(`verify:${i}`);
@@ -332,7 +420,7 @@ const verified = await pipeline(strong, (f, _item, i) => {
     .then((v) => {
       const base = { ...f, verified: v ? !v.refuted : false, verdict: v, verifier_note: verifierNote };
       if (!modelArgs) return base;
-      const weak = isWeakVerifier(modelBlocks[`verify:${i}`], f.providers.map((id) => modelBlocks[`find:${id}`]));
+      const weak = isWeakVerifier(modelBlocks[`verify:${i}`], f.providers.map((id) => modelBlocks[finderLabel(id)]));
       return { ...base, verify_label: `verify:${i}`, ...(weak ? { model_note: WEAK_VERIFIER_NOTE } : {}) };
     });
 });
@@ -351,7 +439,7 @@ if (gateOpen) {
     'devils_advocate',
     `Consensus findings (all verified by a second author): ${JSON.stringify(survivors.map((f) => ({ claim: f.claim, severity: f.severity, evidence: f.evidence })))}. Build the strongest case against them. ${CONTRACT}\n\nDIFF:\n${args.diff}`,
     { label: 'devils-advocate', phase: 'Dissent', schema: DA_FINDINGS, agentType: 'spine:devils-advocate' },
-    survivors.flatMap((f) => f.providers.map((id) => `find:${id}`))
+    survivors.flatMap((f) => f.providers.map(finderLabel))
   ).catch((e) => {
     markNotRun('devils-advocate');
     log(`devils-advocate failed: ${e && e.message}`);
@@ -378,7 +466,7 @@ if (gateOpen) {
 
 function modelFields(f, role) {
   if (!modelArgs) return {};
-  const own = modelBlocks[role === 'devils_advocate' ? 'devils-advocate' : `find:${f.provider}`];
+  const own = modelBlocks[role === 'devils_advocate' ? 'devils-advocate' : finderLabel(f.provider)];
   return {
     ...(own ? { model: own } : {}),
     ...(f.verify_label && modelBlocks[f.verify_label] ? { verifier_model: modelBlocks[f.verify_label] } : {}),
@@ -413,7 +501,7 @@ const findingRecords = [
 ];
 const records = [
   ...findingRecords,
-  ...didNotRunRecords(args.stage || 'review', (label) => (label === 'devils-advocate' ? 'spine:devils-advocate' : label === 'merge' ? 'spine:synthesis' : label.startsWith('verify') ? 'spine:verifier' : label.replace(/^find:/, '')), findingRecords.length)
+  ...didNotRunRecords(args.stage || 'review', (label) => (label === 'devils-advocate' ? 'spine:devils-advocate' : label === 'ux-find' ? 'spine:ux-finder' : label === 'merge' ? 'spine:synthesis' : label.startsWith('verify') ? 'spine:verifier' : label.replace(/^find:/, '')), findingRecords.length)
 ];
 
 return {
@@ -421,5 +509,5 @@ return {
   findings: checked.concat(advisory),
   dissent,
   failed_providers: failedProviders,
-  ...(failedProviders.length ? { verdict_note: `${failedProviders.length} of ${args.providers.length} providers failed` } : {})
+  ...(failedProviders.length ? { verdict_note: `${failedProviders.length} of ${args.providers.length + (uxFinder ? 1 : 0)} providers failed` } : {})
 };

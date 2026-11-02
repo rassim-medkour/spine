@@ -10,6 +10,7 @@ const { parserFor, isBinaryBuffer, BINARY_EXT, PARSER_VERSION } = require('./lib
 const { buildGraph, EXCLUDED_DIR } = require('./lib/graph');
 const { loadHints } = require('./lib/hints');
 const { classifyTree } = require('./lib/tiers');
+const { loadProduct, productSignals } = require('./lib/product-context');
 const { gitBlobSha, cachePath, loadCache, saveCache } = require('./lib/graph-cache');
 
 const CLASSIFIER_VERSION = '1';
@@ -170,7 +171,7 @@ function diagnosticsOf(g, cache, started, io) {
   };
 }
 
-function buildTree({ root, files = [], diffText = '', base = 'HEAD', tc, artifactsDir = '.spine', io = defaultIo(root) }) {
+function buildTree({ root, files = [], diffText = '', base = 'HEAD', tc, artifactsDir = '.spine', config = {}, io = defaultIo(root) }) {
   const started = io.now();
   const diffBuf = Buffer.isBuffer(diffText) ? diffText : Buffer.from(String(diffText));
   const listing = listRepo(io, artifactsDir);
@@ -183,7 +184,9 @@ function buildTree({ root, files = [], diffText = '', base = 'HEAD', tc, artifac
   const cacheFile = cachePath(root, artifactsDir);
   const cache = loadCache(cacheFile);
   const g = graphs({ listing, changed, readOnce, cache, tc, io, started, base });
-  const result = classifyTree(fileInputs(changed, g, readOnce, tc), null, tc, churnFor(changed.map((c) => c.path), io));
+  const product = loadProduct(root, { ...config, artifacts_dir: artifactsDir }, changed.map((c) => c.path));
+  const productFn = (p, added) => productSignals(p, added, product, product.matched);
+  const result = classifyTree(fileInputs(changed, g, readOnce, tc), null, tc, churnFor(changed.map((c) => c.path), io), undefined, productFn);
   const diagnostics = { ...diagnosticsOf(g, cache, started, io), cache_saved: g.merged ? saveCache(cacheFile, g.merged, g.keep) : 'not-saved' };
   const tree = {
     schema_version: 1,
@@ -195,6 +198,7 @@ function buildTree({ root, files = [], diffText = '', base = 'HEAD', tc, artifac
       config_sha256: tierConfigHash(tc),
       classifier_version: CLASSIFIER_VERSION,
       parser_version: PARSER_VERSION,
+      ...(product.state === 'ok' || product.state === 'trimmed' ? { product_sha256: product.sha256 } : {}),
     },
     knobs: result.knobs,
     files: result.files,
@@ -238,7 +242,7 @@ function main(argv, root = process.cwd()) {
   const tc = tierConfig(config);
   if (!tc.enabled) return { ok: true, disabled: true };
   const diffText = args.diff ? fs.readFileSync(path.resolve(root, args.diff)) : Buffer.alloc(0);
-  const { tree, diagnostics, revision } = buildTree({ root, files: args.files, diffText, base: args.base, tc, artifactsDir: config.artifacts_dir });
+  const { tree, diagnostics, revision } = buildTree({ root, files: args.files, diffText, base: args.base, tc, artifactsDir: config.artifacts_dir, config });
   if (!args.run) {
     process.stdout.write(serializeTree(tree));
     return null;

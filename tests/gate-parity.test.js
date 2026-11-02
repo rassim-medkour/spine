@@ -62,3 +62,24 @@ test('the Claude entry points hold no gate logic of their own', () => {
     if (fs.existsSync(p)) assert.match(fs.readFileSync(p, 'utf8'), /require\('\.\.\/lib\/gate'\)/);
   }
 });
+
+// T-15a
+test('Claude and Cursor stop adapters agree when product context is on', () => {
+  const state = { ...BASE, stage: 'intent', spine_version: '0.4.0' };
+  const prep = (d) => {
+    fs.copyFileSync(path.join(FIX, 'artifacts', 'intent-valid.md'), path.join(d, 'intent.md'));
+    passRecord(d, 'intent');
+    fs.writeFileSync(path.join(d, 'product.json'), JSON.stringify({ state: 'ok' }));
+  };
+  const a = cursorRepo(state);
+  const b = cursorRepo(state);
+  prep(a.dir);
+  prep(b.dir);
+  const run = findActiveRun(a.root, loadConfig(a.root, a.home));
+  const claude = claudeVerdict(a);
+  const cursor = cursorVerdict(b);
+  assert.equal(claude.verdict, 'block');
+  assert.equal(cursor.verdict, 'block');
+  assert.equal(claude.text, `spine: ${stopReason(run, collectErrors(run))}\n`);
+  assert.match(collectErrors(run).join(';'), /Who this is for/);
+});

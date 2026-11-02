@@ -1,5 +1,22 @@
 {
   "kind": "markdown",
-  "frontmatter": ["id", "stage", "upstream_id", "status"],
-  "headings": ["## Problem", "## Acceptance criteria", "## Constraints", "## Out of scope"]
+  "frontmatter": [
+    "id",
+    "stage",
+    "upstream_id",
+    "status"
+  ],
+  "headings": [
+    "## Problem",
+    "## Acceptance criteria",
+    "## Constraints",
+    "## Out of scope"
+  ],
+  "conditional_headings": {
+    "when": "product_context",
+    "headings": [
+      "## Who this is for",
+      "## What changes for the user"
+    ]
+  }
 }

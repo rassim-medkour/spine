@@ -1,5 +1,30 @@
 # Changelog
 
+## 0.4.0
+
+Cursor support is still experimental and the live Cursor smoke test is pending.
+
+### Added
+
+- [both] Product context: an optional, committed `.spine/product.md` (users, goals, glossary, invariants, key flows, UX principles) that every stage reads. `/spine:spine product` drafts it from the repo and confirms each entry with you; it never creates a run. Without the file every artifact is byte-identical to 0.3.2 apart from one `INFO` record.
+- [both] Two new routed roles, `product_lens` at spec and `ux_finder` at review, with dispatch labels `product-lens` and `ux-find`. `--model-role` accepts both. `ux_finder` runs only when a changed file is user-facing or on a key flow.
+- [both] Two tree signals, `user_facing` and `key_flow`, written only when product context loaded. A file on a critical key flow is at least trunk, on an important one at least branch.
+- [both] Citation cap: `product_lens` and `ux_finder` records without a `doc` citation are capped on write (confidence 0.5, MEDIUM, `assumption to confirm:`). `run-status.js` prints one `cap_line`.
+- [both] The reading map gains `## Click through yourself` and the G3 line a `click through <n> flows, <m> min` suffix when a key flow is touched; branch and trunk PR bodies gain `## What changes for the user`.
+- [both] `.spine/decisions.md`: an append-only log of human answers to product questions at G1, G2 and G3.
+- [both] `gap-check` question 7, User impact; `## Who this is for`, `## What changes for the user` and `## User impact` are required only when a valid `product.md` existed and the run is 0.4.0 or later.
+
+### Changed
+
+- [both] Model routing: `product_lens` and `ux_finder` join the Balanced table (mid, mid, top). The policy hash changes once because it covers every role; a `model_policy` from 0.3.x that omits them still validates and gets these defaults, and recorded `models.json` plans from 0.3.x still read.
+
+### Fixed
+
+- [both] Every product context line carries its file line number (`14| ...`), so a `product.md:14` citation means the same to the agent, the cap and the human. The workflows receive the key flows the change touches and whether the doc list was truncated; a doc outside a truncated list is not capped. `--decide` appends to `decisions.md` before it writes the decision record. A recorded model plan with a malformed `product_lens` or `ux_finder` entry re-plans just that entry. The Stop gate names an unreadable `product.json` without blocking on it alone.
+- [claude-code] The Stop gate, the PostToolUse hook and the Cursor after-edit hook enforce the product-gated headings from the same `productContextFor` helper; a corrupt `product.json` is reported as unreadable instead of silently turning the headings off.
+- [both] `ux_finder` skips write an `INFO` only when product context loaded, so a run without `product.md` still adds exactly one record.
+- [claude-code] The implement workflow now runs tickets one at a time when `parallel` is false. Before, every ticket's implementer started at once in the same checkout, because `pipeline()` has no barrier between items; `parallel: true` still overlaps tickets in isolated worktrees.
+
 ## 0.3.2
 
 Cursor support is still experimental and the live Cursor smoke test is pending.

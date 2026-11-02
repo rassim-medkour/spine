@@ -57,15 +57,36 @@ function parseFrontmatter(text) {
   return data;
 }
 
-function validateMarkdown(text, schema) {
+const PRODUCT_HEADINGS_SINCE = '0.4.0';
+
+function versionAtLeast(version, min) {
+  const parse = (s) => (/^([0-9]+)[.]([0-9]+)[.]([0-9]+)/.exec(String(s || '')) || []).slice(1).map(Number);
+  const a = parse(version);
+  const b = parse(min);
+  if (a.length !== 3) return false;
+  for (let i = 0; i < 3; i++) if (a[i] !== b[i]) return a[i] > b[i];
+  return true;
+}
+
+// Conditional headings are required only when a valid product.md existed when the artifact was
+// written and the run's spine_version is at or above the release that introduced them.
+function conditionalHeadings(schema, ctx) {
+  const cond = schema.conditional_headings;
+  if (!cond || cond.when !== 'product_context') return [];
+  if (!ctx || ctx.productContext !== true || !versionAtLeast(ctx.spineVersion, PRODUCT_HEADINGS_SINCE)) return [];
+  return cond.headings || [];
+}
+
+function validateMarkdown(text, schema, ctx = {}) {
   const errors = [];
   const fm = parseFrontmatter(text);
-  if (!fm) errors.push('missing frontmatter block');
+  const needsFm = !(Array.isArray(schema.frontmatter) && schema.frontmatter.length === 0);
+  if (!fm && needsFm) errors.push('missing frontmatter block');
   for (const key of schema.frontmatter || []) {
     if (!fm || !(key in fm) || fm[key] === '') errors.push(`missing frontmatter key ${key}`);
   }
   const lines = text.split(/\r?\n/).map((l) => l.trim());
-  for (const heading of schema.headings || []) {
+  for (const heading of [...(schema.headings || []), ...conditionalHeadings(schema, ctx)]) {
     if (!lines.includes(heading)) errors.push(`missing heading "${heading}"`);
   }
   return errors;
@@ -140,7 +161,8 @@ function validateTree(obj) {
   return errors;
 }
 
-function schemaFor(relPath) {
+function schemaFor(relPath, artifactsDir = '.spine') {
+  if (String(relPath).replace(/\\/g, '/') === `${artifactsDir}/product.md`) return 'product';
   const base = path.basename(relPath);
   const parent = path.basename(path.dirname(relPath));
   if (parent === 'records' && /^R-\d+\.json$/.test(base)) return 'record';
@@ -168,8 +190,8 @@ function validateReview(obj) {
   return errors;
 }
 
-function validateArtifactFile(absPath, relPath = absPath) {
-  const name = schemaFor(relPath);
+function validateArtifactFile(absPath, relPath = absPath, ctx = {}) {
+  const name = schemaFor(relPath, ctx.artifactsDir);
   if (!name) return [];
   let text;
   try {
@@ -188,7 +210,7 @@ function validateArtifactFile(absPath, relPath = absPath) {
     return name === 'tree' ? validateTree(parsed) : validateReview(parsed);
   }
   const schema = loadSchema(name);
-  if (schema.kind === 'markdown') return validateMarkdown(text, schema);
+  if (schema.kind === 'markdown') return validateMarkdown(text, schema, ctx);
   try {
     return validateJson(JSON.parse(text), schema);
   } catch {
@@ -196,4 +218,4 @@ function validateArtifactFile(absPath, relPath = absPath) {
   }
 }
 
-module.exports = { loadSchema, validateJson, validateMarkdown, validateRecord, validateTree, validateReview, validateArtifactFile, schemaFor, parseFrontmatter };
+module.exports = { versionAtLeast, PRODUCT_HEADINGS_SINCE, loadSchema, validateJson, validateMarkdown, validateRecord, validateTree, validateReview, validateArtifactFile, schemaFor, parseFrontmatter };

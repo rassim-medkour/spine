@@ -5,7 +5,7 @@
 const crypto = require('node:crypto');
 const { TIERS } = require('./tier-config');
 
-const ROLES = Object.freeze(['implementer', 'finder', 'verifier', 'devils_advocate', 'spec_lens', 'synthesis', 'boundary_checker']);
+const ROLES = Object.freeze(['implementer', 'finder', 'verifier', 'devils_advocate', 'spec_lens', 'synthesis', 'boundary_checker', 'product_lens', 'ux_finder']);
 const CLASSES = Object.freeze(['cheap', 'mid', 'top']);
 const CLASS_RANK = Object.freeze({ cheap: 0, mid: 1, top: 2 });
 const SOURCES = Object.freeze(['requested', 'inherit', 'session-fallback', 'unsupported-dispatch', 'floor-raised', 'fallback-error']);
@@ -27,6 +27,8 @@ const BALANCED = Object.freeze({
   spec_lens: row('mid', 'mid', 'top'),
   synthesis: row('cheap', 'mid', 'mid'),
   boundary_checker: row('cheap', 'cheap', 'mid'),
+  product_lens: row('mid', 'mid', 'top'),
+  ux_finder: row('mid', 'mid', 'top'),
 });
 const DEFAULT_CLASS_IDS = Object.freeze({ 'claude-code': Object.freeze({ cheap: 'haiku', mid: 'sonnet', top: 'opus' }) });
 
@@ -41,11 +43,21 @@ const DISPATCH_ROLES = Object.freeze({
   'spec-review': 'finder',
   'quality-review': 'finder',
   lens: 'spec_lens',
+  'product-lens': 'product_lens',
+  'ux-find': 'ux_finder',
   synthesis: 'synthesis',
   'spine:synthesis': 'synthesis',
   'spine:boundary-checker': 'boundary_checker',
   'spine:devils-advocate': 'devils_advocate',
 });
+
+// Exact label first (REQ-30), then the part before ':' (lens:security -> lens). null when unknown.
+function roleForLabel(label) {
+  const key = String(label);
+  if (Object.prototype.hasOwnProperty.call(DISPATCH_ROLES, key)) return DISPATCH_ROLES[key];
+  const prefix = key.split(':')[0];
+  return Object.prototype.hasOwnProperty.call(DISPATCH_ROLES, prefix) ? DISPATCH_ROLES[prefix] : null;
+}
 
 // Dispatch sites that cannot take a model (REQ-34). Ids are stable; both skills list them.
 const LIMITATIONS = Object.freeze({
@@ -203,6 +215,6 @@ function validateModelBlock(b) {
 
 module.exports = {
   ROLES, CLASSES, CLASS_RANK, SOURCES, HOSTS, SIZE_TIER, MODEL_ID_RE, BALANCED, DEFAULT_CLASS_IDS,
-  DISPATCH_ROLES, WEAK_VERIFIER_NOTE, LIMITATIONS,
+  DISPATCH_ROLES, roleForLabel, WEAK_VERIFIER_NOTE, LIMITATIONS,
   parsePolicyLayer, mergePolicies, parseClassIds, floorClass, effectiveClass, isWeakVerifier, validateModelBlock,
 };

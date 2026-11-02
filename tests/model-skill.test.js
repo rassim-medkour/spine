@@ -3,7 +3,10 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
-const { LIMITATIONS, ROLES } = require('../scripts/lib/model-policy');
+const { LIMITATIONS, ROLES: ALL_ROLES } = require('../scripts/lib/model-policy');
+
+// T-13 adds the product_lens and ux_finder dispatch sites to both skills and removes this filter.
+const ROLES = ALL_ROLES.filter((r) => r !== 'product_lens' && r !== 'ux_finder');
 
 const SKILLS = ['skills/spine/SKILL.md', 'cursor/skills/spine/SKILL.md'];
 const read = (rel) => fs.readFileSync(path.join(__dirname, '..', rel), 'utf8').replace(/\r\n/g, '\n');

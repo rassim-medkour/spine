@@ -7,6 +7,7 @@ const ALL = Object.freeze(['leaf', 'branch', 'trunk']);
 const SECTIONS = Object.freeze([
   { key: 'reading_map', title: 'Risk and reading map', source: 'generated', tiers: ['trunk'], caps: { trunk: 20 } },
   { key: 'tldr', title: 'TL;DR', source: 'written', tiers: ALL, caps: { leaf: 3, branch: 5, trunk: 5 } },
+  { key: 'user_impact', title: 'What changes for the user', source: 'generated', tiers: ['branch', 'trunk'], caps: { branch: 8, trunk: 12 } },
   { key: 'problem', title: 'The problem, with an example', source: 'written', tiers: ['branch', 'trunk'], caps: { branch: 15, trunk: 20 } },
   { key: 'design', title: 'The design decision that shaped everything', source: 'written', tiers: ['trunk'], caps: { trunk: 15 } },
   { key: 'changed', title: 'What changed', source: 'generated', tiers: ALL, caps: { leaf: 12, branch: 20, trunk: 30 } },
@@ -74,6 +75,10 @@ function genReadingMap(data) {
   ];
 }
 
+function genUserImpact(data) {
+  return (data.specUserImpact || []).filter((l) => l.trim());
+}
+
 function genRollout(data) {
   const knob = rollbackAnswer(data.tree, data.proof, data.records);
   const body = planSection(data.planText);
@@ -123,7 +128,7 @@ function genHowToTest(data) {
   return cmds.map((c) => `- \`${c.replace(/`/g, "'")}\``);
 }
 
-const GENERATORS = Object.freeze({ reading_map: genReadingMap, rollout: genRollout, decisions: genDecisions, checked: genChecked, not_verified: genNotVerified, how_to_test: genHowToTest });
+const GENERATORS = Object.freeze({ reading_map: genReadingMap, user_impact: genUserImpact, rollout: genRollout, decisions: genDecisions, checked: genChecked, not_verified: genNotVerified, how_to_test: genHowToTest });
 
 function capLines(lines, cap, note) {
   if (lines.length <= cap) return lines;
@@ -171,13 +176,13 @@ function checkWritten(s, body, tier, cap) {
   return errors;
 }
 
-function sectionsFor(tier, notVerifiedCount) {
-  return SECTIONS.filter((s) => s.tiers.includes(tier) || (s.key === 'not_verified' && notVerifiedCount > 0));
+function sectionsFor(tier, notVerifiedCount, hasUserImpact = false) {
+  return SECTIONS.filter((s) => (s.key === 'user_impact' ? hasUserImpact && s.tiers.includes(tier) : s.tiers.includes(tier) || (s.key === 'not_verified' && notVerifiedCount > 0)));
 }
 
 function buildPrBody(data, writtenText) {
   const written = parseWritten(writtenText);
-  const chosen = sectionsFor(data.tier, genNotVerified(data).length);
+  const chosen = sectionsFor(data.tier, genNotVerified(data).length, genUserImpact(data).length > 0);
   const errors = [];
   const parts = chosen.map((s) => {
     const cap = s.caps[data.tier];

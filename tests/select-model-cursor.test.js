@@ -113,3 +113,13 @@ test('query mode on cursor inherits with "no run directory"', (t) => {
   assert.equal(out.source, 'inherit');
   assert.equal(out.reason, 'cursor: no run directory');
 });
+
+test('cursor plan includes product_lens and ux_finder at the Balanced classes (REQ-18)', needsSqlite, (t) => {
+  const r = makeRun(t, { size: 'L' });
+  const { out } = cursorRun(r, cursorHome(t));
+  for (const role of ['product_lens', 'ux_finder']) {
+    assert.equal(out.roles[role].class, 'top');
+    assert.equal(out.roles[role].model, 'claude-opus-4-10');
+    assert.equal(out.roles[role].source, 'requested');
+  }
+});

@@ -1,0 +1,20 @@
+{
+  "size": "S",
+  "blast_radius": "normal",
+  "signals": {
+    "files": 2,
+    "services": 1,
+    "migration": false,
+    "new_subsystem": false
+  },
+  "lenses": [
+    "correctness",
+    "typescript"
+  ],
+  "devils_advocate": false,
+  "workflows": {
+    "spec": false,
+    "implement": false,
+    "review": false
+  }
+}

@@ -1,5 +1,25 @@
 {
   "kind": "markdown",
-  "frontmatter": ["id", "stage", "upstream_id", "status"],
-  "headings": ["## Summary", "## Requirements", "## Design", "## Error paths", "## Data and migrations", "## Test anchors", "## Assumptions", "## Out of scope"]
+  "frontmatter": [
+    "id",
+    "stage",
+    "upstream_id",
+    "status"
+  ],
+  "headings": [
+    "## Summary",
+    "## Requirements",
+    "## Design",
+    "## Error paths",
+    "## Data and migrations",
+    "## Test anchors",
+    "## Assumptions",
+    "## Out of scope"
+  ],
+  "conditional_headings": {
+    "when": "product_context",
+    "headings": [
+      "## User impact"
+    ]
+  }
 }

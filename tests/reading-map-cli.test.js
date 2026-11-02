@@ -55,3 +55,40 @@ test('no tree.json is skipped; a missing diff.patch is ok false with exit 0', ()
   assert.equal(missing.status, 0);
   assert.equal(JSON.parse(missing.stdout).ok, false);
 });
+
+const PRODUCT_MD = ['## Users', 'a', '## Goals', 'b', '## Glossary', 'c', '## Invariants', 'd', '## Key flows', '', '### Math', 'weight: critical', 'paths: src/lib/**', '1. Open the calculator', '2. Add two numbers', '', '## UX principles', 'e', ''].join('\n');
+
+test('a touched key flow adds Click through yourself with steps from product.md and the G3 suffix', () => {
+  const r = runDir();
+  fs.writeFileSync(path.join(r.dir, 'product.json'), JSON.stringify({ state: 'ok', flows_touched: [{ name: 'Math', weight: 'critical', files: ['src/lib/math.ts'] }] }));
+  fs.mkdirSync(path.join(r.root, '.spine'), { recursive: true });
+  fs.writeFileSync(path.join(r.root, '.spine', 'product.md'), PRODUCT_MD);
+  const s = JSON.parse(cli(r).stdout);
+  assert.match(s.g3, / · click through 1 flows, 3 min$/);
+  const md = fs.readFileSync(path.join(r.dir, 'reading-map.md'), 'utf8');
+  assert.match(md, /## Click through yourself\n\n1\. \*\*Math\*\* \(critical\) · not driven\n   1\. Open the calculator\n   2\. Add two numbers\n/);
+  const json = JSON.parse(fs.readFileSync(path.join(r.dir, 'reading-map.json'), 'utf8'));
+  assert.deepEqual(json.totals.click_through, { flows: 1, minutes: 3 });
+});
+
+test('product.json with no touched flows, or unreadable, leaves the output as without it', () => {
+  const base = runDir();
+  const want = cli(base).stdout.replace(/\.spine\/[^ ]+/, '');
+  for (const body of ['{"state":"ok","flows_touched":[]}', '{"state":"absent"}', 'not json']) {
+    const r = runDir();
+    fs.writeFileSync(path.join(r.dir, 'product.json'), body);
+    assert.equal(cli(r).stdout.replace(/\.spine\/[^ ]+/, ''), want);
+    assert.ok(!fs.readFileSync(path.join(r.dir, 'reading-map.md'), 'utf8').includes('Click through'));
+  }
+});
+
+test('touched flows with an unreadable or missing product.md keep the group with steps unavailable (R-0158)', () => {
+  for (const setup of [(r) => {}, (r) => { fs.mkdirSync(path.join(r.root, '.spine'), { recursive: true }); fs.writeFileSync(path.join(r.root, '.spine', 'product.md'), Buffer.from([0xff, 0xfe, 0x00, 0xc3, 0x28])); }]) {
+    const r = runDir();
+    fs.writeFileSync(path.join(r.dir, 'product.json'), JSON.stringify({ state: 'ok', flows_touched: [{ name: 'Math', weight: 'critical', files: ['src/lib/math.ts'] }] }));
+    setup(r);
+    const s = JSON.parse(cli(r).stdout);
+    assert.match(s.g3, / · click through 1 flows, 3 min$/);
+    assert.match(fs.readFileSync(path.join(r.dir, 'reading-map.md'), 'utf8'), /## Click through yourself\n\n1\. \*\*Math\*\* \(critical\) · not driven\n   steps unavailable\n/);
+  }
+});

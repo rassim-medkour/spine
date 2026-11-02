@@ -9,7 +9,7 @@ Reviewers check what is present. This skill checks what is missing. Run it on
 `intent.md`, `spec.md`, `plan.md`, and `tickets.json`, whether Spine produced
 them or `/spine:spine adopt` imported them.
 
-## The six absence questions
+## The seven absence questions
 
 Answer each with `present`, `absent`, or `partial`, with a line reference for
 `present` and `partial`.
@@ -28,6 +28,9 @@ Answer each with `present`, `absent`, or `partial`, with a line reference for
 5. **Test anchors.** Does every acceptance criterion name at least one test
    that will prove it? For tickets, does every ticket name a test?
 6. **Out of scope.** Is there an explicit list of what this work will not do?
+7. **User impact.** If a user-visible change exists, is each one written as a
+   criterion with an input, an action, and a visible result? `absent` when a
+   user-visible change has no such criterion; `present` cites the line.
 
 ## What to do with a gap
 
@@ -42,7 +45,7 @@ Never silently fill a gap. Never leave a gap unrecorded.
 
 ## Output
 
-A table of the six questions with status and reference, the list of
+A table of the seven questions with status and reference, the list of
 questions and assumptions, then a record block with `agent` set to the agent
 running this skill, `claim` `GAPS: <n>` or `GAPS: 0`, and one `doc` evidence
 entry per gap.

@@ -7,6 +7,8 @@ const { tierConfig } = require('./lib/tier-config');
 const { parseDiff } = require('./lib/diff');
 const { buildPrBody } = require('./lib/pr-body');
 const { checkProof } = require('./check-proof');
+const { productContextFor } = require('./lib/product-context');
+const { versionAtLeast, PRODUCT_HEADINGS_SINCE } = require('./lib/validate');
 
 const readText = (p) => {
   try {
@@ -22,6 +24,21 @@ function assumptions(specText) {
   const rest = specText.slice(m.index + m[0].length);
   const next = rest.search(/^## /m);
   return (next < 0 ? rest : rest.slice(0, next)).split('\n').filter((l) => /^- /.test(l)).map((l) => l.slice(2).replace(/\*\*/g, '').trim()).slice(0, 5);
+}
+
+function userImpact(specText) {
+  const m = /^## User impact[ \t]*$/m.exec(specText);
+  if (!m) return [];
+  const rest = specText.slice(m.index + m[0].length);
+  const next = rest.search(/^## /m);
+  return (next < 0 ? rest : rest.slice(0, next)).split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+}
+
+// The section exists only for a run created at this release with a valid product.md (REQ-3, REQ-21);
+// anything else leaves pr-body.md as 0.3.2 wrote it, whatever spec.md says.
+function productSectionAllowed(runDir) {
+  const ctx = productContextFor(runDir);
+  return ctx.productContext && versionAtLeast(ctx.spineVersion, PRODUCT_HEADINGS_SINCE);
 }
 
 function loadData(runDir, root, tc) {
@@ -40,6 +57,7 @@ function loadData(runDir, root, tc) {
     readingMap: readJson(path.join(runDir, 'reading-map.json')),
     planText: ['review.md', 'plan.md'].map((n) => readText(path.join(runDir, n))).join('\n'),
     specAssumptions: assumptions(readText(path.join(runDir, 'spec.md'))),
+    specUserImpact: productSectionAllowed(runDir) ? userImpact(readText(path.join(runDir, 'spec.md'))) : [],
   };
 }
 

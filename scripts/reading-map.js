@@ -10,6 +10,7 @@ const { validateTree } = require('./lib/validate');
 const { buildReadingMap, renderReadingMap, summarize } = require('./lib/reading-map');
 const { checkProof } = require('./check-proof');
 const { rollbackAnswer } = require('./lib/proof');
+const { parseProduct, decodeProduct } = require('./lib/product-context');
 
 const sha = (buf) => crypto.createHash('sha256').update(buf).digest('hex');
 
@@ -25,6 +26,29 @@ function withRollbackAnswer(tree, proof, records) {
   return { ...tree.knobs, instant_rollback: { ...knob, answer: rollbackAnswer(tree, proof, records) } };
 }
 
+// <run>/product.json names the flows the change touched; their steps live in product.md.
+// Any failure here means no click-through group, never a failed reading map.
+function touchedFlows({ runDir, root }) {
+  let touched;
+  try {
+    const product = readJson(path.join(runDir, 'product.json'));
+    touched = product && Array.isArray(product.flows_touched) ? product.flows_touched.filter((t) => t && typeof t.name === 'string') : [];
+  } catch {
+    return null;
+  }
+  if (!touched.length) return null;
+  // The flows stay on the map even when product.md cannot be read; only their steps are then missing.
+  let steps = new Map();
+  try {
+    const dir = (loadConfig(root) || {}).artifacts_dir || '.spine';
+    const { text } = decodeProduct(fs.readFileSync(path.join(root, dir, 'product.md')), null);
+    steps = new Map(parseProduct(text).flows.map((fl) => [fl.name, fl.steps]));
+  } catch {
+    steps = new Map();
+  }
+  return { flows_touched: touched.map((t) => ({ name: t.name, weight: t.weight, steps: steps.get(t.name) || [] })) };
+}
+
 function readingMap({ runDir, root, tc }) {
   const diffPath = path.join(runDir, 'diff.patch');
   if (!fs.existsSync(diffPath)) throw new Error('diff.patch missing: save the reviewed diff to <run>/diff.patch first');
@@ -37,7 +61,7 @@ function readingMap({ runDir, root, tc }) {
   const diffBuf = fs.readFileSync(diffPath);
   const records = listRecords(runDir).map((r) => r.record);
   const proof = checkProof({ runDir, root, tree, records, tc });
-  const map = buildReadingMap({ diffFiles: parseDiff(diffBuf.toString('utf8')), tree, records, proof, tc });
+  const map = buildReadingMap({ diffFiles: parseDiff(diffBuf.toString('utf8')), tree, records, proof, tc, product: touchedFlows({ runDir, root }) });
   const review = readJson(path.join(runDir, 'review.json')) || {};
   const meta = {
     runId: path.basename(runDir), diffSha: sha(diffBuf), treeSha: sha(treeBuf),

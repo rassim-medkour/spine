@@ -14,6 +14,8 @@
     }
   },
   "inputs": ["base_sha", "head_sha", "diff_sha256", "config_sha256", "classifier_version", "parser_version"],
+  "optional_inputs": ["product_sha256"],
+  "optional_signals": ["user_facing", "key_flow"],
   "signals": ["fan_in", "entry_point", "shared_state", "public_interface", "one_way_door", "security_path", "churn", "tested", "gated"],
   "knobs": ["is_trunk", "wide_downstream", "gated", "severe_if_broken", "instant_rollback"],
   "knob_answers": ["yes", "no", "unknown"],

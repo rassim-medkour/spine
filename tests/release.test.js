@@ -180,3 +180,8 @@ test('README tells users how to update, including auto-update', () => {
   assert.match(text, /auto-update/);
   assert.match(text, /claude plugin marketplace update spine/);
 });
+
+test('package version is 0.4.0 and every manifest follows (T-13)', () => {
+  assert.equal(JSON.parse(read('package.json')).version, '0.4.0');
+  assert.equal(JSON.parse(read('.claude-plugin/plugin.json')).version, '0.4.0');
+});

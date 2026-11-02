@@ -115,3 +115,69 @@ test('security path matches every auth* path, including authorization, authorize
     'src/authorization/policy.js', 'src/authorize.ts', 'src/authority.go']) assert.equal(s({ path: p }).security_path.value, true, p);
   assert.equal(s({ path: 'src/widgets/button.ts' }).security_path.value, false);
 });
+
+// ---- T-3: product signals ----
+const { PRODUCT_SIGNAL_KEYS, keyFlowFloor } = require('../scripts/lib/tiers');
+const { matchFlows, userFacing, productSignals } = require('../scripts/lib/product-context');
+
+const flow = (name, weight, paths, line = 1) => ({ name, weight, paths, steps: [], line });
+
+test('PRODUCT_SIGNAL_KEYS is separate from the nine SIGNAL_KEYS', () => {
+  assert.deepEqual(PRODUCT_SIGNAL_KEYS, ['user_facing', 'key_flow']);
+  assert.equal(SIGNAL_KEYS.length, 9);
+  assert.ok(!SIGNAL_KEYS.includes('user_facing'));
+});
+
+test('matchFlows matches prefix glob, star glob and no match on slash and backslash paths', () => {
+  const flows = [flow('Checkout', 'critical', ['src/checkout/**']), flow('Pay', 'important', ['src/pay*.js'])];
+  const { byFile } = matchFlows(flows, ['src/checkout/cart.js', 'src\\checkout\\deep\\x.js', 'src/pay2.js', 'src/other.js']);
+  assert.deepEqual(byFile.get('src/checkout/cart.js'), [{ name: 'Checkout', weight: 'critical' }]);
+  assert.deepEqual(byFile.get('src/checkout/deep/x.js'), [{ name: 'Checkout', weight: 'critical' }]);
+  assert.deepEqual(byFile.get('src/pay2.js'), [{ name: 'Pay', weight: 'important' }]);
+  assert.equal(byFile.has('src/other.js'), false);
+});
+
+test('a bad glob is skipped with an issue, never thrown', () => {
+  const bad = { toString() { throw new Error('boom'); } };
+  const flows = [flow('Odd', 'minor', [bad, 'src/ok/**'], 7)];
+  const out = matchFlows(flows, ['src/ok/a.js']);
+  assert.equal(out.issues.length, 1);
+  assert.equal(out.issues[0].flow, 'Odd');
+  assert.equal(out.issues[0].line, 7);
+  assert.deepEqual(out.byFile.get('src/ok/a.js'), [{ name: 'Odd', weight: 'minor' }]);
+});
+
+test('a file on several flows records every name and weight', () => {
+  const flows = [flow('A', 'minor', ['src/**']), flow('B', 'critical', ['src/x.js'])];
+  const { byFile } = matchFlows(flows, ['src/x.js']);
+  assert.deepEqual(byFile.get('src/x.js'), [{ name: 'A', weight: 'minor' }, { name: 'B', weight: 'critical' }]);
+  const sig = productSignals('src/x.js', [], { state: 'ok' }, byFile);
+  assert.equal(sig.key_flow.value, true);
+  assert.equal(keyFlowFloor(sig), 'trunk');
+});
+
+test('userFacing table', () => {
+  const rows = [
+    ['src/App.tsx', [], true], ['locales/en.json', [], true], ['emails/welcome.html', [], true],
+    ['src/api.js', ['  res.json({ ok: true });'], true], ['src/api.js', ['const x = 1;'], false],
+    ['src/user.ts', ['class UserDto {'], true], ['src/order.ts', ['export class OrderDTO'], true], ['src/user.ts', ['class UserSerializer extends Base {'], true], ['src/user.ts', ['const dtoCount = 1;'], false],
+    ['tests/x.test.js', ['res.json(1)'], false], ['src/App.test.tsx', [], false], ['scripts/lib/tiers.js', [], false],
+  ];
+  for (const [p, added, want] of rows) assert.equal(userFacing(p, added).value, want, p);
+  assert.equal(userFacing('src/App.tsx').rule, 'ui template');
+});
+
+test('productSignals is null for absent and malformed, both keys otherwise', () => {
+  assert.equal(productSignals('src/a.js', [], { state: 'absent' }, new Map()), null);
+  assert.equal(productSignals('src/a.js', [], { state: 'malformed' }, new Map()), null);
+  const sig = productSignals('src/a.js', [], { state: 'ok' }, new Map());
+  assert.deepEqual(Object.keys(sig), PRODUCT_SIGNAL_KEYS);
+  assert.equal(sig.key_flow.value, false);
+});
+
+test('user_facing marks under 5% of the spike corpus', () => {
+  const { execFileSync } = require('node:child_process');
+  const files = execFileSync('git', ['ls-files'], { cwd: path.join(__dirname, '..'), encoding: 'utf8' }).split('\n').filter(Boolean);
+  const marked = files.filter((f) => userFacing(f, []).value).length;
+  assert.ok(marked / files.length < 0.05, `${marked}/${files.length}`);
+});

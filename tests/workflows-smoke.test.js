@@ -239,3 +239,9 @@ test('review.workflow.js verifies a HIGH finding with a different-author verifie
     text: 'add a test that calls this path without upstream validation'
   });
 });
+
+test('spec.workflow.js with productText and a null stub agent still returns the 0.3.2 result shape', async () => {
+  const result = await run('spec', { intentText: 'x', lenses: ['domain'], providers: [], runId: 'r', productText: '# p\n\n## Users\n' });
+  assert.ok(Array.isArray(result.records));
+  assert.equal('user_impact' in result, false);
+});

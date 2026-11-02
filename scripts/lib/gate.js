@@ -3,6 +3,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { validateArtifactFile, validateRecord } = require('./validate');
 const { latestBoundaryPass } = require('./records');
+const { productContextFor } = require('./product-context');
 
 const STAGE_ARTIFACTS = Object.freeze({
   intent: ['intent.md'],
@@ -19,7 +20,7 @@ function hasStage(stage) {
   return Object.prototype.hasOwnProperty.call(STAGE_ARTIFACTS, stage);
 }
 
-function collectIssues(run) {
+function collectIssues(run, ctx = productContextFor(run.dir)) {
   const stage = run.state.stage;
   if (!hasStage(stage)) return [{ kind: 'unknown-stage' }];
   const issues = [];
@@ -29,7 +30,7 @@ function collectIssues(run) {
       issues.push({ kind: 'missing', artifact: rel });
       continue;
     }
-    const problems = validateArtifactFile(abs, rel);
+    const problems = validateArtifactFile(abs, rel, ctx);
     if (problems.length) issues.push({ kind: 'invalid', artifact: rel, problems });
   }
   if (!latestBoundaryPass(run.dir, stage)) issues.push({ kind: 'no-boundary-pass' });
@@ -61,9 +62,12 @@ function evaluateStop(run, config) {
   if (run.state.status !== 'active') return allowVerdict('not-active');
   if (HUMAN_WAIT.includes(run.state.awaiting)) return allowVerdict('awaiting');
   if (run.state.stage === 'done') return allowVerdict('done');
-  const issues = collectIssues(run);
+  const ctx = productContextFor(run.dir);
+  const issues = collectIssues(run, ctx);
   const errors = formatIssues(issues, run.state.stage);
   if (!errors.length) return { decision: 'allow', why: 'clean', issues, errors };
+  // An unreadable product.json reads as no product context: it is named in the reason but never blocks on its own (hooks fail open).
+  if (ctx.unreadable) errors.push('product.json unreadable');
   return { decision: config.strictness === 'warn' ? 'warn' : 'block', why: 'unclean', issues, errors };
 }
 

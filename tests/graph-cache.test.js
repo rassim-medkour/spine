@@ -59,3 +59,7 @@ test('an unwritable cache path is reported, never thrown', () => {
 test('cachePath sits under the artifacts dir and names the parser version', () => {
   assert.equal(cachePath('/repo', '.spine'), path.join('/repo', '.spine', 'cache', `imports-p${PARSER_VERSION}.json`));
 });
+
+test('CACHE_FORMAT stays 1 after product signals', () => {
+  assert.equal(CACHE_FORMAT, 1);
+});
