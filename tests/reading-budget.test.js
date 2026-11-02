@@ -1,4 +1,6 @@
 'use strict';
+const fs = require('node:fs');
+const path = require('node:path');
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { tmpDir } = require('./helpers/tmp');
@@ -79,4 +81,63 @@ test('a hunk cited by an open CRITICAL or HIGH finding is never moved out of rea
   const proof = checkProof({ runDir, root: runDir, tree, records: [high, high2], tc, findVerify: () => [] });
   const map = buildReadingMap({ diffFiles: parseDiff(diff()).filter((f) => f.path === 'src/core.ts'), tree, records: [high, high2], proof, tc });
   assert.deepEqual(map.groups.read_yourself.map((e) => e.ref).sort(), ['src/core.ts:1401-1500', 'src/core.ts:201-300'], 'both CRITICAL/HIGH-cited hunks stay, nothing else');
+});
+
+// Click through yourself (T-11). The snapshot was produced by the 0.3.2 code on this same input.
+const SNAPSHOT = fs.readFileSync(path.join(__dirname, 'fixtures', 'reading-map-0.3.2.md'), 'utf8');
+const META = { runId: 'x', diffSha: 'd', treeSha: 't', stale: false, tier: 'trunk', verdict: 'UNPROVEN', knobs: {}, rollback: 'n/a', relPath: '.spine/x/reading-map.md' };
+const render = (map) => `${renderReadingMap(map, META)}\n--- g3 ---\n${summarize(map, META).g3}\n`;
+const FLOWS = [
+  { name: 'Checkout', weight: 'critical', steps: ['Add an item', 'Pay with a card', 'See the receipt'] },
+  { name: 'Refund', weight: 'important', steps: ['Open an order', 'Press refund'] },
+];
+test('click-through: no product, empty product and zero flows are byte-equal to the 0.3.2 snapshot', () => {
+  assert.equal(render(build()), SNAPSHOT);
+  for (const product of [null, undefined, {}, { flows_touched: [] }]) {
+    const map = buildReadingMap({ ...mapInput(), product });
+    assert.equal(map.groups.click_through, undefined);
+    assert.equal(map.totals.click_through, undefined);
+    assert.equal(render(map), SNAPSHOT);
+  }
+});
+
+function mapInput(config = {}, records = [FINDING]) {
+  const tc = tierConfig(config);
+  const out = classifyTree([
+    input('src/core.ts', { fanIn: resolved(tc.fan_in_trunk) }),
+    input('db/migrations/0003_drop.sql', { status: 'added', parser: 'generic' }),
+  ], null, tc, () => ({ value: 0, rule: 'commits in 90 days' }));
+  const tree = { schema_version: 1, tier: out.tier, inputs: { head_sha: 'a'.repeat(40), diff_sha256: 'b'.repeat(64) }, knobs: out.knobs, files: out.files };
+  const runDir = tmpDir('spine-budget-');
+  const proof = checkProof({ runDir, root: runDir, tree, records, tc, findVerify: () => [] });
+  return { diffFiles: parseDiff(diff()), tree, records, proof, tc };
+}
+
+test('click-through: two flows add the group, 6 minutes and the G3 suffix after Read yourself', () => {
+  const map = buildReadingMap({ ...mapInput(), product: { flows_touched: FLOWS } });
+  assert.deepEqual(map.totals.click_through, { flows: 2, minutes: 6 });
+  assert.equal(map.groups.click_through.length, 2);
+  assert.deepEqual(map.groups.click_through[0], { name: 'Checkout', weight: 'critical', steps: FLOWS[0].steps, evidence: null });
+  const md = renderReadingMap(map, META);
+  assert.match(md, /## Click through yourself\n\n1\. \*\*Checkout\*\* \(critical\) · not driven\n   1\. Add an item\n   2\. Pay with a card\n   3\. See the receipt\n2\. \*\*Refund\*\* \(important\) · not driven\n   1\. Open an order\n   2\. Press refund\n/);
+  assert.ok(md.indexOf('## Click through yourself') > md.indexOf('## Read yourself'));
+  assert.ok(md.indexOf('## Click through yourself') < md.indexOf('## Skim'));
+  assert.match(summarize(map, META).g3, /\(whole diff \d+ min\) · \.spine\/x\/reading-map\.md · click through 2 flows, 6 min$/);
+});
+
+test('click-through: a live-verification record naming the flow shows its id, otherwise not driven', () => {
+  const live = { id: 'R-0042', stage: 'review', agent: 'spine:live-verify', claim: 'driven: checkout works end to end', evidence: [{ kind: 'command', ref: 'x' }], confidence: 0.9, severity: 'INFO', revision: 'rev1', payloads: [{ path: 'e.png' }] };
+  const noRevision = { ...live, id: 'R-0043', claim: 'refund done', revision: undefined, payloads: undefined };
+  const evNote = { ...live, id: 'R-0044', claim: 'ran it', evidence: [{ kind: 'doc', ref: 'e.md', note: 'flow REFUND clicked' }] };
+  const one = buildReadingMap({ ...mapInput({}, [FINDING, live, noRevision]), product: { flows_touched: FLOWS } });
+  assert.deepEqual(one.groups.click_through.map((e) => e.evidence), ['R-0042', null]);
+  const both = buildReadingMap({ ...mapInput({}, [FINDING, live, evNote]), product: { flows_touched: FLOWS } });
+  assert.deepEqual(both.groups.click_through.map((e) => e.evidence), ['R-0042', 'R-0044']);
+  assert.match(renderReadingMap(both, META), /\*\*Checkout\*\* \(critical\) · R-0042\n/);
+});
+
+test('click-through: tiers.click_through_minutes changes the minutes', () => {
+  const map = buildReadingMap({ ...mapInput({ tiers: { click_through_minutes: 5 } }), product: { flows_touched: FLOWS } });
+  assert.deepEqual(map.totals.click_through, { flows: 2, minutes: 10 });
+  assert.match(summarize(map, META).g3, /click through 2 flows, 10 min$/);
 });
