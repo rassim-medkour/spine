@@ -1,7 +1,7 @@
 <!--
 Sections depend on the change tier (spine writes it to .spine/<run>/tree.json):
 - leaf: TL;DR, What changed, How it was checked, How to test
-- branch: the leaf sections plus The problem, with an example; Decisions to check; Not verified
+- branch: the leaf sections plus What changes for the user (only when the spec has a User impact section); The problem, with an example; Decisions to check; Not verified
 - trunk: every section, with Risk and reading map first
 Delete the sections your tier does not need, but never delete "Not verified" when it has content.
 A spine run can generate this body instead: node <plugin root>/scripts/pr-body.js --run .spine/<run>
@@ -14,6 +14,10 @@ A spine run can generate this body instead: node <plugin root>/scripts/pr-body.j
 ## TL;DR
 
 <!-- at most 5 lines -->
+
+## What changes for the user
+
+<!-- branch and trunk, only when the spec has a User impact section: what the user sees differently -->
 
 ## The problem, with an example
 

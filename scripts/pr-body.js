@@ -24,6 +24,14 @@ function assumptions(specText) {
   return (next < 0 ? rest : rest.slice(0, next)).split('\n').filter((l) => /^- /.test(l)).map((l) => l.slice(2).replace(/\*\*/g, '').trim()).slice(0, 5);
 }
 
+function userImpact(specText) {
+  const m = /^## User impact[ \t]*$/m.exec(specText);
+  if (!m) return [];
+  const rest = specText.slice(m.index + m[0].length);
+  const next = rest.search(/^## /m);
+  return (next < 0 ? rest : rest.slice(0, next)).split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+}
+
 function loadData(runDir, root, tc) {
   const state = readJson(path.join(runDir, 'state.json'));
   if (!state || state.stage !== 'done') throw new Error('pr-body.js runs after G3 approval (state.json stage must be done)');
@@ -40,6 +48,7 @@ function loadData(runDir, root, tc) {
     readingMap: readJson(path.join(runDir, 'reading-map.json')),
     planText: ['review.md', 'plan.md'].map((n) => readText(path.join(runDir, n))).join('\n'),
     specAssumptions: assumptions(readText(path.join(runDir, 'spec.md'))),
+    specUserImpact: userImpact(readText(path.join(runDir, 'spec.md'))),
   };
 }
 

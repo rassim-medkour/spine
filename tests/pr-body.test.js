@@ -43,7 +43,7 @@ test('sections are chosen by change tier, reading map first for trunk', () => {
   assert.deepEqual(buildPrBody(data('leaf'), WRITTEN).sections, ['tldr', 'changed', 'checked', 'how_to_test']);
   assert.deepEqual(buildPrBody(data('branch'), WRITTEN).sections, ['tldr', 'problem', 'changed', 'decisions', 'checked', 'not_verified', 'how_to_test']);
   const trunk = buildPrBody(data('trunk'), WRITTEN);
-  assert.deepEqual(trunk.sections, SECTIONS.map((s) => s.key));
+  assert.deepEqual(trunk.sections, SECTIONS.map((s) => s.key).filter((k) => k !== 'user_impact'));
   assert.equal(trunk.sections[0], 'reading_map');
   assert.ok(trunk.ok, trunk.errors.join('; '));
   assert.match(trunk.body, /^## Risk and reading map\n\n- Is this trunk code\? yes/);
@@ -140,4 +140,45 @@ test('the PR body counts the read-if-time hunks the reading budget moved out', (
   const rm = { totals: { read_yourself: { hunks: 1, minutes: 1 }, read_if_time: { hunks: 3, minutes: 12 }, whole: { minutes: 20 } }, groups: { read_yourself: [{ ref: 'src/lib/math.ts:1-2', reasons: ['trunk'] }], read_if_time: [] } };
   const out = buildPrBody(data('trunk', { readingMap: rm }), WRITTEN);
   assert.match(out.body, /Then, if you have time: 3 more hunks, about 12 min/);
+});
+
+const IMPACT = ['- Checkout now shows the tax line before payment.', '- Empty carts show a hint instead of a blank page.'];
+
+test('What changes for the user: absent or empty User impact leaves the body byte-equal to the old output', () => {
+  for (const tier of ['leaf', 'branch', 'trunk']) {
+    const base = buildPrBody(data(tier), WRITTEN);
+    assert.ok(!base.sections.includes('user_impact'));
+    assert.ok(!base.body.includes('What changes for the user'));
+    assert.equal(buildPrBody(data(tier, { specUserImpact: [] }), WRITTEN).body, base.body);
+  }
+});
+
+test('What changes for the user: branch and trunk place it right after TL;DR, within the cap; leaf never has it', () => {
+  assert.ok(!buildPrBody(data('leaf', { specUserImpact: IMPACT }), WRITTEN).sections.includes('user_impact'));
+  for (const tier of ['branch', 'trunk']) {
+    const out = buildPrBody(data(tier, { specUserImpact: IMPACT }), WRITTEN);
+    assert.ok(out.ok, out.errors.join('; '));
+    const i = out.sections.indexOf('user_impact');
+    assert.equal(out.sections[i - 1], 'tldr');
+    assert.match(out.body, /## TL;DR\n\nAdds subtraction\.\n\n## What changes for the user\n\n- Checkout now shows the tax line/);
+    const many = Array.from({ length: 40 }, (_, k) => `- change ${k}`);
+    const big = buildPrBody(data(tier, { specUserImpact: many }), WRITTEN);
+    const cap = SECTIONS.find((s) => s.key === 'user_impact').caps[tier];
+    assert.ok(sectionBodies(big.body)['What changes for the user'].length <= cap);
+    assert.match(big.body, /\.\.\.and \d+ more/);
+  }
+});
+
+test('CLI reads ## User impact from spec.md', () => {
+  const root = tmpDir('spine-pr-ui-');
+  const runDir = path.join(root, '.spine', '20261015-pr');
+  fs.mkdirSync(runDir, { recursive: true });
+  fs.writeFileSync(path.join(runDir, 'state.json'), JSON.stringify({ stage: 'done' }));
+  fs.writeFileSync(path.join(runDir, 'review.json'), JSON.stringify({ id: 'x', upstream_id: 'none', verdict: 'PASS', providers: [], findings: [], dissent: [] }));
+  fs.writeFileSync(path.join(runDir, 'diff.patch'), DIFF);
+  fs.writeFileSync(path.join(runDir, 'pr-written.md'), WRITTEN);
+  fs.writeFileSync(path.join(runDir, 'spec.md'), '## Summary\n\nx\n\n## User impact\n\nWho: shoppers.\n- Tax line shows before payment.\n\n## Design\n\ny\n');
+  const out = JSON.parse(spawnSync(process.execPath, [path.join(ROOT, 'scripts', 'pr-body.js'), '--run', runDir], { cwd: root, encoding: 'utf8', env: cleanEnv({ SPINE_HOME: root }) }).stdout);
+  assert.equal(out.ok, true, JSON.stringify(out.errors));
+  assert.match(fs.readFileSync(path.join(runDir, 'pr-body.md'), 'utf8'), /## What changes for the user\n\nWho: shoppers\.\n- Tax line shows before payment\./);
 });
