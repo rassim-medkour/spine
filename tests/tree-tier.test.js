@@ -134,3 +134,42 @@ test('partial fan-in applies the thresholds to the known lower bound, branch as 
   assert.equal(tierOf({ fanIn: partial(1) }).tier, 'branch');
   assert.equal(tierOf({ fanIn: partial(tc.fan_in_branch) }).tier, 'branch');
 });
+
+// ---- T-3: key-flow floors ----
+const kf = (flows) => (p) => ({
+  user_facing: { value: false, rule: 'no user-facing rule' },
+  key_flow: { value: flows.length > 0, rule: flows.length ? 'key flow' : 'none', flows },
+});
+const withFlows = (over, flows, cfg) => classifyTree([file(over)], null, cfg || tc, churn0, () => null, kf(flows)).files[0];
+
+test('critical flow floors a fan-in 1 leaf to trunk with the reason', () => {
+  const f = withFlows({ fanIn: resolved(1) }, [{ name: 'Checkout', weight: 'critical' }]);
+  assert.equal(f.tier, 'trunk');
+  assert.ok(f.reasons.includes('key flow Checkout (critical)'));
+  assert.deepEqual(Object.keys(f.signals).slice(0, 9), SIGNAL_KEYS);
+  assert.deepEqual(Object.keys(f.signals).slice(9), ['user_facing', 'key_flow']);
+});
+
+test('important flow floors to branch and the gated rule does not lower it', () => {
+  const gated = { hunks: [hunk('if (isEnabled) {')], fanIn: resolved(2) };
+  assert.equal(withFlows(gated, []).tier, 'leaf');
+  const f = withFlows(gated, [{ name: 'Login', weight: 'important' }]);
+  assert.equal(f.tier, 'branch');
+  assert.ok(f.reasons.includes('key flow Login (important)'));
+});
+
+test('minor flow changes nothing; several flows use the highest weight in the reason', () => {
+  assert.equal(withFlows({ fanIn: resolved(1) }, [{ name: 'M', weight: 'minor' }]).tier, 'leaf');
+  const f = withFlows({ fanIn: resolved(1) }, [{ name: 'M', weight: 'minor' }, { name: 'C', weight: 'critical' }, { name: 'I', weight: 'important' }]);
+  assert.equal(f.tier, 'trunk');
+  assert.ok(f.reasons.includes('key flow C (critical)'));
+});
+
+test('docs file on a critical flow is not leaf; on an important flow stays leaf', () => {
+  assert.equal(withFlows({ path: 'docs/pay.md', parser: 'none' }, [{ name: 'C', weight: 'critical' }]).tier, 'trunk');
+  assert.equal(withFlows({ path: 'docs/pay.md', parser: 'none' }, [{ name: 'I', weight: 'important' }]).tier, 'leaf');
+});
+
+test('without productFn the signals have exactly the nine keys', () => {
+  assert.deepEqual(Object.keys(run([file()]).files[0].signals), SIGNAL_KEYS);
+});

@@ -56,3 +56,12 @@ test('maxTier orders leaf < branch < trunk', () => {
   assert.equal(maxTier('trunk', 'branch'), 'trunk');
   assert.equal(maxTier('leaf', 'leaf'), 'leaf');
 });
+
+test('click_through_minutes defaults to 3 and is not hashed', () => {
+  assert.equal(TIER_DEFAULTS.click_through_minutes, 3);
+  assert.equal(tierConfig({}).click_through_minutes, 3);
+  assert.equal(tierConfig({ tiers: { click_through_minutes: 5 } }).click_through_minutes, 5);
+  assert.equal(tierConfig({ tiers: { click_through_minutes: 0 } }).click_through_minutes, 3);
+  assert.equal(tierConfigHash(tierConfig({ tiers: { click_through_minutes: 9 } })), tierConfigHash(tierConfig({})));
+  assert.equal(tierConfigHash(tierConfig({ product_context_max_lines: 20 })), tierConfigHash(tierConfig({})));
+});

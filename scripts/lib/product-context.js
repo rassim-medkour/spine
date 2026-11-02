@@ -4,6 +4,7 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const { spawnSync } = require('node:child_process');
 const { globToRegExp } = require('../classify');
+const { TEST_FILE } = require('./graph');
 
 const HEADINGS = Object.freeze(['## Users', '## Goals', '## Glossary', '## Invariants', '## Key flows', '## UX principles']);
 const WEIGHTS = Object.freeze(['critical', 'important', 'minor']);
@@ -174,23 +175,70 @@ function compileFlow(flow) {
   return { res, bad };
 }
 
+// Compiles every flow glob once. byFile maps a POSIX path to every flow it matches, in flow order;
+// issues lists globs that do not compile (never thrown). compiled is aligned with flows.
+function matchFlows(flows, files) {
+  const compiled = flows.map(compileFlow);
+  const issues = compiled.flatMap((c) => c.bad);
+  const byFile = new Map();
+  for (const raw of files) {
+    const f = toPosix(raw);
+    flows.forEach((flow, i) => {
+      if (!compiled[i].res.some((re) => re.test(f))) return;
+      byFile.set(f, [...(byFile.get(f) || []), { name: flow.name, weight: flow.weight }]);
+    });
+  }
+  return { byFile, issues, compiled: compiled.map((c) => c.res) };
+}
+
 // A flow is an issue when a glob does not compile or when no tracked repo file (or changed file) matches any glob.
 // A flow the change simply does not touch is not an issue.
 function touchedFlows(flows, changedFiles, repoFiles) {
   const files = changedFiles.map(toPosix);
+  const { byFile, issues, compiled } = matchFlows(flows, files);
   const universe = flows.length ? [...new Set([...repoFiles().map(toPosix), ...files])] : [];
   const touched = [];
-  const flowIssues = [];
-  for (const flow of flows) {
-    const { res, bad } = compileFlow(flow);
-    flowIssues.push(...bad);
-    const hit = files.filter((f) => res.some((re) => re.test(f)));
+  const flowIssues = [...issues];
+  flows.forEach((flow, i) => {
+    const hit = files.filter((f) => (byFile.get(f) || []).some((m) => m.name === flow.name));
     if (hit.length) touched.push({ name: flow.name, weight: flow.weight, files: hit });
-    else if (!universe.some((f) => res.some((re) => re.test(f)))) {
+    else if (!universe.some((f) => compiled[i].some((re) => re.test(f)))) {
       flowIssues.push({ flow: flow.name, glob: flow.paths.join(', '), message: 'no matching files', line: flow.line });
     }
-  }
-  return { touched, flowIssues };
+  });
+  return { touched, flowIssues, byFile };
+}
+
+const USER_FACING_PATH_RULES = Object.freeze([
+  [/\.(jsx|tsx|vue|svelte|html|hbs|ejs|njk)$/i, 'ui template'],
+  [/(^|\/)(locales?|i18n|messages|translations)\//i, 'i18n or copy'],
+  [/(^|\/)(emails?|notifications?)\/.*\.(html|txt|mjml|hbs)$/i, 'email or notification template'],
+]);
+const USER_FACING_LINE_RULES = Object.freeze([
+  [/\bres\.(json|send|render)\(/, 'response shape writer'],
+  [/\b(Serializer|Dto|toJSON)\b/, 'serializer or DTO'],
+]);
+
+// Test files are never user-facing. Path rules first, then added-line rules.
+function userFacing(file, addedLines = []) {
+  const p = toPosix(file);
+  if (TEST_FILE.test(p)) return { value: false, rule: 'test file' };
+  const byPath = USER_FACING_PATH_RULES.find(([re]) => re.test(p));
+  if (byPath) return { value: true, rule: byPath[1] };
+  const byLine = USER_FACING_LINE_RULES.find(([re]) => addedLines.some((l) => re.test(String(l))));
+  return byLine ? { value: true, rule: byLine[1] } : { value: false, rule: 'no user-facing rule' };
+}
+
+// null unless product context loaded (ok or trimmed): absent and malformed leave tree.json as 0.3.2 wrote it.
+function productSignals(file, addedLines, loaded, matched) {
+  if (!loaded || (loaded.state !== 'ok' && loaded.state !== 'trimmed')) return null;
+  const flows = (matched && matched.get(toPosix(file))) || [];
+  return {
+    user_facing: userFacing(file, addedLines),
+    key_flow: flows.length
+      ? { value: true, rule: 'matches key flow ' + flows.map((f) => f.name + ' (' + f.weight + ')').join(', '), flows }
+      : { value: false, rule: 'matches no key flow', flows: [] },
+  };
 }
 
 // Chunks are taken in document order up to max lines; every chunk cut wholly or in part is named in leftOut.
@@ -222,7 +270,7 @@ function budgetText(lines, parsed, touchedNames, max) {
 
 function result(extra) {
   return {
-    state: 'absent', sha256: null, lines: 0, loadedLines: 0, text: '', flows: [], flowsTouched: [],
+    state: 'absent', sha256: null, lines: 0, loadedLines: 0, text: '', flows: [], matched: new Map(), flowsTouched: [],
     flowIssues: [], leftOut: [], issue: null, decisionsTail: [], ...extra,
   };
 }
@@ -267,9 +315,9 @@ function loadProduct(root, config = {}, changedFiles = [], io = defaultIo) {
   const parsed = parseProduct(decoded.text);
   if (!parsed.ok) return result({ state: 'malformed', sha256, lines: lines.length, issue: parsed.issues[0] });
   const listFiles = () => (io.listFiles ? io.listFiles(root) : []);
-  const { touched, flowIssues } = touchedFlows(parsed.flows, changedFiles || [], listFiles);
+  const { touched, flowIssues, byFile } = touchedFlows(parsed.flows, changedFiles || [], listFiles);
   const dropped = parsed.issues.filter((i) => i.flow).map((i) => ({ flow: i.flow, glob: null, message: i.message, line: i.line }));
-  const base = { sha256, lines: lines.length, flows: parsed.flows, flowsTouched: touched, flowIssues: [...dropped, ...flowIssues], decisionsTail: readDecisionsTail() };
+  const base = { sha256, lines: lines.length, flows: parsed.flows, matched: byFile, flowsTouched: touched, flowIssues: [...dropped, ...flowIssues], decisionsTail: readDecisionsTail() };
   if (lines.length <= maxLinesFrom(config)) {
     return result({ ...base, state: 'ok', text: lines.join('\n'), loadedLines: lines.length });
   }
@@ -277,4 +325,4 @@ function loadProduct(root, config = {}, changedFiles = [], io = defaultIo) {
   return result({ ...base, state: 'trimmed', text: trimmed.text, loadedLines: splitLines(trimmed.text).length, leftOut: trimmed.leftOut });
 }
 
-module.exports = { HEADINGS, WEIGHTS, MAX_BYTES, DEFAULT_MAX_LINES, DECISIONS_TAIL, parseProduct, loadProduct, readDecisionsTail, decodeProduct, defaultIo };
+module.exports = { HEADINGS, WEIGHTS, MAX_BYTES, DEFAULT_MAX_LINES, DECISIONS_TAIL, parseProduct, loadProduct, matchFlows, userFacing, productSignals, USER_FACING_PATH_RULES, USER_FACING_LINE_RULES, readDecisionsTail, decodeProduct, defaultIo };

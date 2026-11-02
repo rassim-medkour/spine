@@ -2,6 +2,7 @@
 const path = require('node:path');
 const { TEST_FILE } = require('./graph');
 
+const PRODUCT_SIGNAL_KEYS = Object.freeze(['user_facing', 'key_flow']);
 const SIGNAL_KEYS = Object.freeze(['fan_in', 'entry_point', 'shared_state', 'public_interface', 'one_way_door', 'security_path', 'churn', 'tested', 'gated']);
 // Same pattern as SECURITY_RE in scripts/classify.js (pinned by tests/tree-signals.test.js).
 const SECURITY_RE = /(auth|login|password|token|secret|upload|payment|billing|crypto)/i;
@@ -124,10 +125,25 @@ const FORCEABLE = Object.freeze([
   ['security_path', 'security path'],
 ]);
 
+const FLOW_RANK = Object.freeze({ critical: 2, important: 1 });
+
+// Highest-weight flow on the file: { name, weight, tier } for critical (trunk) or important (branch), else null.
+function keyFlowFloorOf(signals) {
+  const flows = (signals.key_flow && signals.key_flow.flows) || [];
+  const top = flows.filter((f) => FLOW_RANK[f.weight]).sort((a, b) => FLOW_RANK[b.weight] - FLOW_RANK[a.weight])[0];
+  return top ? { name: top.name, weight: top.weight, tier: top.weight === 'critical' ? 'trunk' : 'branch' } : null;
+}
+
+function keyFlowFloor(signals) {
+  const f = keyFlowFloorOf(signals);
+  return f ? f.tier : null;
+}
+
 function tierFor(entry, tc) {
   const { path: file, signals } = entry;
   const cp = tc.critical_paths.find((g) => globToRegExp(g).test(file)) || null;
-  if (!cp && DOCS_RE.test(file)) return { tier: 'leaf', reasons: ['docs only'] };
+  const floor = keyFlowFloorOf(signals);
+  if (!cp && !(floor && floor.tier === 'trunk') && DOCS_RE.test(file)) return { tier: 'leaf', reasons: ['docs only'] };
   const forced = new Set(tc.trunk_signals);
   let tier = 'leaf';
   const reasons = [];
@@ -148,7 +164,8 @@ function tierFor(entry, tc) {
   const source = entry.parser !== 'none' && !TEST_FILE.test(file) && entry.status !== 'deleted';
   if (tc.untested_is_branch && source && signals.tested.value === false) raise('branch', 'untested: no test file imports it');
   const lowerable = tier === 'branch' && signals.gated.value === true && fi.resolved && !cp
-    && signals.one_way_door.value !== true && signals.security_path.value !== true;
+    && signals.one_way_door.value !== true && signals.security_path.value !== true && !floor;
+  if (floor) raise(floor.tier, `key flow ${floor.name} (${floor.weight})`);
   if (lowerable) return { tier: 'leaf', reasons: [...reasons, 'gated: lowered branch to leaf'] };
   return { tier, reasons: reasons.length ? reasons : [`leaf: fan-in ${fi.value}, no trunk or branch signal`] };
 }
@@ -185,16 +202,18 @@ function computeKnobs(files, tc) {
 const byPath = (a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0);
 const NO_CHURN = () => ({ value: null, rule: 'churn unknown: not computed' });
 
-function classifyTree(files, graph, tc, churnFn = NO_CHURN, coverageFn = () => null) {
+function classifyTree(files, graph, tc, churnFn = NO_CHURN, coverageFn = () => null, productFn = null) {
   const results = [...files].sort(byPath).map((f) => {
     const covered = coverageFn(f.path);
     const tested = covered === true || covered === false ? { value: covered, rule: 'coverage data' } : f.tested || graph.tested(f.path);
     const importers = f.importers || graph.importersOf(f.path);
-    const signals = detectSignals({
+    const base = detectSignals({
       path: f.path, parser: f.parser, text: f.text, hunks: f.hunks || [],
       fanIn: f.fanIn || graph.fanIn(f.path), tested, churn: churnFn(f.path),
       declaredEntry: Boolean(f.declaredEntry), flagNames: tc.flag_names, status: f.status, importers,
     });
+    const extra = productFn ? productFn(f.path, addedTexts(f.hunks || [])) : null;
+    const signals = extra ? { ...base, ...extra } : base;
     const { tier, reasons } = tierFor({ path: f.path, status: f.status, parser: f.parser, signals }, tc);
     const downstream = f.downstream !== undefined ? f.downstream : graph.downstream(f.path, tc.downstream_depth);
     return { path: f.path, status: f.status, tier, reasons, parser: f.parser, signals, importers_top: importers.slice(0, 3), downstream };
@@ -202,4 +221,4 @@ function classifyTree(files, graph, tc, churnFn = NO_CHURN, coverageFn = () => n
   return { tier: results.reduce((t, f) => maxTier(t, f.tier), 'leaf'), knobs: computeKnobs(results, tc), files: results };
 }
 
-module.exports = { SIGNAL_KEYS, KNOB_KEYS, SECURITY_RE, DOCS_RE, MIGRATION_RE, detectGating, detectSignals, classifyTree, computeKnobs };
+module.exports = { SIGNAL_KEYS, PRODUCT_SIGNAL_KEYS, keyFlowFloor, KNOB_KEYS, SECURITY_RE, DOCS_RE, MIGRATION_RE, detectGating, detectSignals, classifyTree, computeKnobs };
