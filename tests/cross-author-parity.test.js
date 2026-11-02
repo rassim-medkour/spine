@@ -77,3 +77,92 @@ for (const [name, [findings, opts]] of Object.entries(GATE_CASES)) {
     assert.equal(ca.daGateOpen([...records, ...verifications], opts.devilsAdvocate).open, daCalled);
   });
 }
+
+// --- T-9: ux_finder in the review workflow (REQ-14, REQ-15, REQ-23, REQ-31, REQ-36) ---
+const PRODUCT_TEXT = fs.readFileSync(path.join(__dirname, 'fixtures', 'product', 'product.md'), 'utf8');
+const UX_CITED = { claim: 'order total can go negative', severity: 'HIGH', confidence: 0.9, evidence: [{ kind: 'file', ref: 'src/cart.tsx:9' }, { kind: 'doc', ref: 'product.md:20', note: '§Invariants' }] };
+const UX_UNCITED = { claim: 'the form label was removed', severity: 'HIGH', confidence: 0.9, evidence: [{ kind: 'file', ref: 'src/form.tsx:4' }] };
+
+async function runUx(extraArgs, uxFindings = [UX_CITED, UX_UNCITED]) {
+  const calls = [];
+  const agent = async (prompt, opts) => {
+    calls.push({ label: opts.label, agentType: opts.agentType, prompt });
+    if (opts.label === 'ux-find') return { findings: uxFindings };
+    if (opts.label.startsWith('find:')) return { findings: [] };
+    if (opts.label.startsWith('verify:')) return { refuted: false, reason: 'stub', evidence: [] };
+    return null;
+  };
+  const result = await workflow(agent, parallel, pipeline, noop, noop, { diff: 'x', changedFiles: [], providers: PROVIDERS, devilsAdvocate: false, runId: 'r', stage: 'review', ...extraArgs });
+  return { result, calls };
+}
+
+test('ux-find is dispatched only with uxFinder true and productText (REQ-14)', async () => {
+  for (const extra of [{}, { uxFinder: true }, { productText: PRODUCT_TEXT }, { uxFinder: false, productText: PRODUCT_TEXT }]) {
+    const { calls } = await runUx(extra);
+    assert.equal(calls.some((c) => c.label === 'ux-find'), false, JSON.stringify(Object.keys(extra)));
+  }
+  const { calls } = await runUx({ uxFinder: true, productText: PRODUCT_TEXT });
+  const ux = calls.filter((c) => c.label === 'ux-find');
+  assert.equal(ux.length, 1);
+  assert.equal(ux[0].agentType, 'spine:ux-finder');
+  assert.ok(ux[0].prompt.includes('PRODUCT CONTEXT'));
+});
+
+test('an uncited ux-find HIGH is capped and never verified; a cited one is verified by a non-spine author (REQ-15, REQ-31)', async () => {
+  const { result, calls } = await runUx({ uxFinder: true, productText: PRODUCT_TEXT });
+  const verifies = calls.filter((c) => c.label.startsWith('verify:'));
+  assert.equal(verifies.length, 1);
+  assert.ok(verifies[0].prompt.includes('order total can go negative'));
+  assert.notEqual(verifies[0].agentType, 'spine:ux-finder');
+  const ux = result.records.filter((r) => r.agent === 'spine:ux-finder');
+  const cited = ux.find((r) => r.claim.includes('order total'));
+  const capped = ux.find((r) => r.claim.includes('form label'));
+  assert.equal(cited.severity, 'HIGH');
+  assert.equal(cited.verified, true);
+  assert.equal(capped.severity, 'MEDIUM');
+  assert.equal(capped.confidence, 0.5);
+  assert.equal(capped.verified, false);
+  assert.match(capped.resolution.text, /^assumption to confirm: /);
+});
+
+test('the cap runs before the first verifier call (REQ-31)', async () => {
+  const order = [];
+  const agent = async (prompt, opts) => {
+    order.push(opts.label);
+    if (opts.label === 'ux-find') return { findings: [UX_UNCITED] };
+    if (opts.label.startsWith('find:')) return { findings: [] };
+    return null;
+  };
+  const { result } = { result: await workflow(agent, parallel, pipeline, noop, noop, { diff: 'x', changedFiles: [], providers: PROVIDERS, runId: 'r', stage: 'review', uxFinder: true, productText: PRODUCT_TEXT }) };
+  assert.equal(order.some((l) => l.startsWith('verify:')), false);
+  assert.equal(result.records[0].severity, 'MEDIUM');
+});
+
+test('without uxFinder the record list equals the 0.3.2 run on the same stubs (AC-12)', async () => {
+  const a = await runUx({}, []);
+  const b = await runUx({ productText: PRODUCT_TEXT }, []);
+  assert.deepEqual(a.result.records, b.result.records);
+  assert.deepEqual(a.calls.map((c) => c.label), b.calls.map((c) => c.label));
+});
+
+test('the workflow copy of capProductRecord equals scripts/lib/cap-record.js on the shared fixture (REQ-23)', async () => {
+  const { capProductRecord } = require('../scripts/lib/cap-record');
+  const { parseProduct } = require('../scripts/lib/product-context');
+  const repoDocs = ['README.md', 'docs/x.md'];
+  const ctx = { productSections: parseProduct(PRODUCT_TEXT).sections, repoHas: (p) => repoDocs.includes(p) };
+  const ev = (kind, ref, note) => [{ kind, ref, ...(note ? { note } : {}) }];
+  const inputs = [
+    ev('file', 'a.js:1'), ev('doc', 'README.md'), ev('doc', 'docs/x.md:4'), ev('doc', 'missing.md'), ev('doc', '#12'), ev('doc', 'o/r#3'),
+    ev('doc', 'https://www.w3.org/WAI/WCAG22/'), ev('doc', 'src/a.js'), ev('doc', 'product.md:20', '§Invariants'), ev('doc', 'product.md:18', '§Invariants'),
+    ev('doc', 'product.md:19', '§Invariants'), ev('doc', 'product.md:20', '§Goals'), ev('doc', 'product.md:999', '§Invariants'), ev('doc', 'product.md:20'),
+  ];
+  const mk = (evidence, severity = 'HIGH') => ({ claim: 'c', severity, confidence: 0.9, evidence });
+  const all = inputs.map((e) => mk(e)).concat([mk(ev('file', 'a.js:1'), 'LOW')]);
+  const { result } = await runUx({ uxFinder: true, productText: PRODUCT_TEXT, repoDocs }, all);
+  const got = result.records.filter((r) => r.agent === 'spine:ux-finder');
+  const want = all.map((r) => capProductRecord({ ...r, agent: 'spine:ux-finder' }, ctx));
+  const key = (r) => [r.severity, r.confidence, r.resolution || null];
+  assert.equal(got.length, want.length);
+  const sortK = (rs) => rs.map((r) => JSON.stringify(key(r))).sort();
+  assert.deepEqual(sortK(got), sortK(want));
+});

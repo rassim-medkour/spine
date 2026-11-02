@@ -27,9 +27,9 @@
     "tests/validate-artifact-hook.test.js": "d42ccfeca377f6130ad8a9fd99f186071cb145a186120f9507dbc0f27764853f",
     "tests/validate.test.js": "0818ea202e27be78dc4960287daad32dac338d34d4584835c058aa4be4b17d4c",
     "tests/workflows-smoke.test.js": "3d232b22999b3faddd4c40b5efd0c13f03ea926c395e4237ab49ec5b03224b62",
-    "tests/workflows.test.js": "5f0568dcefd837145362917e2c0c23bc7aec83b3bc53fcb2898f64f8ca92912c",
+    "tests/workflows.test.js": "a19e43ee557fe0e218a8f8d516e11a86510567846bff4c291f2a14a2a0b55e25",
     "workflows/implement.workflow.js": "3cb5596a66e8ee4b22504441fc401ae97e94dedec5876efd2924c658d38f8ce0",
-    "workflows/review.workflow.js": "57590afee7a9a40cf890279bebfd77102b3cf0319db4ff114cf238b927d7a4c3",
+    "workflows/review.workflow.js": "3873ea3e46e357a42ffa666625a1570f23e272ba352c9317ed54a9bc92c390c3",
     "workflows/spec.workflow.js": "f9d4553b704e9e7aaaeb6fabff29967d3c17a3c651599ccb06ae766fd34dc07d"
   }
 }
