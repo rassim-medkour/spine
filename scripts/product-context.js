@@ -5,7 +5,8 @@
 // A present but unparsable product.json is a defect: no record is written and the call reports ok false.
 const fs = require('node:fs');
 const path = require('node:path');
-const { loadProduct } = require('./lib/product-context');
+const { loadProduct, appendDecision } = require('./lib/product-context');
+const { PRODUCT_AGENTS } = require('./lib/cap-record');
 const { writeRecords } = require('./lib/record-writer');
 const { loadConfig, readJson } = require('./lib/state');
 
@@ -16,15 +17,23 @@ const productJsonPath = (runDir) => path.join(runDir, 'product.json');
 const writeJson = (file, obj) => fs.writeFileSync(file, JSON.stringify(obj, null, 2) + '\n');
 
 function parseArgs(argv) {
-  const args = { run: null, files: [] };
+  const args = { run: null, files: [], decide: false, record: null, answer: null };
   for (let i = 0; i < argv.length; i += 2) {
+    if (argv[i] === '--decide') {
+      args.decide = true;
+      i -= 1;
+      continue;
+    }
     const value = argv[i + 1];
     if (value === undefined) throw new Error(`missing value for ${argv[i]}`);
     if (argv[i] === '--run') args.run = value;
     else if (argv[i] === '--files') args.files = value.split(',').map((s) => s.trim()).filter(Boolean);
+    else if (argv[i] === '--record') args.record = value;
+    else if (argv[i] === '--answer') args.answer = value;
     else throw new Error(`unknown flag ${argv[i]}`);
   }
   if (!args.run) throw new Error('--run <run dir> is required');
+  if (args.decide && (!args.record || args.answer === null)) throw new Error('--decide needs --record <R-id> and --answer <text>');
   return args;
 }
 
@@ -70,12 +79,41 @@ function mergeDiagnostics(runDir, product) {
   writeJson(file, { ...current, product });
 }
 
+// The repo root the run was started from: the run dir sits at <root>/<artifacts_dir>/<run id>, whatever the cwd or a review worktree.
+function repoRootOf(runDir, artifactsDir) {
+  const depth = String(artifactsDir).split(/[\/]/).filter(Boolean).length;
+  return path.resolve(runDir, ...Array(depth + 1).fill('..'));
+}
+
+const todayUtc = () => new Date().toISOString().slice(0, 10);
+
+function decide(args, runDir, state, config) {
+  const record = readJson(path.join(runDir, 'records', `${args.record}.json`));
+  if (!record) return { ok: false, error: `record ${args.record} not found` };
+  if (!PRODUCT_AGENTS.includes(record.agent)) return { ok: false, error: 'record agent is not a product role' };
+  const prevPath = productJsonPath(runDir);
+  const prevFile = readJson(prevPath);
+  if (!prevFile && fs.existsSync(prevPath)) return { ok: false, error: 'product.json unreadable' };
+  const prev = { ...emptyState(), ...(prevFile || {}) };
+  const file = path.join(repoRootOf(runDir, config.artifacts_dir), config.artifacts_dir, 'decisions.md');
+  const question = record.resolution && record.resolution.text ? record.resolution.text : record.claim;
+  const out = appendDecision(file, { runId: state.id || path.basename(runDir), recordId: args.record, date: todayUtc(), question, answer: args.answer });
+  if (!out.ok) {
+    const stage = STAGES.has(state.stage) ? state.stage : 'spec';
+    writeRecords(runDir, [infoRecord(stage, 'MEDIUM', `decision not written: ${args.record} (${out.error})`, [{ kind: 'doc', ref: `${config.artifacts_dir}/decisions.md`, note: out.error }])], {});
+    return { ok: false, written: false, error: out.error, record: args.record };
+  }
+  if (out.written) writeJson(prevPath, { ...prev, decisions: [...prev.decisions, { record: args.record, line: out.line }] });
+  return { ok: true, written: out.written, line: out.line, record: args.record, file: path.relative(repoRootOf(runDir, config.artifacts_dir), file).split(path.sep).join('/') };
+}
+
 function main(argv, root = process.cwd()) {
   const args = parseArgs(argv);
   const runDir = path.resolve(root, args.run);
   const state = readJson(path.join(runDir, 'state.json'));
   if (!state) throw new Error('run dir has no readable state.json');
   const config = loadConfig(root);
+  if (args.decide) return decide(args, runDir, state, config);
   const rel = `${config.artifacts_dir}/product.md`;
   const stage = STAGES.has(state.stage) ? state.stage : 'spec';
   const prevPath = productJsonPath(runDir);

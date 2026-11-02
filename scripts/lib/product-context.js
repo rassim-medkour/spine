@@ -277,9 +277,77 @@ function result(extra) {
 
 const malformed = (message, extra = {}) => result({ state: 'malformed', issue: { line: 0, message }, ...extra });
 
-// Stub until the decisions log lands: no tail yet.
-function readDecisionsTail() {
-  return [];
+const DECISIONS_HEADER = '# Decisions log (append-only; one line per human answer, written by spine at gates)';
+const DECISION_LINE_RE = /^- (\d{4}-\d{2}-\d{2}) · (\S+) · (R-\d{4,}) · (.*) · (.*)$/;
+const QUESTION_MAX = 120;
+const ANSWER_MAX = 200;
+const RETRY_CODES = new Set(['EPERM', 'EBUSY']);
+
+const cutPoints = (text, max) => [...text].slice(0, max).join('');
+// One line, no leading '#' (a decisions line must never read as a heading).
+const flatten = (text) => String(text == null ? '' : text).replace(/\s*[\r\n]+\s*/g, ' ').trim().replace(/^#/, '＃');
+
+function formatDecisionLine({ date, runId, recordId, question, answer }) {
+  const q = cutPoints(flatten(question), QUESTION_MAX);
+  const full = flatten(answer);
+  const a = [...full].length > ANSWER_MAX ? `${cutPoints(full, ANSWER_MAX)} (cut, full text in ${recordId})` : full;
+  return `- ${date} · ${runId} · ${recordId} · ${q} · ${a}`;
+}
+
+const defaultDecisionsIo = {
+  read: (file) => {
+    try {
+      return fs.readFileSync(file, 'utf8');
+    } catch (e) {
+      if (e && e.code === 'ENOENT') return null;
+      throw e;
+    }
+  },
+  write: (file, text) => fs.writeFileSync(file, text),
+  rename: (from, to) => fs.renameSync(from, to),
+  mkdir: (dir) => fs.mkdirSync(dir, { recursive: true }),
+  unlink: (file) => fs.unlinkSync(file),
+};
+
+const alreadyLogged = (text, runId, recordId) => text.split(/\r?\n/).some((l) => {
+  const m = DECISION_LINE_RE.exec(l);
+  return m && m[2] === runId && m[3] === recordId;
+});
+
+// Rereads right before writing; temp file + rename in the same directory; one retry on EPERM or EBUSY.
+function appendDecision(file, entry, io = defaultDecisionsIo) {
+  const line = formatDecisionLine(entry);
+  let tmp = null;
+  try {
+    const current = io.read(file);
+    if (current !== null && alreadyLogged(current, entry.runId, entry.recordId)) return { ok: true, written: false, line: null, error: null };
+    const eol = current !== null && current.includes('\r\n') ? '\r\n' : '\n';
+    const head = current === null ? DECISIONS_HEADER + eol : current === '' || current.endsWith('\n') ? current : current + eol;
+    io.mkdir(path.dirname(file));
+    tmp = `${file}.${process.pid}.tmp`;
+    io.write(tmp, head + line + eol);
+    try {
+      io.rename(tmp, file);
+    } catch (e) {
+      if (!RETRY_CODES.has(e && e.code)) throw e;
+      io.rename(tmp, file);
+    }
+    return { ok: true, written: true, line, error: null };
+  } catch (e) {
+    if (tmp) {
+      try { io.unlink(tmp); } catch { /* best effort */ }
+    }
+    return { ok: false, written: false, line: null, error: (e && e.code) || 'write failed' };
+  }
+}
+
+function readDecisionsTail(file, n = DECISIONS_TAIL) {
+  if (!file) return [];
+  try {
+    return fs.readFileSync(file, 'utf8').split(/\r?\n/).filter((l) => DECISION_LINE_RE.test(l)).slice(-n);
+  } catch {
+    return [];
+  }
 }
 
 function maxLinesFrom(config) {
@@ -317,12 +385,13 @@ function loadProduct(root, config = {}, changedFiles = [], io = defaultIo) {
   const listFiles = () => (io.listFiles ? io.listFiles(root) : []);
   const { touched, flowIssues, byFile } = touchedFlows(parsed.flows, changedFiles || [], listFiles);
   const dropped = parsed.issues.filter((i) => i.flow).map((i) => ({ flow: i.flow, glob: null, message: i.message, line: i.line }));
-  const base = { sha256, lines: lines.length, flows: parsed.flows, matched: byFile, flowsTouched: touched, flowIssues: [...dropped, ...flowIssues], decisionsTail: readDecisionsTail() };
+  const decisionsTail = readDecisionsTail(path.join(root, dir, 'decisions.md'));
+  const base = { sha256, lines: lines.length, flows: parsed.flows, matched: byFile, flowsTouched: touched, flowIssues: [...dropped, ...flowIssues], decisionsTail };
   if (lines.length <= maxLinesFrom(config)) {
-    return result({ ...base, state: 'ok', text: lines.join('\n'), loadedLines: lines.length });
+    return result({ ...base, state: 'ok', text: lines.join('\n'), loadedLines: lines.length + decisionsTail.length });
   }
   const trimmed = budgetText(lines, parsed, new Set(touched.map((t) => t.name)), maxLinesFrom(config));
-  return result({ ...base, state: 'trimmed', text: trimmed.text, loadedLines: splitLines(trimmed.text).length, leftOut: trimmed.leftOut });
+  return result({ ...base, state: 'trimmed', text: trimmed.text, loadedLines: splitLines(trimmed.text).length + decisionsTail.length, leftOut: trimmed.leftOut });
 }
 
-module.exports = { HEADINGS, WEIGHTS, MAX_BYTES, DEFAULT_MAX_LINES, DECISIONS_TAIL, parseProduct, loadProduct, matchFlows, userFacing, productSignals, USER_FACING_PATH_RULES, USER_FACING_LINE_RULES, readDecisionsTail, decodeProduct, defaultIo };
+module.exports = { HEADINGS, WEIGHTS, MAX_BYTES, DEFAULT_MAX_LINES, DECISIONS_TAIL, parseProduct, loadProduct, matchFlows, userFacing, productSignals, USER_FACING_PATH_RULES, USER_FACING_LINE_RULES, readDecisionsTail, decodeProduct, defaultIo, DECISIONS_HEADER, DECISION_LINE_RE, formatDecisionLine, appendDecision, defaultDecisionsIo };
