@@ -164,3 +164,12 @@ test('the write-record flag literals equal ROLES and SOURCES', () => {
 test('RUN_ID fixture is a valid run id', () => {
   assert.match(RUN_ID, /^\d{8}-[a-z0-9-]+$/);
 });
+
+test('--model-role ux_finder and product_lens stamp the planned block (REQ-18)', (t) => {
+  const r = planned(t);
+  for (const [i, role] of ['ux_finder', 'product_lens'].entries()) {
+    const res = wr(r, rec(), ['--model-role', role]);
+    assert.equal(res.status, 0, res.stderr);
+    assert.deepEqual(stored(r, `R-000${i + 1}`).model, { role, tier: 'trunk', tier_source: 'size', class: 'top', requested: 'opus', source: 'requested' });
+  }
+});

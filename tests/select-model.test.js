@@ -84,7 +84,7 @@ test('balanced trunk plan for claude-code', (t) => {
   assert.equal(out.ok, true);
   assert.equal(out.host, 'claude-code');
   assert.deepEqual(Object.fromEntries(mp.ROLES.map((x) => [x, out.roles[x].model])), {
-    implementer: 'sonnet', finder: 'opus', verifier: 'opus', devils_advocate: 'opus', spec_lens: 'opus', synthesis: 'sonnet', boundary_checker: 'sonnet',
+    implementer: 'sonnet', finder: 'opus', verifier: 'opus', devils_advocate: 'opus', spec_lens: 'opus', synthesis: 'sonnet', boundary_checker: 'sonnet', product_lens: 'opus', ux_finder: 'opus',
   });
   assert.ok(mp.ROLES.every((x) => out.roles[x].source === 'requested'));
   assert.equal(out.workflow_args.roles.finder.model, 'opus');

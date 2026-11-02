@@ -4,6 +4,14 @@
 
 Cursor support is still experimental and the live Cursor smoke test is pending.
 
+### Added
+
+- [both] Two new routed roles, `product_lens` and `ux_finder`, with dispatch labels `product-lens` and `ux-find`. `--model-role` accepts both.
+
+### Changed
+
+- [both] Model routing: `product_lens` and `ux_finder` join the Balanced table (mid, mid, top). The policy hash changes once because it covers every role; a `model_policy` from 0.3.x that omits them still validates and gets these defaults, and recorded `models.json` plans from 0.3.x still read.
+
 ### Fixed
 
 - [claude-code] The implement workflow now runs tickets one at a time when `parallel` is false. Before, every ticket's implementer started at once in the same checkout, because `pipeline()` has no barrier between items; `parallel: true` still overlaps tickets in isolated worktrees.

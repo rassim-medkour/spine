@@ -11,7 +11,7 @@ const FLAG_RULES = {
   '--verified': /^(true|false)$/,
   '--verifier-note': /^[^\n]{1,200}$/,
   '--host': /^(cursor|claude-code)$/,
-  '--model-role': /^(implementer|finder|verifier|devils_advocate|spec_lens|synthesis|boundary_checker)$/,
+  '--model-role': /^(implementer|finder|verifier|devils_advocate|spec_lens|synthesis|boundary_checker|product_lens|ux_finder)$/,
   '--model-source': /^(requested|inherit|session-fallback|unsupported-dispatch|floor-raised|fallback-error)$/,
   '--from-text': /./,
   '--file': /./,
