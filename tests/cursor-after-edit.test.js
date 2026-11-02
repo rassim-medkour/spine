@@ -67,3 +67,20 @@ test('afterFileEdit file_path wins over tool_input.file_path', () => {
   const res = runCursor('after-edit.js', payload, { SPINE_HOME: r.home });
   assert.match(JSON.parse(res.stdout).additional_context, /intent\.md has/);
 });
+
+test('T-15a: conditional headings apply on the Cursor hook the same way as on Claude', () => {
+  const J = (state) => JSON.stringify({ state });
+  const headings = (raw) => {
+    const r = cursorRepo({ ...BASE, stage: 'intent', spine_version: '0.4.0' });
+    const file = path.join(r.dir, 'intent.md');
+    fs.writeFileSync(file, '---\nid: x\n---\n');
+    if (raw) fs.writeFileSync(path.join(r.dir, 'product.json'), raw);
+    const out = edit(r, file).stdout;
+    return out ? JSON.parse(out).additional_context : '';
+  };
+  assert.match(headings(J('ok')), /missing heading "## Who this is for"/);
+  assert.match(headings(J('trimmed')), /missing heading "## Who this is for"/);
+  assert.doesNotMatch(headings(J('absent')), /Who this is for/);
+  assert.doesNotMatch(headings(null), /Who this is for/);
+  assert.match(headings('{broken'), /product\.json unreadable/);
+});

@@ -80,3 +80,11 @@ test('both spine skills dispatch product-lens with --model-role product_lens and
     assert.match(t, /spine:ux-finder/, rel);
   }
 });
+
+test('both spine skills write the ux_finder skip INFO only when product context loaded (T-15a)', () => {
+  for (const rel of SPINE_SKILLS) {
+    const t = readSkill(rel).replace(/\s+/g, ' ');
+    assert.ok(t.includes('only when `<run>/product.json` `state` is `ok` or `trimmed`, write one `INFO`'), `${rel} skip condition`);
+    assert.ok(t.includes('write no skip record'), `${rel} absent case`);
+  }
+});

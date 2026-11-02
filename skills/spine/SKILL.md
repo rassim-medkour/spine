@@ -340,9 +340,11 @@ downstream artifact and re-run. The Stop hook enforces this.
    `key_flow.value` true, run the UX finder: size S, dispatch
    `agents/ux-finder.md` inline with `<run>/product-context.md` and the diff
    (role `ux_finder`, records with `--model-role ux_finder`); size M or L, pass
-   `uxFinder: true` and `productText` to the review workflow. Otherwise write
-   one `INFO` record, agent `spine:orchestrator`, claim
-   `ux_finder skipped: no user-facing or key-flow file`, and dispatch nothing.
+   `uxFinder: true` and `productText` to the review workflow. Otherwise, only when `<run>/product.json` `state` is `ok` or `trimmed`, write one `INFO`
+   record, agent `spine:orchestrator`, claim
+   `ux_finder skipped: no user-facing or key-flow file`, and dispatch nothing. With
+   `state` `absent` or `malformed`, write no skip record and dispatch nothing: the
+   run adds nothing beyond the records `product-context.js` already wrote.
    A `spine:ux-finder` CRITICAL or HIGH that survives the citation cap is
    verified by a provider of a different author, like any finder claim.
 4. Size S: run the one selected provider inline (invoke its skill or agent;

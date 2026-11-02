@@ -164,15 +164,18 @@ const toPosix = (p) => String(p).replace(/\\/g, '/').replace(/^\.\//, '');
 
 function compileFlow(flow) {
   const res = [];
+  const entries = [];
   const bad = [];
   for (const glob of flow.paths) {
     try {
-      res.push(globToRegExp(toPosix(glob)));
+      const re = globToRegExp(toPosix(glob));
+      res.push(re);
+      entries.push({ glob, re });
     } catch {
       bad.push({ flow: flow.name, glob, message: 'glob does not compile', line: flow.line });
     }
   }
-  return { res, bad };
+  return { res, entries, bad };
 }
 
 // Compiles every flow glob once. byFile maps a POSIX path to every flow it matches, in flow order;
@@ -188,22 +191,22 @@ function matchFlows(flows, files) {
       byFile.set(f, [...(byFile.get(f) || []), { name: flow.name, weight: flow.weight }]);
     });
   }
-  return { byFile, issues, compiled: compiled.map((c) => c.res) };
+  return { byFile, issues, compiled: compiled.map((c) => c.res), entries: compiled.map((c) => c.entries) };
 }
 
-// A flow is an issue when a glob does not compile or when no tracked repo file (or changed file) matches any glob.
-// A flow the change simply does not touch is not an issue.
+// A glob is an issue when it does not compile or when no tracked repo file (or changed file) matches it.
+// Globs are judged one by one and the flow keeps its other globs. A flow the change does not touch is not an issue.
 function touchedFlows(flows, changedFiles, repoFiles) {
   const files = changedFiles.map(toPosix);
-  const { byFile, issues, compiled } = matchFlows(flows, files);
+  const { byFile, issues, entries } = matchFlows(flows, files);
   const universe = flows.length ? [...new Set([...repoFiles().map(toPosix), ...files])] : [];
   const touched = [];
   const flowIssues = [...issues];
   flows.forEach((flow, i) => {
     const hit = files.filter((f) => (byFile.get(f) || []).some((m) => m.name === flow.name));
     if (hit.length) touched.push({ name: flow.name, weight: flow.weight, files: hit });
-    else if (!universe.some((f) => compiled[i].some((re) => re.test(f)))) {
-      flowIssues.push({ flow: flow.name, glob: flow.paths.join(', '), message: 'no matching files', line: flow.line });
+    for (const { glob, re } of entries[i]) {
+      if (!universe.some((f) => re.test(f))) flowIssues.push({ flow: flow.name, glob, message: 'no matching files', line: flow.line });
     }
   });
   return { touched, flowIssues, byFile };
@@ -241,6 +244,33 @@ function productSignals(file, addedLines, loaded, matched) {
   };
 }
 
+const SECTION_HEADING_RE = /^(## [^#].*?)\s*$/;
+
+// Text a trimmed load can never carry: the preamble, the Key flows intro and repeated headings.
+function unreachableParts(lines, parsed) {
+  const out = [];
+  const firstHeading = lines.findIndex((l) => SECTION_HEADING_RE.test(l));
+  const preamble = firstHeading === -1 ? lines : lines.slice(0, firstHeading);
+  if (preamble.some((l) => l.trim())) out.push('preamble');
+  const flows = parsed.sections.get('## Key flows');
+  if (flows) {
+    let end = flows.end;
+    for (let i = flows.start; i < flows.end; i++) {
+      if (/^###\s+\S/.test(lines[i])) { end = i; break; }
+    }
+    if (lines.slice(flows.start, end).some((l) => l.trim())) out.push('## Key flows (intro)');
+  }
+  const seen = new Map();
+  for (const l of lines) {
+    const m = SECTION_HEADING_RE.exec(l);
+    if (!m) continue;
+    const n = (seen.get(m[1]) || 0) + 1;
+    seen.set(m[1], n);
+    if (n > 1) out.push(m[1] + ' (' + n + ')');
+  }
+  return out;
+}
+
 // Chunks are taken in document order up to max lines; every chunk cut wholly or in part is named in leftOut.
 function budgetText(lines, parsed, touchedNames, max) {
   const chunks = [];
@@ -265,7 +295,7 @@ function budgetText(lines, parsed, touchedNames, max) {
     keep.push(...chunk.lines.slice(0, room));
     if (room < chunk.lines.length) leftOut.push(room > 0 ? chunk.label + ' (cut)' : chunk.label);
   }
-  return { text: keep.join('\n'), leftOut };
+  return { text: keep.join('\n'), leftOut: [...leftOut, ...unreachableParts(lines, parsed)] };
 }
 
 function result(extra) {
@@ -287,10 +317,11 @@ const cutPoints = (text, max) => [...text].slice(0, max).join('');
 // One line, no leading '#' (a decisions line must never read as a heading).
 const flatten = (text) => String(text == null ? '' : text).replace(/\s*[\r\n]+\s*/g, ' ').trim().replace(/^#/, '＃');
 
-function formatDecisionLine({ date, runId, recordId, question, answer }) {
+// fullTextRecordId names the record holding the whole answer; it defaults to the source record.
+function formatDecisionLine({ date, runId, recordId, question, answer, fullTextRecordId }) {
   const q = cutPoints(flatten(question), QUESTION_MAX);
   const full = flatten(answer);
-  const a = [...full].length > ANSWER_MAX ? `${cutPoints(full, ANSWER_MAX)} (cut, full text in ${recordId})` : full;
+  const a = [...full].length > ANSWER_MAX ? `${cutPoints(full, ANSWER_MAX)} (cut, full text in ${fullTextRecordId || recordId})` : full;
   return `- ${date} · ${runId} · ${recordId} · ${q} · ${a}`;
 }
 
@@ -365,7 +396,13 @@ function decodeProduct(buf, sha256) {
   }
 }
 
-function loadProduct(root, config = {}, changedFiles = [], io = defaultIo) {
+const DECISIONS_BLOCK_HEADING = '## Decisions (last ' + DECISIONS_TAIL + ')';
+
+// The tail rides at the end of the prompt text; it never counts toward product_context_max_lines.
+const withDecisionsTail = (text, tail) => (tail.length ? (text ? text + '\n\n' : '') + DECISIONS_BLOCK_HEADING + '\n' + tail.join('\n') : text);
+
+// opts.decisionsRoot: the main checkout, when product.md is read from a review worktree.
+function loadProduct(root, config = {}, changedFiles = [], io = defaultIo, opts = {}) {
   const dir = (config && config.artifacts_dir) || '.spine';
   const file = path.join(root, dir, 'product.md');
   let buf;
@@ -385,13 +422,44 @@ function loadProduct(root, config = {}, changedFiles = [], io = defaultIo) {
   const listFiles = () => (io.listFiles ? io.listFiles(root) : []);
   const { touched, flowIssues, byFile } = touchedFlows(parsed.flows, changedFiles || [], listFiles);
   const dropped = parsed.issues.filter((i) => i.flow).map((i) => ({ flow: i.flow, glob: null, message: i.message, line: i.line }));
-  const decisionsTail = readDecisionsTail(path.join(root, dir, 'decisions.md'));
+  const decisionsTail = readDecisionsTail(path.join(opts.decisionsRoot || root, dir, 'decisions.md'));
   const base = { sha256, lines: lines.length, flows: parsed.flows, matched: byFile, flowsTouched: touched, flowIssues: [...dropped, ...flowIssues], decisionsTail };
   if (lines.length <= maxLinesFrom(config)) {
-    return result({ ...base, state: 'ok', text: lines.join('\n'), loadedLines: lines.length + decisionsTail.length });
+    return result({ ...base, state: 'ok', text: withDecisionsTail(lines.join('\n'), decisionsTail), loadedLines: lines.length + decisionsTail.length });
   }
   const trimmed = budgetText(lines, parsed, new Set(touched.map((t) => t.name)), maxLinesFrom(config));
-  return result({ ...base, state: 'trimmed', text: trimmed.text, loadedLines: splitLines(trimmed.text).length + decisionsTail.length, leftOut: trimmed.leftOut });
+  return result({ ...base, state: 'trimmed', text: withDecisionsTail(trimmed.text, decisionsTail), loadedLines: splitLines(trimmed.text).length + decisionsTail.length, leftOut: trimmed.leftOut });
 }
 
-module.exports = { HEADINGS, WEIGHTS, MAX_BYTES, DEFAULT_MAX_LINES, DECISIONS_TAIL, parseProduct, loadProduct, matchFlows, userFacing, productSignals, USER_FACING_PATH_RULES, USER_FACING_LINE_RULES, readDecisionsTail, decodeProduct, defaultIo, DECISIONS_HEADER, DECISION_LINE_RE, formatDecisionLine, appendDecision, defaultDecisionsIo };
+// product.json: missing (ENOENT) is a normal state; anything else that is not a JSON object is unreadable.
+function readProductJson(runDir) {
+  let text;
+  try {
+    text = fs.readFileSync(path.join(runDir, 'product.json'), 'utf8');
+  } catch (e) {
+    return { status: e && e.code === 'ENOENT' ? 'missing' : 'unreadable', data: null };
+  }
+  try {
+    const data = JSON.parse(text);
+    return data && typeof data === 'object' && !Array.isArray(data) ? { status: 'ok', data } : { status: 'unreadable', data: null };
+  } catch {
+    return { status: 'unreadable', data: null };
+  }
+}
+
+// What the artifact validators need to know about product context for a run directory.
+function productContextFor(runDir) {
+  let spineVersion = null;
+  try {
+    const s = JSON.parse(fs.readFileSync(path.join(runDir, 'state.json'), 'utf8'));
+    if (s && typeof s.spine_version === 'string') spineVersion = s.spine_version;
+  } catch {
+    spineVersion = null;
+  }
+  const pj = readProductJson(runDir);
+  const state = pj.status === 'ok' && typeof pj.data.state === 'string' ? pj.data.state : null;
+  return { productContext: state === 'ok' || state === 'trimmed', spineVersion, state, unreadable: pj.status === 'unreadable' };
+}
+
+module.exports = {
+  readProductJson, productContextFor, DECISIONS_BLOCK_HEADING, HEADINGS, WEIGHTS, MAX_BYTES, DEFAULT_MAX_LINES, DECISIONS_TAIL, parseProduct, loadProduct, matchFlows, userFacing, productSignals, USER_FACING_PATH_RULES, USER_FACING_LINE_RULES, readDecisionsTail, decodeProduct, defaultIo, DECISIONS_HEADER, DECISION_LINE_RE, formatDecisionLine, appendDecision, defaultDecisionsIo };

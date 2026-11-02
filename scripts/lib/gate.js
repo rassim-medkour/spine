@@ -3,6 +3,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { validateArtifactFile, validateRecord } = require('./validate');
 const { latestBoundaryPass } = require('./records');
+const { productContextFor } = require('./product-context');
 
 const STAGE_ARTIFACTS = Object.freeze({
   intent: ['intent.md'],
@@ -23,13 +24,14 @@ function collectIssues(run) {
   const stage = run.state.stage;
   if (!hasStage(stage)) return [{ kind: 'unknown-stage' }];
   const issues = [];
+  const ctx = productContextFor(run.dir);
   for (const rel of STAGE_ARTIFACTS[stage]) {
     const abs = path.join(run.dir, rel);
     if (!fs.existsSync(abs)) {
       issues.push({ kind: 'missing', artifact: rel });
       continue;
     }
-    const problems = validateArtifactFile(abs, rel);
+    const problems = validateArtifactFile(abs, rel, ctx);
     if (problems.length) issues.push({ kind: 'invalid', artifact: rel, problems });
   }
   if (!latestBoundaryPass(run.dir, stage)) issues.push({ kind: 'no-boundary-pass' });

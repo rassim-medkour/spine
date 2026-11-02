@@ -5,12 +5,15 @@
 // A present but unparsable product.json is a defect: no record is written and the call reports ok false.
 const fs = require('node:fs');
 const path = require('node:path');
-const { loadProduct, appendDecision } = require('./lib/product-context');
+const { loadProduct, appendDecision, readProductJson, readDecisionsTail } = require('./lib/product-context');
+const { listRecords } = require('./lib/records');
 const { PRODUCT_AGENTS } = require('./lib/cap-record');
 const { writeRecords } = require('./lib/record-writer');
 const { loadConfig, readJson } = require('./lib/state');
 
 const ABSENT_CLAIM = 'no product context: .spine/product.md absent';
+const RECORD_ID_RE = /^R-\d{4,}$/;
+const CLAIM_ANSWER_MAX = 120;
 const STAGES = new Set(['intent', 'spec', 'plan', 'implement', 'review']);
 
 const productJsonPath = (runDir) => path.join(runDir, 'product.json');
@@ -62,10 +65,11 @@ function plannedRecords(prev, loaded, flowIssues, rel) {
   }
   if (flowIssues.length && !prev.flow_record) {
     const names = (list) => [...new Set(list.map((i) => i.flow))].join(', ');
+    const pairs = (list) => list.map((i) => i.flow + ': ' + i.glob).join(', ');
     const dropped = flowIssues.filter((i) => i.glob === null);
     const unmatched = flowIssues.filter((i) => i.glob !== null);
     const parts = [];
-    if (unmatched.length) parts.push(`key flow paths matched nothing: ${names(unmatched)}`);
+    if (unmatched.length) parts.push(`key flow paths matched nothing: ${pairs(unmatched)}`);
     if (dropped.length) parts.push(`key flow entries dropped: ${names(dropped)}`);
     out.push(['flow_record', 'INFO', parts.join('; '), flowIssues.map((i) => ({ kind: 'doc', ref: ref(i.line), note: `${i.flow}: ${i.message}` }))]);
   }
@@ -87,40 +91,70 @@ function repoRootOf(runDir, artifactsDir) {
 
 const todayUtc = () => new Date().toISOString().slice(0, 10);
 
-function decide(args, runDir, state, config) {
-  const record = readJson(path.join(runDir, 'records', `${args.record}.json`));
-  if (!record) return { ok: false, error: `record ${args.record} not found` };
+const decisionRecord = (stage, sourceId, answer, rel) => {
+  const flat = String(answer).replace(/\s*[\r\n]+\s*/g, ' ').trim();
+  return {
+    ...infoRecord(stage, 'INFO', 'decision for ' + sourceId + ': ' + [...flat].slice(0, CLAIM_ANSWER_MAX).join(''), [{ kind: 'doc', ref: rel, note: 'decisions log' }]),
+    resolution: { kind: 'decision', text: String(answer) },
+    resolves: sourceId,
+  };
+};
+
+const existingDecisionRecord = (runDir, sourceId) => {
+  const hit = listRecords(runDir).map((r) => r.record).find((r) => r.resolves === sourceId && r.agent === 'spine:orchestrator' && r.resolution && r.resolution.kind === 'decision');
+  return hit ? hit.id : null;
+};
+
+// Records the human answer: one decision record holding the whole answer, one log line, product.json bookkeeping.
+// The append is the commitment; a product.json that cannot be written is repaired by the next call.
+function decide(args, runDir, state, config, io) {
+  const record = readJson(path.join(runDir, 'records', args.record + '.json'));
+  if (!record) return { ok: false, error: 'record ' + args.record + ' not found' };
   if (!PRODUCT_AGENTS.includes(record.agent)) return { ok: false, error: 'record agent is not a product role' };
   const prevPath = productJsonPath(runDir);
-  const prevFile = readJson(prevPath);
-  if (!prevFile && fs.existsSync(prevPath)) return { ok: false, error: 'product.json unreadable' };
-  const prev = { ...emptyState(), ...(prevFile || {}) };
-  const file = path.join(repoRootOf(runDir, config.artifacts_dir), config.artifacts_dir, 'decisions.md');
+  const pj = readProductJson(runDir);
+  if (pj.status === 'unreadable') return { ok: false, error: 'product.json unreadable' };
+  const prev = { ...emptyState(), ...(pj.data || {}) };
+  const stage = STAGES.has(state.stage) ? state.stage : 'spec';
+  const repoRoot = repoRootOf(runDir, config.artifacts_dir);
+  const rel = config.artifacts_dir + '/decisions.md';
+  const file = path.join(repoRoot, config.artifacts_dir, 'decisions.md');
+  const runId = state.id || path.basename(runDir);
+  const decisionId = existingDecisionRecord(runDir, args.record) || writeRecords(runDir, [decisionRecord(stage, args.record, args.answer, rel)], {})[0];
   const question = record.resolution && record.resolution.text ? record.resolution.text : record.claim;
-  const out = appendDecision(file, { runId: state.id || path.basename(runDir), recordId: args.record, date: todayUtc(), question, answer: args.answer });
+  const out = appendDecision(file, { runId, recordId: args.record, date: todayUtc(), question, answer: args.answer, fullTextRecordId: decisionId }, io);
   if (!out.ok) {
-    const stage = STAGES.has(state.stage) ? state.stage : 'spec';
-    writeRecords(runDir, [infoRecord(stage, 'MEDIUM', `decision not written: ${args.record} (${out.error})`, [{ kind: 'doc', ref: `${config.artifacts_dir}/decisions.md`, note: out.error }])], {});
+    writeRecords(runDir, [infoRecord(stage, 'MEDIUM', 'decision not written: ' + args.record + ' (' + out.error + ')', [{ kind: 'doc', ref: rel, note: out.error }])], {});
     return { ok: false, written: false, error: out.error, record: args.record };
   }
-  if (out.written) writeJson(prevPath, { ...prev, decisions: [...prev.decisions, { record: args.record, line: out.line }] });
-  return { ok: true, written: out.written, line: out.line, record: args.record, file: path.relative(repoRootOf(runDir, config.artifacts_dir), file).split(path.sep).join('/') };
+  const line = out.written ? out.line : (readDecisionsTail(file, Infinity).find((l) => l.includes(' · ' + runId + ' · ' + args.record + ' · ')) || null);
+  const result = { ok: true, written: out.written, line, record: args.record, decision_record: decisionId, file: rel };
+  if (line && !prev.decisions.some((d) => d.record === args.record)) {
+    try {
+      writeJson(prevPath, { ...prev, decisions: [...prev.decisions, { record: args.record, line, decision_record: decisionId }] });
+    } catch {
+      return { ...result, warning: 'product.json not updated; the next call repairs it' };
+    }
+  }
+  return result;
 }
 
-function main(argv, root = process.cwd()) {
+function main(argv, root = process.cwd(), decisionsIo) {
   const args = parseArgs(argv);
+  if (args.decide && !RECORD_ID_RE.test(args.record)) return { ok: false, error: 'invalid record id' };
   const runDir = path.resolve(root, args.run);
   const state = readJson(path.join(runDir, 'state.json'));
   if (!state) throw new Error('run dir has no readable state.json');
   const config = loadConfig(root);
-  if (args.decide) return decide(args, runDir, state, config);
+  if (args.decide) return decide(args, runDir, state, config, decisionsIo);
   const rel = `${config.artifacts_dir}/product.md`;
   const stage = STAGES.has(state.stage) ? state.stage : 'spec';
   const prevPath = productJsonPath(runDir);
-  const prevFile = readJson(prevPath);
-  if (!prevFile && fs.existsSync(prevPath)) return { ok: false, error: 'product.json unreadable' };
+  const pj = readProductJson(runDir);
+  if (pj.status === 'unreadable') return { ok: false, error: 'product.json unreadable' };
+  const prevFile = pj.data;
   const prev = { ...emptyState(), ...(prevFile || {}) };
-  const loaded = loadProduct(root, config, args.files);
+  const loaded = loadProduct(root, config, args.files, undefined, { decisionsRoot: repoRootOf(runDir, config.artifacts_dir) });
   const changed = Boolean(prevFile) && prev.sha256 !== loaded.sha256;
   const flowIssues = changed ? [] : loaded.flowIssues;
 
@@ -141,7 +175,7 @@ function main(argv, root = process.cwd()) {
   return { ok: true, state: next.state, record, loaded_lines: next.loaded_lines, flows_touched: next.flows_touched.length };
 }
 
-module.exports = { main, productJsonPath };
+module.exports = { main, productJsonPath, plannedRecords };
 
 if (require.main === module) {
   try {

@@ -117,3 +117,53 @@ test('T-2b: non-UTF-8 product.md reports an error code and exits 0', () => {
   assert.equal(r.status, 0);
   assert.match(JSON.parse(r.stdout).hookSpecificOutput.additionalContext, /not valid UTF-8/);
 });
+
+// T-15a
+const hookCtx = (text) => {
+  const cwd = tmpDir('spine-');
+  fs.mkdirSync(path.join(cwd, '.spine'), { recursive: true });
+  const file = path.join(cwd, '.spine', 'product.md');
+  fs.writeFileSync(file, text);
+  const r = runHook({ hook_event_name: 'PostToolUse', cwd, tool_name: 'Write', tool_input: { file_path: file } });
+  assert.equal(r.status, 0);
+  return JSON.parse(r.stdout).hookSpecificOutput.additionalContext;
+};
+const FULL = (flows) => `## Users\n## Goals\n## Glossary\n## Invariants\n## Key flows\n${flows}## UX principles\n`;
+
+test('T-15a: a heading defect says the file is treated as absent until fixed', () => {
+  const ctx = hookCtx(FULL('').replace('## Goals\n', ''));
+  assert.match(ctx, /missing heading "## Goals"/);
+  assert.match(ctx, /treated as absent until fixed/);
+});
+
+test('T-15a: a dropped flow entry says the rest of the file still loads', () => {
+  const ctx = hookCtx(FULL('### Pay\nweight: huge\npaths: a/**\n'));
+  assert.match(ctx, /line 6: flow entry dropped; the rest of the file still loads/);
+  assert.doesNotMatch(ctx, /treated as absent/);
+  assert.ok(!ctx.includes('Pay'));
+});
+
+function runWithProductJson(pj, version = '0.4.0') {
+  const { cwd, home, dir } = repoWithRun();
+  writeState(dir, { id: '20260920-demo', stage: 'intent', status: 'active', awaiting: null, size: 'S', updated: '2026-09-20T10:00:00Z', ...(version ? { spine_version: version } : {}) });
+  if (pj !== undefined) fs.writeFileSync(path.join(dir, 'product.json'), pj);
+  const file = path.join(dir, 'intent.md');
+  fs.writeFileSync(file, '---\nid: x\nstage: intent\nupstream_id: x\nstatus: draft\n---\n\n# x\n');
+  const r = runHook({ hook_event_name: 'PostToolUse', cwd, tool_name: 'Write', tool_input: { file_path: file } }, { SPINE_HOME: home });
+  assert.equal(r.status, 0);
+  return r.stdout ? JSON.parse(r.stdout).hookSpecificOutput.additionalContext : '';
+}
+
+test('T-15a: conditional headings follow product.json state, spine_version and a readable file', () => {
+  assert.match(runWithProductJson(JSON.stringify({ state: 'ok' })), /missing heading "## Who this is for"/);
+  assert.match(runWithProductJson(JSON.stringify({ state: 'trimmed' })), /missing heading "## Who this is for"/);
+  for (const state of ['absent', 'malformed']) assert.doesNotMatch(runWithProductJson(JSON.stringify({ state })), /Who this is for/);
+  assert.doesNotMatch(runWithProductJson(JSON.stringify({ state: 'ok' }), null), /Who this is for/);
+  assert.doesNotMatch(runWithProductJson(JSON.stringify({ state: 'ok' }), '0.3.2'), /Who this is for/);
+});
+
+test('T-15a: a corrupt product.json warns with product.json unreadable', () => {
+  const ctx = runWithProductJson('{nope');
+  assert.match(ctx, /product\.json unreadable/);
+  assert.doesNotMatch(ctx, /Who this is for/);
+});

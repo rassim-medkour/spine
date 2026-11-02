@@ -134,3 +134,39 @@ test('T-2b: sha256 covers the whole oversize file', () => {
   const raw = fs.readFileSync(path.join(root, '.spine', 'product.md'));
   assert.equal(r.sha256, crypto.createHash('sha256').update(raw).digest('hex'));
 });
+
+// T-15a
+test('T-15a: leftOut names the preamble, the Key flows intro and a repeated heading', () => {
+  const body = doc('intro prose\n' + flow('Checkout', 'critical', 'src/checkout/**'), 'u\n').replace('term: meaning\n', 'g\n'.repeat(40));
+  const r = loadProduct(repo('preamble words\n' + body + '## Glossary\nsecond\n'), { product_context_max_lines: 20 }, ['src/checkout/a.js']);
+  assert.equal(r.state, 'trimmed');
+  for (const name of ['preamble', '## Key flows (intro)', '## Glossary (2)']) assert.ok(r.leftOut.includes(name), `${name} in ${r.leftOut.join('|')}`);
+});
+
+test('T-15a: flow globs are judged one by one; the flow keeps its other globs', () => {
+  const root = repo(doc(flow('Mixed', 'important', 'lib/**, nowhere/**')));
+  fs.mkdirSync(path.join(root, 'lib'));
+  fs.writeFileSync(path.join(root, 'lib', 'x.js'), '');
+  const r = loadProduct(root, {}, ['lib/x.js']);
+  assert.deepEqual(r.flowIssues.map((i) => [i.flow, i.glob, i.message]), [['Mixed', 'nowhere/**', 'no matching files']]);
+  assert.equal(r.flowIssues[0].line, 10);
+  assert.deepEqual(r.flowsTouched.map((f) => f.name), ['Mixed']);
+});
+
+test('T-15a: productContextFor separates absent, unreadable, and a readable product.json', () => {
+  const { productContextFor } = require('../scripts/lib/product-context');
+  const run = (state, pj) => {
+    const d = tmpDir('spine-pcf-');
+    if (state !== undefined) fs.writeFileSync(path.join(d, 'state.json'), JSON.stringify(state));
+    if (pj !== undefined) fs.writeFileSync(path.join(d, 'product.json'), pj);
+    return productContextFor(d);
+  };
+  assert.deepEqual(run({ spine_version: '0.4.0' }), { productContext: false, spineVersion: '0.4.0', state: null, unreadable: false });
+  assert.equal(run({ spine_version: '0.4.0' }, JSON.stringify({ state: 'ok' })).productContext, true);
+  assert.equal(run({ spine_version: '0.4.0' }, JSON.stringify({ state: 'trimmed' })).productContext, true);
+  assert.equal(run({ spine_version: '0.4.0' }, JSON.stringify({ state: 'absent' })).productContext, false);
+  assert.equal(run({ spine_version: '0.4.0' }, JSON.stringify({ state: 'malformed' })).productContext, false);
+  assert.equal(run({}, JSON.stringify({ state: 'ok' })).spineVersion, null);
+  const bad = run({ spine_version: '0.4.0' }, '{not json');
+  assert.deepEqual([bad.productContext, bad.unreadable], [false, true]);
+});

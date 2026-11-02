@@ -84,7 +84,7 @@ test('a flow whose glob matches nothing writes one INFO naming the flow, once', 
   const recs = records(r.runDir);
   assert.equal(recs.length, 1);
   assert.equal(recs[0].severity, 'INFO');
-  assert.equal(recs[0].claim, 'key flow paths matched nothing: Ghost');
+  assert.equal(recs[0].claim, 'key flow paths matched nothing: Ghost: nowhere/**');
   assert.match(recs[0].evidence[0].ref, /^\.spine\/product\.md:\d+$/);
 });
 
@@ -176,4 +176,57 @@ test('the bootstrap step adds exactly one INFO record and changes no artifact', 
     const then = stripVolatile(name, fs.readFileSync(path.join(BASELINE, name)));
     assert.ok(now.equals(then), `${name} differs from the 0.3.2 baseline`);
   }
+});
+
+// T-15a
+test('T-15a: a trimmed load writes one INFO naming what was left out, once per run', (t) => {
+  const r = setup(t, doc().replace('term: meaning\n', 'g\n'.repeat(40)));
+  fs.writeFileSync(path.join(r.root, '.spine', 'config.json'), JSON.stringify({ product_context_max_lines: 20 }));
+  assert.equal(call(r).state, 'trimmed');
+  call(r);
+  call(r);
+  const recs = records(r.runDir);
+  assert.equal(recs.length, 1);
+  assert.equal(recs[0].severity, 'INFO');
+  assert.match(recs[0].claim, /^product context trimmed: left out .*## Users/);
+  assert.equal(productJson(r.runDir).trim_record, recs[0].id);
+});
+
+test('T-15a: the unmatched-glob INFO lists flow and glob pairs; a dropped entry is named with its line', (t) => {
+  const r = setup(t, doc(flow('Checkout', 'src/checkout/**, nowhere/**') + '### Bad\nweight: huge\npaths: a/**\n'));
+  call(r, 'src/checkout/a.js');
+  const recs = records(r.runDir);
+  assert.equal(recs.length, 1);
+  assert.equal(recs[0].claim, 'key flow paths matched nothing: Checkout: nowhere/**; key flow entries dropped: Bad');
+  assert.ok(recs[0].evidence.some((e) => /^\.spine\/product\.md:\d+$/.test(e.ref)));
+});
+
+test('T-15a: a glob that does not compile is planned as one flow INFO', () => {
+  const { plannedRecords } = require('../scripts/product-context');
+  const prev = { absent_record: null, defect_record: null, trim_record: null, flow_record: null };
+  const loaded = { state: 'ok', leftOut: [] };
+  const issues = [{ flow: 'Pay', glob: '[', message: 'glob does not compile', line: 12 }];
+  const plan = plannedRecords(prev, loaded, issues, '.spine/product.md');
+  assert.equal(plan.length, 1);
+  assert.deepEqual(plan[0].slice(0, 3), ['flow_record', 'INFO', 'key flow paths matched nothing: Pay: [']);
+  assert.equal(plan[0][3][0].ref, '.spine/product.md:12');
+  assert.deepEqual(plannedRecords({ ...prev, flow_record: 'R-0001' }, loaded, issues, '.spine/product.md'), []);
+});
+
+test('T-15a: argument errors throw with the flag named', (t) => {
+  const r = setup(t);
+  assert.throws(() => main([], r.root), /--run <run dir> is required/);
+  assert.throws(() => main(['--run'], r.root), /missing value for --run/);
+  assert.throws(() => main(['--run', r.runDir, '--files'], r.root), /missing value for --files/);
+  assert.throws(() => main(['--run', r.runDir, '--bogus', 'x'], r.root), /unknown flag --bogus/);
+  assert.throws(() => main(['--run', r.runDir, '--decide'], r.root), /--decide needs/);
+});
+
+test('T-15a: a corrupt product.json is a defect: no new record and ok false', (t) => {
+  const r = setup(t);
+  fs.writeFileSync(path.join(r.runDir, 'product.json'), '{nope');
+  const out = call(r);
+  assert.deepEqual([out.ok, out.error], [false, 'product.json unreadable']);
+  assert.deepEqual(records(r.runDir), []);
+  assert.equal(fs.readFileSync(path.join(r.runDir, 'product.json'), 'utf8'), '{nope');
 });
