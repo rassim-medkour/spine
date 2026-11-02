@@ -62,7 +62,7 @@ function runScript(spineRoot, repoDir, name, args) {
   return r.stdout;
 }
 
-function capture({ spineRoot, out }) {
+function capture({ spineRoot, out, productContext = false }) {
   const { dir, git, headSha } = makeRepo(spineRoot);
   const runRel = path.join('.spine', RUN_ID);
   const runDir = path.join(dir, runRel);
@@ -71,6 +71,8 @@ function capture({ spineRoot, out }) {
   fs.writeFileSync(path.join(runDir, 'diff.patch'), git('diff'));
   fs.writeFileSync(path.join(runDir, 'classify.json'), runScript(spineRoot, dir, 'classify.js', ['--files', FILES.join(',')]));
   const tree = runScript(spineRoot, dir, 'tree.js', ['--run', runRel, '--files', FILES.join(','), '--diff', path.join(runRel, 'diff.patch'), '--base', 'HEAD']);
+  // Optional orchestrator step (0.4.0 only): the bootstrap call that writes the one absent INFO record.
+  if (productContext) runScript(spineRoot, dir, 'product-context.js', ['--run', runRel, '--files', FILES.join(',')]);
   const readingMap = runScript(spineRoot, dir, 'reading-map.js', ['--run', runRel]);
   fs.writeFileSync(path.join(runDir, 'review.json'), `${JSON.stringify(REVIEW)}\n`);
   fs.writeFileSync(path.join(runDir, 'pr-written.md'), WRITTEN);
@@ -81,10 +83,11 @@ function capture({ spineRoot, out }) {
   const copied = ARTIFACTS.filter((name) => fs.existsSync(path.join(runDir, name)));
   for (const name of copied) fs.copyFileSync(path.join(runDir, name), path.join(out, name));
   const records = fs.existsSync(path.join(runDir, 'records')) ? fs.readdirSync(path.join(runDir, 'records')).sort() : [];
+  const recordBodies = records.map((f) => JSON.parse(fs.readFileSync(path.join(runDir, 'records', f), 'utf8')));
   const manifest = { head_sha: headSha, files: FILES, artifacts: copied, records, outputs: { tree: JSON.parse(tree), reading_map: JSON.parse(readingMap), pr_body: JSON.parse(prBody) } };
   fs.writeFileSync(path.join(out, 'manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`);
   fs.rmSync(dir, { recursive: true, force: true });
-  return manifest;
+  return { ...manifest, record_bodies: recordBodies };
 }
 
 if (require.main === module) {

@@ -141,3 +141,39 @@ test('T-2b: a corrupt product.json is a defect: no new record, ok false', (t) =>
   assert.deepEqual(records(r.runDir), []);
   assert.equal(fs.readFileSync(path.join(r.runDir, 'product.json'), 'utf8'), '{not json');
 });
+
+// T-14 (REQ-1, REQ-32): byte-identity against artifacts captured from 0.3.2.
+const { capture, ARTIFACTS } = require('./fixtures/product/absent-baseline/capture');
+const BASELINE = path.join(__dirname, 'fixtures', 'product', 'absent-baseline', '0.3.2');
+const ROOT = path.join(__dirname, '..');
+const stripVolatile = (name, buf) => {
+  if (name !== 'diagnostics.json') return buf;
+  const { elapsed_ms: _elapsed, ...rest } = JSON.parse(buf.toString('utf8'));
+  return Buffer.from(JSON.stringify(rest));
+};
+
+test('every baseline artifact is byte-equal with the new code and no product.md', (t) => {
+  const out = tmpDir('spine-absent-now-', t);
+  const manifest = capture({ spineRoot: ROOT, out });
+  assert.deepEqual(manifest.artifacts, ARTIFACTS);
+  for (const name of ['manifest.json', ...ARTIFACTS]) {
+    const now = stripVolatile(name, fs.readFileSync(path.join(out, name)));
+    const then = stripVolatile(name, fs.readFileSync(path.join(BASELINE, name)));
+    assert.ok(now.equals(then), `${name} differs from the 0.3.2 baseline`);
+  }
+});
+
+test('the bootstrap step adds exactly one INFO record and changes no artifact', (t) => {
+  const out = tmpDir('spine-absent-boot-', t);
+  const manifest = capture({ spineRoot: ROOT, out, productContext: true });
+  assert.equal(manifest.record_bodies.length, 1);
+  const rec = manifest.record_bodies[0];
+  assert.equal(rec.agent, 'spine:orchestrator');
+  assert.equal(rec.severity, 'INFO');
+  assert.equal(rec.claim, 'no product context: .spine/product.md absent');
+  for (const name of ARTIFACTS) {
+    const now = stripVolatile(name, fs.readFileSync(path.join(out, name)));
+    const then = stripVolatile(name, fs.readFileSync(path.join(BASELINE, name)));
+    assert.ok(now.equals(then), `${name} differs from the 0.3.2 baseline`);
+  }
+});
