@@ -20,6 +20,8 @@ Cursor support is still experimental and the live Cursor smoke test is pending.
 
 ### Fixed
 
+- [claude-code] The Stop gate, the PostToolUse hook and the Cursor after-edit hook enforce the product-gated headings from the same `productContextFor` helper; a corrupt `product.json` is reported as unreadable instead of silently turning the headings off.
+- [both] `ux_finder` skips write an `INFO` only when product context loaded, so a run without `product.md` still adds exactly one record.
 - [claude-code] The implement workflow now runs tickets one at a time when `parallel` is false. Before, every ticket's implementer started at once in the same checkout, because `pipeline()` has no barrier between items; `parallel: true` still overlaps tickets in isolated worktrees.
 
 ## 0.3.2
