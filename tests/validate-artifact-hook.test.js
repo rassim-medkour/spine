@@ -94,3 +94,26 @@ test('a valid product.md produces no output', () => {
   assert.equal(r.status, 0);
   assert.equal(r.stdout, '');
 });
+
+test('T-2b: product.md defects use the parseProduct rule: a leading-space heading is missing, flow names are not echoed', () => {
+  const cwd = tmpDir('spine-');
+  fs.mkdirSync(path.join(cwd, '.spine'), { recursive: true });
+  const file = path.join(cwd, '.spine', 'product.md');
+  fs.writeFileSync(file, ' ## Users\n## Goals\n## Glossary\n## Invariants\n## Key flows\n### SecretFlowName\nweight: huge\npaths: a/**\n## UX principles\n');
+  const r = runHook({ hook_event_name: 'PostToolUse', cwd, tool_name: 'Write', tool_input: { file_path: file } });
+  assert.equal(r.status, 0);
+  const ctx = JSON.parse(r.stdout).hookSpecificOutput.additionalContext;
+  assert.match(ctx, /missing heading "## Users"/);
+  assert.match(ctx, /line 6/);
+  assert.ok(!ctx.includes('SecretFlowName'));
+});
+
+test('T-2b: non-UTF-8 product.md reports an error code and exits 0', () => {
+  const cwd = tmpDir('spine-');
+  fs.mkdirSync(path.join(cwd, '.spine'), { recursive: true });
+  const file = path.join(cwd, '.spine', 'product.md');
+  fs.writeFileSync(file, Buffer.from([0xff, 0xfe, 0x41]));
+  const r = runHook({ hook_event_name: 'PostToolUse', cwd, tool_name: 'Write', tool_input: { file_path: file } });
+  assert.equal(r.status, 0);
+  assert.match(JSON.parse(r.stdout).hookSpecificOutput.additionalContext, /not valid UTF-8/);
+});

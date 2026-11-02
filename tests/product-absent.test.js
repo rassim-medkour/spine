@@ -16,6 +16,8 @@ function setup(t, productText) {
   const runDir = path.join(root, '.spine', RUN_ID);
   writeState(runDir, { id: RUN_ID, stage: 'spec', status: 'active', awaiting: null, size: 'M', updated: '2026-11-01T00:00:00Z', host: 'claude-code', spine_version: '0.4.0' });
   if (productText !== undefined) fs.writeFileSync(path.join(root, '.spine', 'product.md'), productText);
+  fs.mkdirSync(path.join(root, 'src', 'checkout'), { recursive: true });
+  fs.writeFileSync(path.join(root, 'src', 'checkout', 'a.js'), '');
   return { root, runDir };
 }
 
@@ -74,6 +76,8 @@ test('a changed sha256 on a second call writes one INFO and keeps product.json s
 
 test('a flow whose glob matches nothing writes one INFO naming the flow, once', (t) => {
   const r = setup(t, doc(flow('Checkout', 'src/checkout/**') + flow('Ghost', 'nowhere/**')));
+  fs.mkdirSync(path.join(r.root, 'src', 'checkout'), { recursive: true });
+  fs.writeFileSync(path.join(r.root, 'src', 'checkout', 'a.js'), '');
   const out = call(r, 'src/checkout/a.js');
   assert.equal(out.flows_touched, 1);
   call(r, 'src/checkout/a.js');
@@ -98,4 +102,42 @@ test('diagnostics.json is not created when absent', (t) => {
   const r = setup(t);
   call(r);
   assert.equal(fs.existsSync(path.join(r.runDir, 'diagnostics.json')), false);
+});
+
+test('T-2b: absent and malformed leave diagnostics.json byte-identical', (t) => {
+  for (const text of [undefined, '## Users\n']) {
+    const r = setup(t, text);
+    const file = path.join(r.runDir, 'diagnostics.json');
+    fs.writeFileSync(file, '{"elapsed_ms":5}');
+    call(r);
+    assert.equal(fs.readFileSync(file, 'utf8'), '{"elapsed_ms":5}');
+  }
+});
+
+test('T-2b: a dropped flow is named in one INFO with its line', (t) => {
+  const r = setup(t, doc('### Bad\nweight: huge\npaths: src/**\n1. one\n'));
+  call(r);
+  call(r);
+  const recs = records(r.runDir);
+  assert.equal(recs.length, 1);
+  assert.match(recs[0].claim, /Bad/);
+  assert.match(recs[0].evidence[0].ref, /^\.spine\/product\.md:\d+$/);
+});
+
+test('T-2b: an untouched flow with repo files writes no record', (t) => {
+  const r = setup(t, doc());
+  fs.mkdirSync(path.join(r.root, 'src', 'checkout'), { recursive: true });
+  fs.writeFileSync(path.join(r.root, 'src', 'checkout', 'a.js'), '');
+  call(r, 'README.md');
+  assert.deepEqual(records(r.runDir), []);
+});
+
+test('T-2b: a corrupt product.json is a defect: no new record, ok false', (t) => {
+  const r = setup(t);
+  fs.writeFileSync(path.join(r.runDir, 'product.json'), '{not json');
+  const out = call(r);
+  assert.equal(out.ok, false);
+  assert.equal(out.error, 'product.json unreadable');
+  assert.deepEqual(records(r.runDir), []);
+  assert.equal(fs.readFileSync(path.join(r.runDir, 'product.json'), 'utf8'), '{not json');
 });

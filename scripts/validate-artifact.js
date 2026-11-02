@@ -4,14 +4,29 @@ const { readGuardedInput, emitContext, appendHookLog } = require('./lib/hook-io'
 const { yieldToCursorCopy } = require('./lib/host/detect');
 const { loadConfig, findActiveRun } = require('./lib/state');
 const { validateArtifactFile } = require('./lib/validate');
+const { sanitizeHookText } = require('./lib/safe-text');
+const { parseProduct, decodeProduct, defaultIo, MAX_BYTES } = require('./lib/product-context');
+
+// product.md defects, judged by the same parseProduct rule the loader uses.
+// Messages carry heading names, line numbers and error codes only, never flow names or body text.
+function productProblems(abs) {
+  let buf;
+  try {
+    buf = defaultIo.read(abs, MAX_BYTES);
+  } catch (e) {
+    return ['read error ' + ((e && e.code) || 'unknown')];
+  }
+  const decoded = decodeProduct(buf, null);
+  if (decoded.error) return [decoded.error];
+  return parseProduct(decoded.text).issues.map((i) => (i.flow ? 'line ' + i.line + ': flow entry rejected' : i.message));
+}
 
 // product.md lives outside any run, so it is validated with or without an active run.
-// Output carries heading names and line numbers only, never the file body.
-function validateProduct(cwd, config, run, rel) {
-  const errors = validateArtifactFile(path.resolve(cwd, rel), rel, { artifactsDir: config.artifacts_dir });
+function validateProduct(cwd, run, rel) {
+  const errors = productProblems(path.resolve(cwd, rel));
   appendHookLog(run, 'PostToolUse', errors.length ? 'warn' : 'ok');
   if (!errors.length) return;
-  process.stdout.write(emitContext('PostToolUse', `spine: ${rel} has ${errors.length} problem(s): ${errors.join('; ')}. It is treated as absent until fixed.`));
+  process.stdout.write(emitContext('PostToolUse', sanitizeHookText('spine: ' + rel + ' has ' + errors.length + ' problem(s): ' + errors.join('; ') + '. It is treated as absent until fixed.')));
 }
 
 function main() {
@@ -24,7 +39,7 @@ function main() {
   const run = findActiveRun(cwd, config);
   const productRel = path.relative(cwd, path.resolve(cwd, filePath)).split(path.sep).join('/');
   if (productRel === `${config.artifacts_dir}/product.md`) {
-    validateProduct(cwd, config, run, productRel);
+    validateProduct(cwd, run, productRel);
     return;
   }
   if (!run) return;

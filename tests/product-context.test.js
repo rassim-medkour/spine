@@ -99,3 +99,38 @@ test('CLI: product-context.md equals loadProduct().text', (t) => {
   main(['--run', runDir], root);
   assert.equal(fs.readFileSync(path.join(runDir, 'product-context.md'), 'utf8'), loadProduct(root, { artifacts_dir: '.spine' }, []).text);
 });
+
+test('T-2b: cut sections and flows are named in leftOut, partial cuts marked', () => {
+  const big = doc(flow('Checkout', 'critical', 'src/checkout/**'), 'u\n').replace('term: meaning\n', 'g\n'.repeat(40));
+  const r = loadProduct(repo(big), { product_context_max_lines: 20 }, ['src/checkout/a.js']);
+  assert.equal(r.state, 'trimmed');
+  assert.ok(r.loadedLines <= 20);
+  assert.ok(r.leftOut.includes('## Glossary (cut)'), r.leftOut.join('|'));
+  assert.ok(r.leftOut.includes('## Invariants'));
+  assert.ok(r.leftOut.includes('flow Checkout'));
+  assert.ok(r.leftOut.includes('## Users'));
+});
+
+test('T-2b: flows dropped by parseProduct reach loadProduct flowIssues with glob null and line', () => {
+  const r = loadProduct(repo(doc(flow('A', 'huge', 'src/**') + flow('B', 'minor', ''))), {}, []);
+  const dropped = r.flowIssues.filter((i) => i.glob === null);
+  assert.deepEqual(dropped.map((i) => [i.flow, i.line]), [['A', 10], ['B', 16]]);
+  assert.match(dropped[0].message, /weight/);
+});
+
+test('T-2b: a flow is an issue only when no repo file matches, not when the change leaves it untouched', () => {
+  const root = repo(doc(flow('Live', 'minor', 'lib/**') + flow('Ghost', 'minor', 'nowhere/**')));
+  fs.mkdirSync(path.join(root, 'lib'));
+  fs.writeFileSync(path.join(root, 'lib', 'x.js'), '');
+  const r = loadProduct(root, {}, ['unrelated.js']);
+  assert.deepEqual(r.flowIssues.map((i) => i.flow), ['Ghost']);
+  assert.equal(r.flowIssues[0].message, 'no matching files');
+});
+
+test('T-2b: sha256 covers the whole oversize file', () => {
+  const root = repo(doc() + 'x'.repeat(MAX_BYTES + 10));
+  const r = loadProduct(root, {}, []);
+  assert.equal(r.state, 'malformed');
+  const raw = fs.readFileSync(path.join(root, '.spine', 'product.md'));
+  assert.equal(r.sha256, crypto.createHash('sha256').update(raw).digest('hex'));
+});

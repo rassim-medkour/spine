@@ -2,6 +2,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
+const { spawnSync } = require('node:child_process');
 const { globToRegExp } = require('../classify');
 
 const HEADINGS = Object.freeze(['## Users', '## Goals', '## Glossary', '## Invariants', '## Key flows', '## UX principles']);
@@ -23,7 +24,50 @@ const defaultIo = {
       fs.closeSync(fd);
     }
   },
+  // sha256 over the whole file, streamed, so the byte cap limits parsing and never the hash.
+  hash(file) {
+    const h = crypto.createHash('sha256');
+    const fd = fs.openSync(file, 'r');
+    try {
+      const chunk = Buffer.alloc(64 * 1024);
+      let n;
+      while ((n = fs.readSync(fd, chunk, 0, chunk.length, null)) > 0) h.update(chunk.subarray(0, n));
+    } finally {
+      fs.closeSync(fd);
+    }
+    return h.digest('hex');
+  },
+  // Tracked repo files (git ls-files), falling back to a directory walk when git is unavailable.
+  listFiles(root) {
+    const git = spawnSync('git', ['ls-files', '-z'], { cwd: root, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
+    if (git.status === 0 && typeof git.stdout === 'string' && git.stdout) return git.stdout.split('\0').filter(Boolean);
+    return walkFiles(root);
+  },
 };
+
+const WALK_SKIP = new Set(['.git', 'node_modules']);
+const WALK_LIMIT = 50000;
+
+function walkFiles(root) {
+  const out = [];
+  const stack = [''];
+  while (stack.length && out.length < WALK_LIMIT) {
+    const rel = stack.pop();
+    let entries;
+    try {
+      entries = fs.readdirSync(path.join(root, rel), { withFileTypes: true });
+    } catch {
+      continue;
+    }
+    for (const e of entries) {
+      if (WALK_SKIP.has(e.name)) continue;
+      const child = rel ? rel + '/' + e.name : e.name;
+      if (e.isDirectory()) stack.push(child);
+      else out.push(child);
+    }
+  }
+  return out;
+}
 
 function normalizeText(text) {
   return String(text).replace(/^﻿/, '').replace(/\r\n?/g, '\n');
@@ -80,11 +124,11 @@ function parseFlows(lines, keySection) {
     const end = n + 1 < heads.length ? heads[n + 1] : keySection.end;
     const flow = parseFlowBlock(lines, idx, end);
     if (!WEIGHTS.includes(flow.weight)) {
-      issues.push({ line: flow.line, message: `flow "${flow.name}" has an unknown weight` });
+      issues.push({ line: flow.line, flow: flow.name, message: `flow "${flow.name}" has an unknown weight` });
       return;
     }
     if (!flow.paths.length) {
-      issues.push({ line: flow.line, message: `flow "${flow.name}" has empty paths` });
+      issues.push({ line: flow.line, flow: flow.name, message: `flow "${flow.name}" has empty paths` });
       return;
     }
     flows.push(flow);
@@ -130,8 +174,11 @@ function compileFlow(flow) {
   return { res, bad };
 }
 
-function touchedFlows(flows, changedFiles) {
+// A flow is an issue when a glob does not compile or when no tracked repo file (or changed file) matches any glob.
+// A flow the change simply does not touch is not an issue.
+function touchedFlows(flows, changedFiles, repoFiles) {
   const files = changedFiles.map(toPosix);
+  const universe = flows.length ? [...new Set([...repoFiles().map(toPosix), ...files])] : [];
   const touched = [];
   const flowIssues = [];
   for (const flow of flows) {
@@ -139,28 +186,38 @@ function touchedFlows(flows, changedFiles) {
     flowIssues.push(...bad);
     const hit = files.filter((f) => res.some((re) => re.test(f)));
     if (hit.length) touched.push({ name: flow.name, weight: flow.weight, files: hit });
+    else if (!universe.some((f) => res.some((re) => re.test(f)))) {
+      flowIssues.push({ flow: flow.name, glob: flow.paths.join(', '), message: 'no matching files', line: flow.line });
+    }
   }
   return { touched, flowIssues };
 }
 
+// Chunks are taken in document order up to max lines; every chunk cut wholly or in part is named in leftOut.
 function budgetText(lines, parsed, touchedNames, max) {
-  const keep = [];
+  const chunks = [];
   const leftOut = [];
   for (const [heading, sec] of parsed.sections) {
     const headingIdx = sec.start - 1;
     if (KEPT_WHEN_TRIMMED.includes(heading)) {
-      keep.push(...lines.slice(headingIdx, sec.end));
+      chunks.push({ label: heading, lines: lines.slice(headingIdx, sec.end) });
     } else if (heading === '## Key flows') {
-      keep.push(lines[headingIdx]);
+      chunks.push({ label: heading, lines: [lines[headingIdx]] });
       for (const b of parsed.flowBlocks) {
-        if (touchedNames.has(b.flow.name)) keep.push(...lines.slice(b.start, b.end));
-        else leftOut.push(`flow ${b.flow.name}`);
+        if (touchedNames.has(b.flow.name)) chunks.push({ label: 'flow ' + b.flow.name, lines: lines.slice(b.start, b.end) });
+        else leftOut.push('flow ' + b.flow.name);
       }
     } else {
       leftOut.push(heading);
     }
   }
-  return { text: keep.slice(0, max).join('\n'), leftOut };
+  const keep = [];
+  for (const chunk of chunks) {
+    const room = Math.max(0, max - keep.length);
+    keep.push(...chunk.lines.slice(0, room));
+    if (room < chunk.lines.length) leftOut.push(room > 0 ? chunk.label + ' (cut)' : chunk.label);
+  }
+  return { text: keep.join('\n'), leftOut };
 }
 
 function result(extra) {
@@ -182,30 +239,37 @@ function maxLinesFrom(config) {
   return Number.isInteger(n) && n > 0 ? n : DEFAULT_MAX_LINES;
 }
 
+// Decodes raw product.md bytes. error is a short message (code or heading, never body text) or null.
+function decodeProduct(buf, sha256) {
+  if (buf.length > MAX_BYTES) return { sha256, error: 'size over limit', text: '' };
+  try {
+    return { sha256, error: null, text: normalizeText(new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(buf)) };
+  } catch {
+    return { sha256, error: 'not valid UTF-8', text: '' };
+  }
+}
+
 function loadProduct(root, config = {}, changedFiles = [], io = defaultIo) {
   const dir = (config && config.artifacts_dir) || '.spine';
   const file = path.join(root, dir, 'product.md');
   let buf;
+  let sha256;
   try {
     buf = io.read(file, MAX_BYTES);
+    sha256 = buf.length > MAX_BYTES && io.hash ? io.hash(file) : crypto.createHash('sha256').update(buf).digest('hex');
   } catch (e) {
     if (e && e.code === 'ENOENT') return result({});
-    return malformed(`read error ${(e && e.code) || 'unknown'}`);
+    return malformed('read error ' + ((e && e.code) || 'unknown'));
   }
-  const sha256 = crypto.createHash('sha256').update(buf).digest('hex');
-  if (buf.length > MAX_BYTES) return malformed('size over limit', { sha256 });
-  let raw;
-  try {
-    raw = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(buf);
-  } catch {
-    return malformed('not valid UTF-8', { sha256 });
-  }
-  const text = normalizeText(raw);
-  const lines = splitLines(text);
-  const parsed = parseProduct(text);
+  const decoded = decodeProduct(buf, sha256);
+  if (decoded.error) return malformed(decoded.error, { sha256 });
+  const lines = splitLines(decoded.text);
+  const parsed = parseProduct(decoded.text);
   if (!parsed.ok) return result({ state: 'malformed', sha256, lines: lines.length, issue: parsed.issues[0] });
-  const { touched, flowIssues } = touchedFlows(parsed.flows, changedFiles || []);
-  const base = { sha256, lines: lines.length, flows: parsed.flows, flowsTouched: touched, flowIssues, decisionsTail: readDecisionsTail() };
+  const listFiles = () => (io.listFiles ? io.listFiles(root) : []);
+  const { touched, flowIssues } = touchedFlows(parsed.flows, changedFiles || [], listFiles);
+  const dropped = parsed.issues.filter((i) => i.flow).map((i) => ({ flow: i.flow, glob: null, message: i.message, line: i.line }));
+  const base = { sha256, lines: lines.length, flows: parsed.flows, flowsTouched: touched, flowIssues: [...dropped, ...flowIssues], decisionsTail: readDecisionsTail() };
   if (lines.length <= maxLinesFrom(config)) {
     return result({ ...base, state: 'ok', text: lines.join('\n'), loadedLines: lines.length });
   }
@@ -213,4 +277,4 @@ function loadProduct(root, config = {}, changedFiles = [], io = defaultIo) {
   return result({ ...base, state: 'trimmed', text: trimmed.text, loadedLines: splitLines(trimmed.text).length, leftOut: trimmed.leftOut });
 }
 
-module.exports = { HEADINGS, WEIGHTS, MAX_BYTES, DEFAULT_MAX_LINES, DECISIONS_TAIL, parseProduct, loadProduct, readDecisionsTail };
+module.exports = { HEADINGS, WEIGHTS, MAX_BYTES, DEFAULT_MAX_LINES, DECISIONS_TAIL, parseProduct, loadProduct, readDecisionsTail, decodeProduct, defaultIo };

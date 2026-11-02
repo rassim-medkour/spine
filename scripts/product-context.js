@@ -1,6 +1,8 @@
 'use strict';
 // node scripts/product-context.js --run <run dir> [--files a,b,c]
 // Writes <run>/product.json and <run>/product-context.md; each state's record is written at most once per run.
+// Idempotence rests on product.json. Known limit (REQ-2): two overlapping calls on a fresh run can both write the absent record.
+// A present but unparsable product.json is a defect: no record is written and the call reports ok false.
 const fs = require('node:fs');
 const path = require('node:path');
 const { loadProduct } = require('./lib/product-context');
@@ -35,12 +37,6 @@ const infoRecord = (stage, severity, claim, evidence) => ({
   stage, agent: 'spine:orchestrator', claim, evidence, confidence: 1, severity, dissent: null, resolution: null, alternatives: [],
 });
 
-function unmatchedFlows(loaded, files) {
-  if (!files.length) return [];
-  const hit = new Set(loaded.flowsTouched.map((t) => t.name));
-  return loaded.flows.filter((f) => !hit.has(f.name)).map((f) => ({ flow: f.name, glob: f.paths.join(', '), message: 'no matching files', line: f.line }));
-}
-
 // Decides which records this call owes, given what product.json already says was written.
 function plannedRecords(prev, loaded, flowIssues, rel) {
   const ref = (line) => (line ? `${rel}:${line}` : rel);
@@ -56,8 +52,13 @@ function plannedRecords(prev, loaded, flowIssues, rel) {
     out.push(['trim_record', 'INFO', `product context trimmed: left out ${loaded.leftOut.join(', ')}`, [{ kind: 'doc', ref: rel, note: 'over product_context_max_lines' }]]);
   }
   if (flowIssues.length && !prev.flow_record) {
-    const names = [...new Set(flowIssues.map((i) => i.flow))].join(', ');
-    out.push(['flow_record', 'INFO', `key flow paths matched nothing: ${names}`, flowIssues.map((i) => ({ kind: 'doc', ref: ref(i.line), note: `${i.flow}: ${i.message}` }))]);
+    const names = (list) => [...new Set(list.map((i) => i.flow))].join(', ');
+    const dropped = flowIssues.filter((i) => i.glob === null);
+    const unmatched = flowIssues.filter((i) => i.glob !== null);
+    const parts = [];
+    if (unmatched.length) parts.push(`key flow paths matched nothing: ${names(unmatched)}`);
+    if (dropped.length) parts.push(`key flow entries dropped: ${names(dropped)}`);
+    out.push(['flow_record', 'INFO', parts.join('; '), flowIssues.map((i) => ({ kind: 'doc', ref: ref(i.line), note: `${i.flow}: ${i.message}` }))]);
   }
   return out;
 }
@@ -77,11 +78,13 @@ function main(argv, root = process.cwd()) {
   const config = loadConfig(root);
   const rel = `${config.artifacts_dir}/product.md`;
   const stage = STAGES.has(state.stage) ? state.stage : 'spec';
-  const prevFile = readJson(productJsonPath(runDir));
+  const prevPath = productJsonPath(runDir);
+  const prevFile = readJson(prevPath);
+  if (!prevFile && fs.existsSync(prevPath)) return { ok: false, error: 'product.json unreadable' };
   const prev = { ...emptyState(), ...(prevFile || {}) };
   const loaded = loadProduct(root, config, args.files);
   const changed = Boolean(prevFile) && prev.sha256 !== loaded.sha256;
-  const flowIssues = changed ? [] : [...loaded.flowIssues, ...unmatchedFlows(loaded, args.files)];
+  const flowIssues = changed ? [] : loaded.flowIssues;
 
   const plan = plannedRecords(changed ? { ...prev, absent_record: 'x', defect_record: 'x', trim_record: 'x', flow_record: 'x' } : prev, loaded, flowIssues, rel);
   if (changed && !prev.resume_record) plan.push(['resume_record', 'INFO', 'product.md changed since run start', [{ kind: 'doc', ref: rel, note: 'sha256 differs from product.json' }]]);
@@ -90,12 +93,12 @@ function main(argv, root = process.cwd()) {
 
   const fresh = changed ? prev : {
     ...prev, state: loaded.state, sha256: loaded.sha256, lines: loaded.lines, loaded_lines: loaded.loadedLines,
-    flows_touched: loaded.flowsTouched, left_out: loaded.leftOut, flow_issues: flowIssues.map(({ flow, glob, message }) => ({ flow, glob, message })),
+    flows_touched: loaded.flowsTouched, left_out: loaded.leftOut, flow_issues: flowIssues.map(({ flow, glob, message, line }) => ({ flow, glob, message, line })),
   };
   const next = { ...fresh, ...written };
   writeJson(productJsonPath(runDir), next);
   if (!changed && loaded.text) fs.writeFileSync(path.join(runDir, 'product-context.md'), loaded.text);
-  mergeDiagnostics(runDir, { state: next.state, loaded_lines: next.loaded_lines, flows_touched: next.flows_touched.length, flow_issues: next.flow_issues.length });
+  if (next.state === 'ok' || next.state === 'trimmed') mergeDiagnostics(runDir, { state: next.state, loaded_lines: next.loaded_lines, flows_touched: next.flows_touched.length, flow_issues: next.flow_issues.length });
   const record = ids.length ? ids[ids.length - 1] : null;
   return { ok: true, state: next.state, record, loaded_lines: next.loaded_lines, flows_touched: next.flows_touched.length };
 }
