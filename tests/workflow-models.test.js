@@ -257,3 +257,75 @@ test('implement: parallel true overlaps tickets in isolated worktrees', async ()
   assert.deepEqual(a.calls.slice(0, 2), ['implement:T-1', 'implement:T-2']);
   assert.ok(calls.filter((o) => o.label.startsWith('implement:')).every((o) => o.isolation === 'worktree'));
 });
+
+// --- T-8: product lens in the spec workflow (REQ-35) ---
+const PRODUCT_TEXT = fs.readFileSync(path.join(__dirname, 'fixtures', 'product', 'product.md'), 'utf8');
+const productAnswer = (opts) => (opts.label === 'product-lens'
+  ? { invariants_touched: ['An order total is never negative.'], flows_touched: [{ name: 'Checkout', weight: 'critical' }], states_missing: ['empty cart'], conflicts: [],
+    user_impact: { before: 'b', after: 'a' },
+    records: [{ claim: 'empty cart state is not specified', severity: 'HIGH', confidence: 0.9, evidence: [{ kind: 'file', ref: 'intent.md:3' }] }] }
+  : specAnswer(opts));
+
+test('spec: without productText no product-lens agent runs and the result has no user_impact (AC-12)', async () => {
+  const a = recorder(productAnswer);
+  const out = await load('spec')(a.agent, parallel, pipeline, noop, noop, { intentText: 'i', lenses: ['domain'] });
+  assert.deepEqual(a.calls.map((c) => c.label), ['lens:domain', 'synthesis']);
+  assert.equal('user_impact' in out, false);
+  assert.equal(out.records.length, 1);
+});
+
+test('spec: with productText one product-lens agent runs on role product_lens (REQ-35)', async () => {
+  const a = recorder(productAnswer);
+  const models = MODELS({ product_lens: { class: 'mid', model: 'sonnet-p', source: 'requested' } });
+  const out = await load('spec')(a.agent, parallel, pipeline, noop, noop, { intentText: 'i', lenses: ['domain'], productText: PRODUCT_TEXT, models });
+  const lens = a.calls.filter((c) => c.label === 'product-lens');
+  assert.equal(lens.length, 1);
+  assert.equal(lens[0].opts.model, 'sonnet-p');
+  assert.deepEqual(out.user_impact, { before: 'b', after: 'a', invariants_touched: ['An order total is never negative.'], flows_touched: [{ name: 'Checkout', weight: 'critical' }], states_missing: ['empty cart'], conflicts: [] });
+  const rec = out.records.find((r) => r.agent === 'spine:product-lens');
+  assert.equal(rec.stage, 'spec');
+  assert.equal(rec.model.role, 'product_lens');
+  assert.match(rec.id, /^R-\d{4}$/);
+});
+
+test('spec: uncited product-lens records come back capped, cited ones pass (REQ-11, REQ-12)', async () => {
+  const cited = { claim: 'total must not go negative', severity: 'HIGH', confidence: 0.9, evidence: [{ kind: 'doc', ref: 'product.md:20', note: '§Invariants' }] };
+  const heading = { claim: 'x', severity: 'HIGH', confidence: 0.9, evidence: [{ kind: 'doc', ref: 'product.md:18', note: '§Invariants' }] };
+  const base = productAnswer({ label: 'product-lens' });
+  const a = recorder((opts) => (opts.label === 'product-lens' ? { ...base, records: [...base.records, cited, heading] } : specAnswer(opts)));
+  const out = await load('spec')(a.agent, parallel, pipeline, noop, noop, { intentText: 'i', lenses: ['domain'], productText: PRODUCT_TEXT });
+  const [uncited, ok, onHeading] = out.records.filter((r) => r.agent === 'spine:product-lens');
+  assert.equal(uncited.severity, 'MEDIUM');
+  assert.equal(uncited.confidence, 0.5);
+  assert.equal(uncited.resolution.kind, 'question');
+  assert.match(uncited.resolution.text, /^assumption to confirm: /);
+  assert.equal(ok.severity, 'HIGH');
+  assert.equal(ok.resolution, null);
+  assert.equal(onHeading.severity, 'MEDIUM');
+});
+
+test('spec: a product-lens that returns nothing under a requested model yields a did-not-run record', async () => {
+  const a = recorder((opts) => (opts.label === 'product-lens' ? null : specAnswer(opts)));
+  const out = await load('spec')(a.agent, parallel, pipeline, noop, noop, { intentText: 'i', lenses: ['domain'], productText: PRODUCT_TEXT, models: MODELS({ product_lens: { class: 'mid', model: 'sonnet-p', source: 'requested' } }) });
+  const dn = out.records.filter((r) => /^agent did not run/.test(r.claim));
+  assert.deepEqual(dn.map((r) => [r.claim, r.agent]), [['agent did not run: product-lens', 'spine:product-lens']]);
+});
+
+test('spec: the workflow copy of capProductRecord equals scripts/lib/cap-record.js on the shared fixture (REQ-23)', async () => {
+  const { capProductRecord } = require('../scripts/lib/cap-record');
+  const { parseProduct } = require('../scripts/lib/product-context');
+  const repoDocs = ['README.md', 'docs/x.md'];
+  const ctx = { productSections: parseProduct(PRODUCT_TEXT).sections, repoHas: (p) => repoDocs.includes(p) };
+  const ev = (kind, ref, note) => [{ kind, ref, ...(note ? { note } : {}) }];
+  const inputs = [
+    ev('file', 'a.js:1'), ev('doc', 'README.md'), ev('doc', 'docs/x.md:4'), ev('doc', 'missing.md'), ev('doc', '#12'), ev('doc', 'o/r#3'),
+    ev('doc', 'https://www.w3.org/WAI/WCAG22/'), ev('doc', 'src/a.js'), ev('doc', 'product.md:20', '§Invariants'), ev('doc', 'product.md:18', '§Invariants'),
+    ev('doc', 'product.md:19', '§Invariants'), ev('doc', 'product.md:20', '§Goals'), ev('doc', 'product.md:999', '§Invariants'), ev('doc', 'product.md:20'),
+  ];
+  const mk = (evidence, severity = 'HIGH') => ({ claim: 'c', severity, confidence: 0.9, evidence });
+  const a = recorder((opts) => (opts.label === 'product-lens' ? { ...productAnswer(opts), records: inputs.map((e) => mk(e)).concat([mk(ev('file', 'a.js:1'), 'LOW')]) } : specAnswer(opts)));
+  const out = await load('spec')(a.agent, parallel, pipeline, noop, noop, { intentText: 'i', lenses: ['domain'], productText: PRODUCT_TEXT, repoDocs });
+  const got = out.records.filter((r) => r.agent === 'spine:product-lens');
+  const want = inputs.map((e) => mk(e)).concat([mk(ev('file', 'a.js:1'), 'LOW')]).map((r) => capProductRecord({ ...r, agent: 'spine:product-lens' }, ctx));
+  assert.deepEqual(got.map((r) => [r.severity, r.confidence, r.resolution]), want.map((r) => [r.severity, r.confidence, r.resolution || null]));
+});

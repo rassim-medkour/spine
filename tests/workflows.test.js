@@ -48,3 +48,11 @@ for (const name of WF) {
     }
   });
 }
+
+test('spec.workflow.js adds the product lens on role product_lens and keeps the domain focus (REQ-35)', () => {
+  const text = fs.readFileSync(path.join(__dirname, '..', 'workflows', 'spec.workflow.js'), 'utf8');
+  assert.ok(text.includes("routed('product_lens'"));
+  assert.ok(text.includes("label: 'product-lens'"));
+  assert.ok(text.includes('spine:product-lens'));
+  assert.deepEqual(require('../scripts/lib/workflow-lint').lintWorkflow(text), []);
+});

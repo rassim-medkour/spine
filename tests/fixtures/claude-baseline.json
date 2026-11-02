@@ -26,10 +26,10 @@
     "tests/subagent-gate.test.js": "37b12dc6c4c78c77da9dfdd668e53046e28d9f35c9fe8999a5336cf4c08c2296",
     "tests/validate-artifact-hook.test.js": "d42ccfeca377f6130ad8a9fd99f186071cb145a186120f9507dbc0f27764853f",
     "tests/validate.test.js": "0818ea202e27be78dc4960287daad32dac338d34d4584835c058aa4be4b17d4c",
-    "tests/workflows-smoke.test.js": "edb3176e8341241c3da970446519e1ab9c6e929cd03cc76945ca4869ca1842ec",
-    "tests/workflows.test.js": "6e25d22e546647f3ee324b687b7139935a07a840ac65cf7da2b6d4446ad802a4",
+    "tests/workflows-smoke.test.js": "3d232b22999b3faddd4c40b5efd0c13f03ea926c395e4237ab49ec5b03224b62",
+    "tests/workflows.test.js": "5f0568dcefd837145362917e2c0c23bc7aec83b3bc53fcb2898f64f8ca92912c",
     "workflows/implement.workflow.js": "3cb5596a66e8ee4b22504441fc401ae97e94dedec5876efd2924c658d38f8ce0",
     "workflows/review.workflow.js": "57590afee7a9a40cf890279bebfd77102b3cf0319db4ff114cf238b927d7a4c3",
-    "workflows/spec.workflow.js": "600c01ebf045e507450e4a486e9bbd576eead618cd2a1c587247f1bb9b21125a"
+    "workflows/spec.workflow.js": "f9d4553b704e9e7aaaeb6fabff29967d3c17a3c651599ccb06ae766fd34dc07d"
   }
 }

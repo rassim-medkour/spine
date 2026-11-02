@@ -7,10 +7,12 @@ export const meta = {
   ]
 };
 
-// args: { intentText, lenses, providers, runId }
+// args: { intentText, lenses, providers, runId, productText?, repoDocs? }
 if (!args || typeof args.intentText !== 'string' || !args.intentText.trim()) throw new Error('spine-internal-spec: args.intentText is required. This is an internal step of the spine skill; run /spine:spine-spec "<request>" instead.');
 const lenses = Array.isArray(args.lenses) && args.lenses.length ? args.lenses : ['domain', 'architecture', 'data', 'security', 'ops', 'testability'];
 const providers = Array.isArray(args.providers) ? args.providers : [];
+const productText = typeof args.productText === 'string' && args.productText.trim() ? args.productText : '';
+const repoDocs = Array.isArray(args.repoDocs) ? args.repoDocs.map((d) => String(d).replaceAll('\\', '/')) : [];
 
 // --- spine model routing (identical in all three workflows; pinned by tests/workflow-model-parity.test.js) ---
 const MODEL_CLASS_RANK = { cheap: 0, mid: 1, top: 2 };
@@ -150,7 +152,8 @@ const LENS_FOCUS = {
   data: 'stored shapes, migrations, rollback, and data integrity',
   security: 'authentication, authorization, PII, input validation, and abuse cases',
   ops: 'deployment, observability, failure modes, and rollback in production',
-  testability: 'how each requirement becomes a named test, and what is hard to test'
+  testability: 'how each requirement becomes a named test, and what is hard to test',
+  product: 'the business rules, the ubiquitous language, and what the user actually needs'
 };
 
 function providerFor(index) {
@@ -167,9 +170,111 @@ INTENT:
 ${args.intentText}`;
 }
 
+// --- product lens (REQ-35); the cap and section parser are self-contained copies of
+// scripts/lib/cap-record.js and scripts/lib/product-context.js, pinned by a parity test (REQ-23) ---
+const PRODUCT_CAP_PREFIX = 'assumption to confirm: ';
+const PRODUCT_CAP_CONFIDENCE = 0.5;
+const PRODUCT_DOC_FILE_RE = /(\.(md|markdown|rst|txt)$)|(^|\/)docs\//i;
+const PRODUCT_ISSUE_RE = /^(#\d+|[\w.-]+\/[\w.-]+#\d+)$/;
+const PRODUCT_URL_RE = /^https?:\/\//i;
+const PRODUCT_REF_RE = /^(?:.*\/)?product\.md:(\d+)$/;
+const PRODUCT_SECTION_NOTE_RE = /§\s*(.+?)\s*$/;
+function productSections(text) {
+  const lines = String(text).replace(/^﻿/, '').replace(/\r\n?/g, '\n').split('\n');
+  if (lines.length && lines[lines.length - 1] === '') lines.pop();
+  const sections = new Map();
+  let current = null;
+  lines.forEach((raw, i) => {
+    const m = /^(## [^#].*?)\s*$/.exec(raw);
+    if (m) {
+      if (current) current.end = i;
+      current = { start: i + 1, end: lines.length, lines: [] };
+      if (!sections.has(m[1])) sections.set(m[1], current);
+      return;
+    }
+    if (current) current.lines.push(raw);
+  });
+  return sections;
+}
+function productLineQualifies(line, note, sections) {
+  const m = PRODUCT_SECTION_NOTE_RE.exec(String(note || ''));
+  if (!m) return false;
+  const section = sections.get('## ' + m[1].replace(/^#+\s*/, ''));
+  if (!section || !(line > section.start && line <= section.end)) return false;
+  const t = section.lines[line - section.start - 1];
+  return typeof t === 'string' && t.trim() !== '' && !/^\s*#/.test(t);
+}
+function productDocQualifies(ref, note, sections) {
+  const value = String(ref || '').trim();
+  const product = PRODUCT_REF_RE.exec(value);
+  if (product) return productLineQualifies(Number(product[1]), note, sections);
+  if (PRODUCT_ISSUE_RE.test(value) || PRODUCT_URL_RE.test(value)) return true;
+  const file = value.replace(/:\d+(-\d+)?$/, '').replaceAll('\\', '/').replace(/^\.\//, '');
+  return PRODUCT_DOC_FILE_RE.test(file) && repoDocs.includes(file);
+}
+function capProductRecord(record, sections) {
+  const cited = (Array.isArray(record.evidence) ? record.evidence : []).some((e) => e && e.kind === 'doc' && productDocQualifies(e.ref, e.note, sections));
+  if (cited) return record;
+  const resolution = record.resolution || null;
+  const keep = resolution && resolution.kind === 'question' && typeof resolution.text === 'string' ? resolution.text : record.claim;
+  const text = String(keep).startsWith(PRODUCT_CAP_PREFIX) ? keep : PRODUCT_CAP_PREFIX + keep;
+  return {
+    ...record,
+    confidence: Math.min(Number(record.confidence), PRODUCT_CAP_CONFIDENCE),
+    severity: record.severity === 'CRITICAL' || record.severity === 'HIGH' ? 'MEDIUM' : record.severity,
+    resolution: { kind: 'question', text },
+  };
+}
+
+const PRODUCT_SECTION = {
+  type: 'object',
+  properties: {
+    invariants_touched: { type: 'array', items: { type: 'string' } },
+    flows_touched: { type: 'array', items: { type: 'object', properties: { name: { type: 'string' }, weight: { type: 'string' } }, required: ['name', 'weight'] } },
+    states_missing: { type: 'array', items: { type: 'string' } },
+    conflicts: { type: 'array', items: { type: 'string' } },
+    user_impact: { type: 'object', properties: { before: { type: 'string' }, after: { type: 'string' } }, required: ['before', 'after'] },
+    records: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          claim: { type: 'string' },
+          severity: { type: 'string' },
+          confidence: { type: 'number' },
+          evidence: { type: 'array', items: { type: 'object', properties: { kind: { type: 'string' }, ref: { type: 'string' }, note: { type: 'string' } }, required: ['kind', 'ref'] } },
+          resolution: { type: 'object' }
+        },
+        required: ['claim', 'severity', 'confidence', 'evidence']
+      }
+    }
+  },
+  required: ['invariants_touched', 'flows_touched', 'states_missing', 'conflicts', 'user_impact', 'records']
+};
+
+function productLensPrompt() {
+  return `You are the product lens for a spec. Focus only on ${LENS_FOCUS.product}.
+Read the product context and the intent below. Report: invariants the intent touches, key flows it touches with their weight, user-visible states the intent omits (empty, loading, error, partial, permission denied), and conflicts with goals or UX principles. Give user_impact before and after.
+Every record needs evidence. The source of an expectation is a doc entry: product.md:<line> with the section heading in the note (for example §Invariants), a repo documentation file, an issue or a URL. A file entry only records where something was observed. Never state a business rule that has no source; an unsourced expectation is a question.
+
+PRODUCT CONTEXT:
+${productText}
+
+INTENT:
+${args.intentText}`;
+}
+
 const failedLenses = [];
 
 phase('Lenses');
+const productRun = productText
+  ? routed('product_lens', productLensPrompt(), { label: 'product-lens', phase: 'Lenses', schema: PRODUCT_SECTION })
+    .catch((e) => {
+      markNotRun('product-lens');
+      log(`product-lens failed: ${e && e.message}`);
+      return null;
+    })
+  : null;
 const sections = await parallel(lenses.map((lens, i) => () =>
   routed('spec_lens', lensPrompt(lens, i), { label: `lens:${lens}`, phase: 'Lenses', schema: SECTION })
     .catch((e) => {
@@ -186,6 +291,8 @@ const sections = await parallel(lenses.map((lens, i) => () =>
 ));
 const good = sections.filter(Boolean);
 log(`spine-internal-spec: ${good.length}/${lenses.length} lenses returned`);
+
+const productResult = productRun ? await productRun : null;
 
 phase('Synthesis');
 const merged = await routed(
@@ -233,10 +340,34 @@ const synthesisRecords = modelArgs && merged ? [{
   alternatives: [],
   model: modelBlocks.synthesis
 }] : [];
+const productStart = records.length + synthesisRecords.length;
+const sectionMap = productResult ? productSections(productText) : null;
+const productRecords = productResult && Array.isArray(productResult.records) ? productResult.records.map((r, i) => capProductRecord({
+  id: `R-${String(productStart + i + 1).padStart(4, '0')}`,
+  stage: 'spec',
+  agent: 'spine:product-lens',
+  provider: 'spine:product-lens',
+  claim: r.claim,
+  evidence: r.evidence,
+  confidence: r.confidence,
+  severity: r.severity,
+  dissent: null,
+  resolution: r.resolution || null,
+  alternatives: [],
+  ...(modelArgs ? { model: modelBlocks['product-lens'] || null } : {})
+}, sectionMap)) : [];
+const agentFor = (label) => (label === 'synthesis' ? 'spine:synthesis' : label === 'product-lens' ? 'spine:product-lens' : 'spine:lens');
 const allRecords = [
   ...records,
   ...synthesisRecords,
-  ...didNotRunRecords('spec', (label) => (label === 'synthesis' ? 'spine:synthesis' : 'spine:lens'), records.length + synthesisRecords.length)
+  ...productRecords,
+  ...didNotRunRecords('spec', agentFor, productStart + productRecords.length)
 ];
 
-return { sections: good, merged: merged || null, dissent: merged ? merged.dissent : [], records: allRecords, failed_lenses: failedLenses };
+const result = { sections: good, merged: merged || null, dissent: merged ? merged.dissent : [], records: allRecords, failed_lenses: failedLenses };
+if (!productResult) return result;
+const { before, after } = productResult.user_impact;
+return {
+  ...result,
+  user_impact: { before, after, invariants_touched: productResult.invariants_touched, flows_touched: productResult.flows_touched, states_missing: productResult.states_missing, conflicts: productResult.conflicts }
+};
