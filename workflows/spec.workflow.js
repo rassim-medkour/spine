@@ -182,6 +182,12 @@ const PRODUCT_SECTION_NOTE_RE = /§\s*(.+?)\s*$/;
 const posixPath = (p) => String(p).replaceAll('\\', '/').replace(/^\.\//, '');
 const productFile = posixPath(typeof args.productPath === 'string' && args.productPath ? args.productPath : '.spine/product.md');
 // product.json.sections: { '## Invariants': { start, end, blank: [lines], headings: [lines] } }. Citations are checked against it, never against productText line numbers.
+const repoDocsTruncated = args.repoDocsTruncated === true;
+const flowsTouched = Array.isArray(args.flowsTouched) ? args.flowsTouched.filter((x) => x && typeof x.name === 'string') : [];
+// "key flows this change touches" (product.json.flows_touched); empty when the orchestrator passes none.
+const flowsBlock = flowsTouched.length
+  ? '\n\nThe key flows this change touches:\n' + flowsTouched.map((x) => '- ' + x.name + ' (' + x.weight + ')').join('\n')
+  : '';
 const productSectionMap = args.productSections && typeof args.productSections === 'object' && !Array.isArray(args.productSections) ? args.productSections : null;
 function productLineQualifies(line, section) {
   return line > section.start && line <= section.end && !(section.blank || []).includes(line) && !(section.headings || []).includes(line);
@@ -202,7 +208,8 @@ function productDocQualifies(ref, note) {
   const file = posixPath(value.replace(PRODUCT_LINE_SPEC_RE, ''));
   if (file === 'product.md' || file === productFile) return productCitationQualifies(PRODUCT_LINE_SPEC_RE.exec(value), note);
   if (PRODUCT_ISSUE_RE.test(value) || PRODUCT_URL_RE.test(value)) return true;
-  return PRODUCT_DOC_FILE_RE.test(file) && repoDocs.includes(file);
+  // A truncated doc list cannot prove absence, so a doc file outside it qualifies (fail open toward the finding).
+  return PRODUCT_DOC_FILE_RE.test(file) && (repoDocs.includes(file) || repoDocsTruncated);
 }
 function capProductRecord(record) {
   const cited = (Array.isArray(record.evidence) ? record.evidence : []).some((e) => e && e.kind === 'doc' && productDocQualifies(e.ref, e.note));
@@ -250,7 +257,7 @@ Read the product context and the intent below. Report: invariants the intent tou
 Every record needs evidence. The source of an expectation is a doc entry: product.md:<line> with the section heading in the note (for example §Invariants), a repo documentation file, an issue or a URL. A file entry only records where something was observed. Never state a business rule that has no source; an unsourced expectation is a question.
 
 PRODUCT CONTEXT:
-${productText}
+${productText}${flowsBlock}
 
 INTENT:
 ${args.intentText}`;

@@ -20,11 +20,10 @@ function hasStage(stage) {
   return Object.prototype.hasOwnProperty.call(STAGE_ARTIFACTS, stage);
 }
 
-function collectIssues(run) {
+function collectIssues(run, ctx = productContextFor(run.dir)) {
   const stage = run.state.stage;
   if (!hasStage(stage)) return [{ kind: 'unknown-stage' }];
   const issues = [];
-  const ctx = productContextFor(run.dir);
   for (const rel of STAGE_ARTIFACTS[stage]) {
     const abs = path.join(run.dir, rel);
     if (!fs.existsSync(abs)) {
@@ -63,9 +62,12 @@ function evaluateStop(run, config) {
   if (run.state.status !== 'active') return allowVerdict('not-active');
   if (HUMAN_WAIT.includes(run.state.awaiting)) return allowVerdict('awaiting');
   if (run.state.stage === 'done') return allowVerdict('done');
-  const issues = collectIssues(run);
+  const ctx = productContextFor(run.dir);
+  const issues = collectIssues(run, ctx);
   const errors = formatIssues(issues, run.state.stage);
   if (!errors.length) return { decision: 'allow', why: 'clean', issues, errors };
+  // An unreadable product.json reads as no product context: it is named in the reason but never blocks on its own (hooks fail open).
+  if (ctx.unreadable) errors.push('product.json unreadable');
   return { decision: config.strictness === 'warn' ? 'warn' : 'block', why: 'unclean', issues, errors };
 }
 

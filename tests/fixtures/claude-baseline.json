@@ -1,7 +1,7 @@
 {
   "files": {
     "hooks/hooks.json": "52aa39d8aad136be82ef062411e1887537c4f7378feacbe7339ce2d012fd5096",
-    "tests/agents.test.js": "75f3e7394ce93b963c67160b9eccde3a3407631475213610b9cd1c0bce757ee5",
+    "tests/agents.test.js": "0ca16b56aab2482ba7dda344f1a17c7dca8267c0612f135dbbc218169c2949de",
     "tests/churn.test.js": "4663f4b111543b791297c584224328eb882322f52ac1b41d8f4b67346ffaebea",
     "tests/classify.test.js": "678766d0fa13e406a0eab75f3e3f15f5e250108f6edb278660abe041d6895ad6",
     "tests/command.test.js": "c5b2fa49efaadafee88976c79a702642a57dcfa10d4ff696518d3da20bef61c1",
@@ -20,16 +20,16 @@
     "tests/providers.test.js": "88a00380650a6f248fb7ecad5ea16026080a62d85c403720d7ae0e33d9eaa319",
     "tests/release.test.js": "c97a819a91dcf2b47148195b331ff1144930ccaede6947eeb44094b5cb49bdc8",
     "tests/session-start.test.js": "95a76ecf2866875207c9cc0b2c74fba3a1baaeceac0a3185298bb53acee78867",
-    "tests/skills.test.js": "9328c23a8e66b3f277624ecf4179b725638052eaa760f87e83e3f504e2bab4d0",
+    "tests/skills.test.js": "06c8752a29ae95e30e927ed260222b319c93d1cd73cfb1976a57ce8ba6aaf942",
     "tests/state.test.js": "aae4f5406f62555cbab999ad06136123c3d10869ec2d32e57adb9c2598dd2393",
-    "tests/stop-gate.test.js": "4293dc4923259555724e4e32ae02214b1fa99d6438e8f247a7d28e83e1112221",
+    "tests/stop-gate.test.js": "880dafeb752308f5bbb6c885620932d749aa918e97c45ca18c173330f63a14da",
     "tests/subagent-gate.test.js": "37b12dc6c4c78c77da9dfdd668e53046e28d9f35c9fe8999a5336cf4c08c2296",
     "tests/validate-artifact-hook.test.js": "2b501ae57fc960e05ba356f2913c954ac64cff380c96ef1e91cee07eab9fc867",
     "tests/validate.test.js": "0818ea202e27be78dc4960287daad32dac338d34d4584835c058aa4be4b17d4c",
     "tests/workflows-smoke.test.js": "3d232b22999b3faddd4c40b5efd0c13f03ea926c395e4237ab49ec5b03224b62",
     "tests/workflows.test.js": "a19e43ee557fe0e218a8f8d516e11a86510567846bff4c291f2a14a2a0b55e25",
     "workflows/implement.workflow.js": "3cb5596a66e8ee4b22504441fc401ae97e94dedec5876efd2924c658d38f8ce0",
-    "workflows/review.workflow.js": "b976fb48a748462e50cced877f22a92e1f63b55073d2cd088fa716e4cc7093c7",
-    "workflows/spec.workflow.js": "fec4f46cfcadead9cbf2d6b85b9483dc6ca457ed79aed27e734bfb60e53b94da"
+    "workflows/review.workflow.js": "f78a38628da6e307fb329e17345fb42a1f6e1cdb0592cbdd8a72976464956446",
+    "workflows/spec.workflow.js": "d7480628263f18ff809c20f007d1bf05fcbb7403a43ede32f2ac67a1567be780"
   }
 }

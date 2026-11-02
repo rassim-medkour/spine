@@ -103,3 +103,12 @@ test('ux-finder pins the REQ-36 report items (R-0143)', () => {
   }
   assert.match(text, /file and line|<file>:<line>/);
 });
+
+test('T-15c: both prompts say to cite the number before the pipe and name the touched key flows (R-0220, R-0221)', () => {
+  for (const name of ['product-lens', 'ux-finder']) {
+    const text = read(name).replace(/\s+/g, ' ');
+    assert.ok(text.includes('Cite the number before the `|`, as `product.md:14`'), name);
+    assert.ok(text.includes('carry no number'), name);
+    assert.ok(text.includes('key flows this change touches'), name);
+  }
+});

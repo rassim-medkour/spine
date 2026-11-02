@@ -20,6 +20,7 @@ Cursor support is still experimental and the live Cursor smoke test is pending.
 
 ### Fixed
 
+- [both] Every product context line carries its file line number (`14| ...`), so a `product.md:14` citation means the same to the agent, the cap and the human. The workflows receive the key flows the change touches and whether the doc list was truncated; a doc outside a truncated list is not capped. `--decide` appends to `decisions.md` before it writes the decision record. A recorded model plan with a malformed `product_lens` or `ux_finder` entry re-plans just that entry. The Stop gate names an unreadable `product.json` without blocking on it alone.
 - [claude-code] The Stop gate, the PostToolUse hook and the Cursor after-edit hook enforce the product-gated headings from the same `productContextFor` helper; a corrupt `product.json` is reported as unreadable instead of silently turning the headings off.
 - [both] `ux_finder` skips write an `INFO` only when product context loaded, so a run without `product.md` still adds exactly one record.
 - [claude-code] The implement workflow now runs tickets one at a time when `parallel` is false. Before, every ticket's implementer started at once in the same checkout, because `pipeline()` has no barrier between items; `parallel: true` still overlaps tickets in isolated worktrees.

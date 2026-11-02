@@ -273,3 +273,20 @@ test('T-15a: --record must look like R-0001, else ok false and no file access', 
   }
   assert.ok(!fs.existsSync(path.join(r.root, '.spine', 'decisions.md')));
 });
+
+test('T-15c: --decide appends first and writes the decision record only after a successful append (R-0214)', (t) => {
+  const r = setupRun(t);
+  const kinds = () => fs.readdirSync(path.join(r.runDir, 'records')).map((f) => JSON.parse(read(path.join(r.runDir, 'records', f)))).filter((x) => x.resolution && x.resolution.kind === 'decision');
+  const failing = { ...pc.defaultDecisionsIo, rename() { throw Object.assign(new Error('busy'), { code: 'EPERM' }); } };
+  const out = main(['--run', r.runDir, '--decide', '--record', 'R-0001', '--answer', 'yes'], r.root, failing);
+  assert.equal(out.ok, false);
+  assert.equal(kinds().length, 0, 'no decision record after a failed append');
+  const order = [];
+  const spy = { ...pc.defaultDecisionsIo, rename(a, b) { order.push(fs.readdirSync(path.join(r.runDir, 'records')).length); return fs.renameSync(a, b); } };
+  const before = fs.readdirSync(path.join(r.runDir, 'records')).length;
+  const ok = main(['--run', r.runDir, '--decide', '--record', 'R-0001', '--answer', 'yes'], r.root, spy);
+  assert.equal(ok.ok, true);
+  assert.deepEqual(order, [before], 'the append ran before the decision record existed');
+  assert.equal(kinds().length, 1);
+  assert.equal(ok.decision_record, kinds()[0].id);
+});

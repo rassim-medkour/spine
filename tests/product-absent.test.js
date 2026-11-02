@@ -263,3 +263,41 @@ test('an absent product.md leaves sections null and repo_docs empty', (t) => {
   assert.equal(pj.sections, null);
   assert.deepEqual(pj.repo_docs, []);
 });
+
+// --- T-15c ---
+test('T-15c: repo_docs_truncated is true only when the 5000-entry cut applied; the CLI prints it (R-0227)', (t) => {
+  const { defaultIo } = require('../scripts/lib/product-context');
+  const real = defaultIo.listFiles;
+  const run = (n) => {
+    defaultIo.listFiles = () => Array.from({ length: n }, (_, i) => `docs/d${String(i).padStart(5, '0')}.md`);
+    const r = setup(t, doc());
+    const out = call(r);
+    return { out, pj: productJson(r.runDir) };
+  };
+  try {
+    const big = run(5001);
+    assert.equal(big.pj.repo_docs.length, 5000);
+    assert.equal(big.pj.repo_docs_truncated, true);
+    assert.equal(big.out.repo_docs_truncated, true);
+    const exact = run(5000);
+    assert.equal(exact.pj.repo_docs_truncated, false);
+    assert.equal(exact.out.repo_docs_truncated, false);
+  } finally {
+    defaultIo.listFiles = real;
+  }
+});
+
+test('T-15c: a run that bootstrapped with product.md absent stays absent and requires no headings when product.md appears later (R-0209)', (t) => {
+  const { productContextFor } = require('../scripts/lib/product-context');
+  const { validateArtifactFile } = require('../scripts/lib/validate');
+  const r = setup(t);
+  call(r);
+  fs.writeFileSync(path.join(r.root, '.spine', 'product.md'), doc());
+  call(r);
+  assert.equal(productJson(r.runDir).state, 'absent');
+  const ctx = productContextFor(r.runDir);
+  assert.equal(ctx.productContext, false);
+  fs.writeFileSync(path.join(r.runDir, 'intent.md'), '---\nid: x\nstage: intent\nupstream_id: x\nstatus: draft\n---\n\n# Intent\n');
+  const errs = validateArtifactFile(path.join(r.runDir, 'intent.md'), 'intent.md', ctx);
+  assert.equal(errs.some((e) => /Who this is for|What changes for the user/.test(e)), false, errs.join('|'));
+});

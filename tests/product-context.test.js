@@ -170,3 +170,20 @@ test('T-15a: productContextFor separates absent, unreadable, and a readable prod
   const bad = run({ spine_version: '0.4.0' }, '{not json');
   assert.deepEqual([bad.productContext, bad.unreadable], [false, true]);
 });
+
+// T-15c item 1 (R-0220)
+test('T-15c: every product line in the text carries its 1-based file line number, in ok and trimmed states', () => {
+  const ok = loadProduct(repo(doc()), {}, []);
+  const raw = doc().split('\n');
+  ok.text.split('\n').forEach((l, i) => assert.equal(l, `${i + 1}| ${raw[i]}`));
+  const big = doc(flow('Checkout', 'critical', 'src/checkout/**') + flow('Other', 'minor', 'lib/**'), 'u\n'.repeat(30));
+  const all = big.split('\n');
+  const t = loadProduct(repo(big), { product_context_max_lines: 20 }, ['src/checkout/a.js']);
+  assert.equal(t.state, 'trimmed');
+  for (const l of t.text.split('\n')) {
+    const m = /^(\d+)\| (.*)$/.exec(l);
+    assert.ok(m, l);
+    assert.equal(all[Number(m[1]) - 1], m[2]);
+  }
+  assert.ok(t.text.split('\n').some((l) => /^\d+\| ## Invariants$/.test(l)));
+});

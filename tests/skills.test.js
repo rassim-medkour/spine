@@ -97,3 +97,12 @@ test('both spine skills pass productSections, productPath and repoDocs from prod
     }
   }
 });
+
+test('T-15c: both spine skills pass flowsTouched and repoDocsTruncated from product.json to the workflows (R-0221, R-0227)', () => {
+  for (const rel of SPINE_SKILLS) {
+    const text = readSkill(rel).replace(/\s+/g, ' ');
+    for (const needle of ['`flowsTouched` (`product.json` `flows_touched`)', '`repoDocsTruncated` (`product.json` `repo_docs_truncated`)']) {
+      assert.ok(text.includes(needle), rel + ' ' + needle);
+    }
+  }
+});

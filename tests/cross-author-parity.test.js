@@ -221,3 +221,20 @@ test('a ux-find failure is listed in failed_providers and verdict_note with and 
     if (models) assert.ok(result.records.some((r) => r.agent === 'spine:ux-finder' && /agent did not run: ux-find/.test(r.claim)));
   }
 });
+
+// --- T-15c ---
+test('T-15c: the ux-find prompt lists the key flows this change touches when flowsTouched is given (R-0221)', async () => {
+  const { calls } = await runUx({ uxFinder: true, productText: PRODUCT_TEXT, flowsTouched: [{ name: 'Checkout', weight: 'critical', files: ['src/checkout/a.js'] }] });
+  const ux = calls.find((c) => c.label === 'ux-find');
+  assert.ok(ux.prompt.includes('key flows this change touches'));
+  assert.ok(ux.prompt.includes('Checkout (critical)'));
+  const plain = await runUx({ uxFinder: true, productText: PRODUCT_TEXT });
+  assert.equal(plain.calls.find((c) => c.label === 'ux-find').prompt.includes('key flows this change touches'), false);
+});
+
+test('T-15c: a doc citation outside a truncated repo_docs list qualifies (R-0227)', async () => {
+  const rec = { claim: 'c', severity: 'HIGH', confidence: 0.9, evidence: [{ kind: 'file', ref: 'src/a.tsx:1' }, { kind: 'doc', ref: 'docs/far.md:3' }] };
+  const sev = async (extra) => (await runUx({ uxFinder: true, productText: PRODUCT_TEXT, repoDocs: ['README.md'], ...extra }, [rec])).result.records.find((r) => r.agent === 'spine:ux-finder').severity;
+  assert.equal(await sev({}), 'MEDIUM');
+  assert.equal(await sev({ repoDocsTruncated: true }), 'HIGH');
+});

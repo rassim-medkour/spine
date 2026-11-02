@@ -329,3 +329,51 @@ test('spec: the workflow copy of capProductRecord equals scripts/lib/cap-record.
   const want = inputs.map((e) => mk(e)).concat([mk(ev('file', 'a.js:1'), 'LOW')]).map((r) => capProductRecord({ ...r, agent: 'spine:product-lens' }, ctx));
   assert.deepEqual(got.map((r) => [r.severity, r.confidence, r.resolution]), want.map((r) => [r.severity, r.confidence, r.resolution || null]));
 });
+
+// --- T-15c: flows to the workflows, shared citation shapes, truncated doc list ---
+const FLOWS_TOUCHED = [{ name: 'Checkout', weight: 'critical', files: ['src/checkout/a.js'] }];
+const SHAPES = (ev) => [
+  ev('file', 'a.js:1'), ev('doc', 'README.md'), ev('doc', 'docs/x.md:4'), ev('doc', 'missing.md'), ev('doc', '#12'), ev('doc', 'o/r#3'),
+  ev('doc', 'https://www.w3.org/WAI/WCAG22/'), ev('doc', 'src/a.js'), ev('doc', 'product.md:20', '§Invariants'), ev('doc', 'product.md:18', '§Invariants'),
+  ev('doc', 'product.md:19', '§Invariants'), ev('doc', 'product.md:20', '§Goals'), ev('doc', 'product.md:999', '§Invariants'), ev('doc', 'product.md:20'),
+  ev('doc', '.spine/product.md:20', '§Invariants'), ev('doc', '.spine/product.md'), ev('doc', 'product.md', '§Invariants'),
+  ev('doc', 'product.md:20-22', '§Invariants'), ev('doc', 'product.md:20-23', '§Invariants'), ev('doc', 'product.md:17-20', '§Invariants'),
+];
+
+test('T-15c: the product-lens prompt lists the key flows this change touches when flowsTouched is given (R-0221)', async () => {
+  const prompts = [];
+  const agent = async (prompt, opts) => { if (opts.label === 'product-lens') prompts.push(prompt); return productAnswer(opts); };
+  await load('spec')(agent, parallel, pipeline, noop, noop, { intentText: 'i', lenses: ['domain'], productText: PRODUCT_TEXT, flowsTouched: FLOWS_TOUCHED });
+  assert.ok(prompts[0].includes('key flows this change touches'));
+  assert.ok(prompts[0].includes('Checkout (critical)'));
+  prompts.length = 0;
+  await load('spec')(agent, parallel, pipeline, noop, noop, { intentText: 'i', lenses: ['domain'], productText: PRODUCT_TEXT });
+  assert.equal(prompts[0].includes('key flows this change touches'), false);
+});
+
+test('T-15c: spec parity covers the same citation shapes as the review one, record by record (R-0222)', async () => {
+  const { capProductRecord } = require('../scripts/lib/cap-record');
+  const repoDocs = ['README.md', 'docs/x.md'];
+  const ctx = { productSections: SECTIONS, repoHas: (p) => repoDocs.includes(p) };
+  const ev = (kind, ref, note) => ({ kind, ref, ...(note ? { note } : {}) });
+  const mk = (e, i, severity = 'HIGH') => ({ claim: 'c' + i, severity, confidence: 0.9, evidence: [ev('file', 'src/f' + i + '.ts:1'), e] });
+  const all = SHAPES(ev).map((e, i) => mk(e, i));
+  const a = recorder((opts) => (opts.label === 'product-lens' ? { ...productAnswer(opts), records: all } : specAnswer(opts)));
+  const out = await load('spec')(a.agent, parallel, pipeline, noop, noop, { intentText: 'i', lenses: ['domain'], productText: PRODUCT_TEXT, productSections: SECTIONS, repoDocs });
+  const got = out.records.filter((r) => r.agent === 'spine:product-lens');
+  const want = all.map((r) => capProductRecord({ ...r, agent: 'spine:product-lens' }, ctx));
+  assert.equal(got.length, want.length);
+  want.forEach((w, i) => assert.deepEqual([got[i].claim, got[i].severity, got[i].confidence, got[i].resolution], [w.claim, w.severity, w.confidence, w.resolution || null], w.claim));
+});
+
+test('T-15c: a doc citation outside a truncated repo_docs list qualifies; outside a complete list it is capped (R-0227)', async () => {
+  const rec = { claim: 'c', severity: 'HIGH', confidence: 0.9, evidence: [{ kind: 'doc', ref: 'docs/far.md:3' }] };
+  const run = async (extra) => {
+    const a = recorder((opts) => (opts.label === 'product-lens' ? { ...productAnswer(opts), records: [rec] } : specAnswer(opts)));
+    const out = await load('spec')(a.agent, parallel, pipeline, noop, noop, { intentText: 'i', lenses: ['domain'], productText: PRODUCT_TEXT, productSections: SECTIONS, repoDocs: ['README.md'], ...extra });
+    return out.records.find((r) => r.agent === 'spine:product-lens');
+  };
+  assert.equal((await run({})).severity, 'MEDIUM');
+  assert.equal((await run({ repoDocsTruncated: false })).severity, 'MEDIUM');
+  assert.equal((await run({ repoDocsTruncated: true })).severity, 'HIGH');
+});

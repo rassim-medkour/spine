@@ -6,7 +6,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { loadProduct, appendDecision, readProductJson, readDecisionsTail, defaultIo } = require('./lib/product-context');
-const { listRecords } = require('./lib/records');
+const { listRecords, nextRecordId } = require('./lib/records');
 const { PRODUCT_AGENTS, DOC_FILE_RE } = require('./lib/cap-record');
 const { writeRecords } = require('./lib/record-writer');
 const { loadConfig, readJson } = require('./lib/state');
@@ -43,7 +43,7 @@ function parseArgs(argv) {
 const emptyState = () => ({
   state: 'absent', sha256: null, lines: 0, loaded_lines: 0, flows_touched: [], left_out: [], flow_issues: [],
   absent_record: null, defect_record: null, trim_record: null, flow_record: null, resume_record: null, decisions: [],
-  sections: null, repo_docs: [],
+  sections: null, repo_docs: [], repo_docs_truncated: false,
 });
 
 const infoRecord = (stage, severity, claim, evidence) => ({
@@ -82,9 +82,11 @@ const REPO_DOCS_MAX = 5000;
 // Tracked documentation files (REQ-11): the workflows check doc citations against this list instead of the file system.
 function repoDocsOf(root) {
   try {
-    return defaultIo.listFiles(root).map((f) => f.replaceAll('\\', '/')).filter((f) => DOC_FILE_RE.test(f)).sort().slice(0, REPO_DOCS_MAX);
+    const all = defaultIo.listFiles(root).map((f) => f.replaceAll('\\', '/')).filter((f) => DOC_FILE_RE.test(f)).sort();
+    // truncated tells the workflows the list cannot prove a doc is missing (R-0227).
+    return { docs: all.slice(0, REPO_DOCS_MAX), truncated: all.length > REPO_DOCS_MAX };
   } catch {
-    return [];
+    return { docs: [], truncated: false };
   }
 }
 
@@ -132,13 +134,16 @@ function decide(args, runDir, state, config, io) {
   const rel = config.artifacts_dir + '/decisions.md';
   const file = path.join(repoRoot, config.artifacts_dir, 'decisions.md');
   const runId = state.id || path.basename(runDir);
-  const decisionId = existingDecisionRecord(runDir, args.record) || writeRecords(runDir, [decisionRecord(stage, args.record, args.answer, rel)], {})[0];
+  // The log line is appended first; the decision record is written only after it succeeds. Its id is known in advance for the cut marker.
+  const existingId = existingDecisionRecord(runDir, args.record);
+  const plannedId = existingId || nextRecordId(runDir);
   const question = record.resolution && record.resolution.text ? record.resolution.text : record.claim;
-  const out = appendDecision(file, { runId, recordId: args.record, date: todayUtc(), question, answer: args.answer, fullTextRecordId: decisionId }, io);
+  const out = appendDecision(file, { runId, recordId: args.record, date: todayUtc(), question, answer: args.answer, fullTextRecordId: plannedId }, io);
   if (!out.ok) {
     writeRecords(runDir, [infoRecord(stage, 'MEDIUM', 'decision not written: ' + args.record + ' (' + out.error + ')', [{ kind: 'doc', ref: rel, note: out.error }])], {});
     return { ok: false, written: false, error: out.error, record: args.record };
   }
+  const decisionId = existingId || writeRecords(runDir, [decisionRecord(stage, args.record, args.answer, rel)], {})[0];
   const line = out.written ? out.line : (readDecisionsTail(file, Infinity).find((l) => l.includes(' · ' + runId + ' · ' + args.record + ' · ')) || null);
   const result = { ok: true, written: out.written, line, record: args.record, decision_record: decisionId, file: rel };
   if (line && !prev.decisions.some((d) => d.record === args.record)) {
@@ -176,17 +181,18 @@ function main(argv, root = process.cwd(), decisionsIo) {
   const written = Object.fromEntries(plan.map(([key], i) => [key, ids[i]]));
 
   const usable = loaded.state === 'ok' || loaded.state === 'trimmed';
+  const docs = usable && !changed ? repoDocsOf(root) : { docs: [], truncated: false };
   const fresh = changed ? prev : {
     ...prev, state: loaded.state, sha256: loaded.sha256, lines: loaded.lines, loaded_lines: loaded.loadedLines,
     flows_touched: loaded.flowsTouched, left_out: loaded.leftOut, flow_issues: flowIssues.map(({ flow, glob, message, line }) => ({ flow, glob, message, line })),
-    sections: usable ? loaded.sections : null, repo_docs: usable ? repoDocsOf(root) : [],
+    sections: usable ? loaded.sections : null, repo_docs: docs.docs, repo_docs_truncated: docs.truncated,
   };
   const next = { ...fresh, ...written };
   writeJson(productJsonPath(runDir), next);
   if (!changed && loaded.text) fs.writeFileSync(path.join(runDir, 'product-context.md'), loaded.text);
   if (next.state === 'ok' || next.state === 'trimmed') mergeDiagnostics(runDir, { state: next.state, loaded_lines: next.loaded_lines, flows_touched: next.flows_touched.length, flow_issues: next.flow_issues.length });
   const record = ids.length ? ids[ids.length - 1] : null;
-  return { ok: true, state: next.state, record, loaded_lines: next.loaded_lines, flows_touched: next.flows_touched.length };
+  return { ok: true, state: next.state, record, loaded_lines: next.loaded_lines, flows_touched: next.flows_touched.length, repo_docs_truncated: next.repo_docs_truncated === true };
 }
 
 module.exports = { main, productJsonPath, plannedRecords };

@@ -320,3 +320,23 @@ test('tree.json is stale when inputs.product_sha256 differs from the current pro
   fs.rmSync(path.join(r.dir, 'models.json'));
   assert.equal(run(['--run', r.dir, '--stage', 'review'], r).out.tier_reason, 'tree.json stale: product.md changed');
 });
+
+test('T-15c: a malformed product_lens or ux_finder entry in an otherwise valid plan is re-planned; valid entries are untouched (R-0226)', (t) => {
+  const r = makeRun(t, { size: 'L' });
+  const first = run(['--run', r.dir, '--stage', 'implement'], r);
+  const file = path.join(r.dir, 'models.json');
+  const doc = JSON.parse(fs.readFileSync(file, 'utf8'));
+  const stage = doc.stages.implement;
+  stage.roles.product_lens = 'oops';
+  stage.roles.ux_finder = { ...stage.roles.ux_finder, model: 5 };
+  stage.workflow_args.roles.ux_finder = { class: 'mid', model: 5, source: 'requested' };
+  stage.roles.finder = { ...stage.roles.finder, reason: 'kept as written' };
+  fs.writeFileSync(file, JSON.stringify(doc, null, 2));
+  const again = run(['--run', r.dir, '--stage', 'implement'], r);
+  assert.deepEqual(again.out.roles.product_lens, first.out.roles.product_lens);
+  assert.deepEqual(again.out.roles.ux_finder, first.out.roles.ux_finder);
+  assert.deepEqual(again.out.workflow_args.roles.ux_finder, first.out.workflow_args.roles.ux_finder);
+  assert.equal(again.out.roles.finder.reason, 'kept as written');
+  const written = JSON.parse(fs.readFileSync(file, 'utf8')).stages.implement;
+  assert.equal(written.roles.ux_finder.model, first.out.roles.ux_finder.model);
+});

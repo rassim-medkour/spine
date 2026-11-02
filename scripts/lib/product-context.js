@@ -271,18 +271,22 @@ function unreachableParts(lines, parsed) {
   return out;
 }
 
+// Every prompt line carries its 1-based file line, so a citation product.md:<n> means the same to the agent, the cap and the human (REQ-13).
+const numberLines = (lines) => lines.map((l, i) => `${i + 1}| ${l}`);
+
 // Chunks are taken in document order up to max lines; every chunk cut wholly or in part is named in leftOut.
 function budgetText(lines, parsed, touchedNames, max) {
+  const numbered = numberLines(lines);
   const chunks = [];
   const leftOut = [];
   for (const [heading, sec] of parsed.sections) {
     const headingIdx = sec.start - 1;
     if (KEPT_WHEN_TRIMMED.includes(heading)) {
-      chunks.push({ label: heading, lines: lines.slice(headingIdx, sec.end) });
+      chunks.push({ label: heading, lines: numbered.slice(headingIdx, sec.end) });
     } else if (heading === '## Key flows') {
-      chunks.push({ label: heading, lines: [lines[headingIdx]] });
+      chunks.push({ label: heading, lines: [numbered[headingIdx]] });
       for (const b of parsed.flowBlocks) {
-        if (touchedNames.has(b.flow.name)) chunks.push({ label: 'flow ' + b.flow.name, lines: lines.slice(b.start, b.end) });
+        if (touchedNames.has(b.flow.name)) chunks.push({ label: 'flow ' + b.flow.name, lines: numbered.slice(b.start, b.end) });
         else leftOut.push('flow ' + b.flow.name);
       }
     } else {
@@ -444,7 +448,7 @@ function loadProduct(root, config = {}, changedFiles = [], io = defaultIo, opts 
   const decisionsTail = readDecisionsTail(path.join(opts.decisionsRoot || root, dir, 'decisions.md'));
   const base = { sections: sectionMapOf(parsed.sections), sha256, lines: lines.length, flows: parsed.flows, matched: byFile, flowsTouched: touched, flowIssues: [...dropped, ...flowIssues], decisionsTail };
   if (lines.length <= maxLinesFrom(config)) {
-    return result({ ...base, state: 'ok', text: withDecisionsTail(lines.join('\n'), decisionsTail), loadedLines: lines.length + decisionsTail.length });
+    return result({ ...base, state: 'ok', text: withDecisionsTail(numberLines(lines).join('\n'), decisionsTail), loadedLines: lines.length + decisionsTail.length });
   }
   const trimmed = budgetText(lines, parsed, new Set(touched.map((t) => t.name)), maxLinesFrom(config));
   return result({ ...base, state: 'trimmed', text: withDecisionsTail(trimmed.text, decisionsTail), loadedLines: splitLines(trimmed.text).length + decisionsTail.length, leftOut: trimmed.leftOut });

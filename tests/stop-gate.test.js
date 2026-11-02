@@ -151,3 +151,15 @@ test('T-15a: the same run with product.json absent is gate-clean', () => {
     assert.equal(run({ cwd, stop_hook_active: false }, { SPINE_HOME: home }).status, 0);
   }
 });
+
+test('T-15c: an unreadable product.json adds a note to the Stop reason but never blocks alone (R-0215)', () => {
+  const clean = productGateRepo(null);
+  fs.writeFileSync(path.join(clean.dir, 'product.json'), '{ not json');
+  assert.equal(run({ cwd: clean.cwd, stop_hook_active: false }, { SPINE_HOME: clean.home }).status, 0);
+  const dirty = repo({ ...base, stage: 'intent', spine_version: '0.4.0' });
+  fs.writeFileSync(path.join(dirty.dir, 'product.json'), '{ not json');
+  const r = run({ cwd: dirty.cwd, stop_hook_active: false }, { SPINE_HOME: dirty.home });
+  assert.equal(r.status, 2);
+  assert.match(r.stderr, /intent\.md is missing/);
+  assert.match(r.stderr, /product\.json unreadable/);
+});

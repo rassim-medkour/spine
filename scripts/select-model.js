@@ -154,25 +154,25 @@ function policySummary(merged) {
 // Roles every 0.3.x plan holds; a plan with these is reusable and only gets the roles added since (REQ-18).
 const LEGACY_ROLES = mp.ROLES.slice(0, 7);
 
+const validRoleEntry = (e) => isObj(e) && (e.model === null || (typeof e.model === 'string' && mp.MODEL_ID_RE.test(e.model)));
+
 function rolesValid(entry, roles) {
   if (!isObj(entry) || !isObj(entry.roles) || !isObj(entry.workflow_args)) return false;
-  return roles.every((role) => {
-    const e = entry.roles[role];
-    return isObj(e) && (e.model === null || (typeof e.model === 'string' && mp.MODEL_ID_RE.test(e.model)));
-  });
+  return roles.every((role) => validRoleEntry(entry.roles[role]));
 }
 
 const stageReusable = (entry) => rolesValid(entry, mp.ROLES);
 
 // Recorded entries are kept as written; only the roles the plan lacks come from the fresh plan.
 function appendMissingRoles(entry, fresh) {
-  const missing = mp.ROLES.filter((role) => !isObj(entry.roles[role]));
+  // A role is re-planned when its entry is absent or malformed (not an object, or a model id that is not a string).
+  const missing = mp.ROLES.filter((role) => !validRoleEntry(entry.roles[role]));
   const wfRoles = isObj(entry.workflow_args.roles) ? entry.workflow_args.roles : {};
   const roles = { ...entry.roles };
   const workflowRoles = { ...wfRoles };
   for (const role of mp.ROLES) {
     if (missing.includes(role)) roles[role] = fresh.roles[role];
-    if (missing.includes(role) || !isObj(wfRoles[role])) workflowRoles[role] = fresh.workflow_args.roles[role];
+    if (missing.includes(role) || !validRoleEntry(wfRoles[role])) workflowRoles[role] = fresh.workflow_args.roles[role];
   }
   const ordered = (obj) => Object.fromEntries(mp.ROLES.map((role) => [role, obj[role]]));
   return { ...entry, roles: ordered(roles), workflow_args: { ...entry.workflow_args, roles: ordered(workflowRoles) } };

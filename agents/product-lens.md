@@ -15,6 +15,9 @@ The prompt gives you the budgeted product context (`product-context.md`) and
 `intent.md`. Read both fully. Use Read, Grep and Glob on the repo only to find
 a documentation source for a claim.
 
+Every line of the product context starts with its line number in `product.md` and a `|`, for example `14| - An invoice is never deleted, only voided.`. Cite the number before the `|`, as `product.md:14`. The lines of the `## Decisions (last 10)` block carry no number.
+When the prompt lists "key flows this change touches", treat them as the flows in scope.
+
 ## Decisions
 
 If the product context ends with a `## Decisions (last 10)` block, read it first.
