@@ -23,3 +23,11 @@ for (const file of fs.readdirSync(DIR).filter((f) => f.endsWith('.md')).sort()) 
     else assert.equal(fm.readonly, expected, `${name} readonly`);
   });
 }
+
+for (const name of ['product-lens', 'ux-finder']) {
+  test(`agents/${name}.md is shipped and readonly for Cursor`, () => {
+    const fm = parseFrontmatter(fs.readFileSync(path.join(DIR, `${name}.md`), 'utf8'));
+    assert.equal(fm.name, name);
+    assert.equal(fm.readonly, 'true');
+  });
+}

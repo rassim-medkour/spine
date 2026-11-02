@@ -1,7 +1,7 @@
 {
   "files": {
     "hooks/hooks.json": "52aa39d8aad136be82ef062411e1887537c4f7378feacbe7339ce2d012fd5096",
-    "tests/agents.test.js": "8ed08eb20adb67a0f0b054bcea282bf0762ad40517ea56c104c55e51320fdf9d",
+    "tests/agents.test.js": "e12f55ba5c543208397403e1babb25d6397446c294bdb3564b44b93b1efbcac0",
     "tests/churn.test.js": "4663f4b111543b791297c584224328eb882322f52ac1b41d8f4b67346ffaebea",
     "tests/classify.test.js": "678766d0fa13e406a0eab75f3e3f15f5e250108f6edb278660abe041d6895ad6",
     "tests/command.test.js": "c5b2fa49efaadafee88976c79a702642a57dcfa10d4ff696518d3da20bef61c1",
