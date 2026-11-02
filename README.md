@@ -1,7 +1,7 @@
 # spine
 
-> **Status: alpha (0.3.2).** Commands, artifact shapes and gate behaviour may
-> change between minor versions. `master` is the alpha channel; pin `v0.3.2`
+> **Status: alpha (0.4.0).** Commands, artifact shapes and gate behaviour may
+> change between minor versions. `master` is the alpha channel; pin `v0.4.0`
 > for a fixed version.
 
 A gated, evidence-first engineering process for Claude Code. One plugin that
@@ -35,7 +35,7 @@ the [releases page](https://github.com/rassim-medkour/spine/releases) for
 what changed.
 
 Pin a version instead with
-`claude plugin marketplace add https://github.com/rassim-medkour/spine.git#v0.3.2`.
+`claude plugin marketplace add https://github.com/rassim-medkour/spine.git#v0.4.0`.
 Remove spine with `claude plugin uninstall spine@spine` and
 `claude plugin marketplace remove spine`.
 
@@ -162,6 +162,7 @@ the claim `workflow tool unavailable, ran inline`, and keeps the gate chain.
 /spine:spine review <pr# | branch | --diff>
 /spine:spine status
 /spine:spine resume <run-id>
+/spine:spine product
 ```
 
 Shortcuts for the three stages people start most:
@@ -376,6 +377,71 @@ Nits (LOW, collapsed), Proof (what ran and what is missing) and Not verified.
 Each finding is one line: location, claim, record id; locations link to the
 reviewed commit. Reviewer text is cleaned so it cannot mention people or carry
 HTML. Spine asks before posting it with `gh pr comment` and never posts on its own.
+
+## Product context
+
+Optional. Commit a `.spine/product.md` and every stage reads it under the usual
+evidence rules. Start one with `/spine:spine product`: it drafts the file from
+your README, routes, screens, UI copy and docs, marks each drafted line
+`(unconfirmed, from <file>)`, then asks one question per turn until each
+section has a confirmed entry. It never creates a run, and it warns once that
+the file is committed, so it must hold no customer data and no secrets.
+
+The file has six headings: `## Users`, `## Goals`, `## Glossary`,
+`## Invariants`, `## Key flows`, `## UX principles`. A file missing a heading,
+unreadable, not UTF-8 or over 256 KiB counts as absent for that run and yields
+one `MEDIUM` record naming the defect.
+
+A key flow is a `### <name>` block under `## Key flows`:
+
+```markdown
+### Checkout
+weight: critical
+paths: src/checkout/**, src/pay*.js
+1. Open the cart
+2. Pay
+3. See the receipt
+```
+
+`weight` is `critical`, `important` or `minor`; there is no default, and an
+entry with an unknown weight or no paths is dropped with its line number.
+`paths` use the same globs as `critical_paths`. Business weight raises the file
+tier after every other rule: a file on a `critical` flow is at least trunk, on
+an `important` flow at least branch, whatever its fan-in. The tree also gains
+two signals, `user_facing` and `key_flow`, written only when product context
+loaded.
+
+What it changes in a run:
+
+- **Spec.** A `product_lens` reads the product context and `intent.md` and the
+  spec gains `## User impact` (before and after, flows, invariants,
+  citations). `gap-check` has a seventh question, User impact.
+- **Review.** A `ux_finder` runs only when a changed file is user-facing or on
+  a key flow. It reports missing UI states, copy that exposes internals or
+  contradicts the glossary, flow inconsistencies, accessibility regressions
+  visible in code and invariant violations.
+- **Click-through.** The reading map gains `## Click through yourself` when a
+  key flow is touched (the click-through list): flow name, weight, steps, and the live-verification
+  record that drove it or `not driven`. Each flow adds
+  `tiers.click_through_minutes` (default 3) minutes to the G3 line.
+- **Pull request.** Branch and trunk PR bodies gain `## What changes for the
+  user`, taken from the spec's `## User impact`.
+- **Citation rule.** A `product_lens` or `ux_finder` record needs a `doc`
+  citation: a line of `product.md` (with its `§Section` in the note), a repo
+  documentation file, an issue or a URL such as WCAG. Without one the record is
+  capped on write: confidence at most 0.5, severity at most MEDIUM, and a
+  question starting `assumption to confirm:`. The G3 summary prints one
+  `product cap:` line instead of a badge per record.
+- **Decisions log.** When you answer a product question at G1, G2 or G3, spine
+  appends one line to `.spine/decisions.md` (date, run, record, question,
+  answer). It is append-only, never counts toward `product_context_max_lines`
+  (default 150), and its last 10 lines are loaded into every product prompt.
+  Commit it, and consider `.spine/decisions.md merge=union` in
+  `.gitattributes`. Spine never writes to `product.md` and never commits for
+  you.
+
+Without `.spine/product.md` every artifact a run writes is byte-identical to
+0.3.2, apart from one `INFO` record, `no product context: .spine/product.md absent`.
 
 ## Model routing
 

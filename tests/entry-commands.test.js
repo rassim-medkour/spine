@@ -63,3 +63,16 @@ test('review without a target asks first and names the run after the target', ()
   assert.match(skill, /no target[^\n]*ask/i);
   assert.ok(skill.includes('20261022-pr-885'));
 });
+
+test('the product entry point edits one file and never creates a run (AC-2)', () => {
+  for (const rel of ['skills/spine/SKILL.md', 'cursor/skills/spine/SKILL.md']) {
+    const t = read(rel);
+    const start = t.indexOf('- `product`');
+    assert.ok(start > 0, rel);
+    const entry = t.slice(start, t.indexOf('\n- `', start + 5));
+    assert.match(entry, /never create a run/i, rel);
+    assert.match(entry, /one question per turn/i, rel);
+    assert.match(entry, /customer data and secrets/, rel);
+    assert.match(entry, /never invent/i, rel);
+  }
+});

@@ -49,3 +49,34 @@ test('both gap-check skills list seven questions and name User impact', () => {
     assert.doesNotMatch(text, /six/);
   }
 });
+
+const SPINE_SKILLS = ['skills/spine/SKILL.md', 'cursor/skills/spine/SKILL.md'];
+const readSkill = (rel) => fs.readFileSync(path.join(__dirname, '..', rel), 'utf8').replace(/\r\n/g, '\n');
+
+test('both spine skills name the product entry point, bootstrap call, --decide call, ux_finder skip claim and both agent files (T-13)', () => {
+  for (const rel of SPINE_SKILLS) {
+    const t = readSkill(rel);
+    assert.match(t, /^- `product`/m, `${rel} entry point`);
+    assert.ok(t.includes('scripts/product-context.js --run <run> --files'), `${rel} bootstrap call`);
+    assert.ok(t.includes('scripts/product-context.js --run <run> --decide --record <R-id> --answer'), `${rel} decide call`);
+    assert.ok(t.includes('ux_finder skipped: no user-facing or key-flow file'), `${rel} skip claim`);
+    assert.ok(t.includes('agents/product-lens.md'), `${rel} product-lens agent`);
+    assert.ok(t.includes('agents/ux-finder.md'), `${rel} ux-finder agent`);
+    assert.ok(t.includes('(unconfirmed, from <file>)'), `${rel} unconfirmed marker`);
+    assert.ok(t.includes('.spine/decisions.md merge=union'), `${rel} gitattributes hint`);
+    assert.ok(t.includes('cap_line'), `${rel} DONE cap line`);
+    assert.ok(t.includes('click through'), `${rel} STATE suffix`);
+  }
+});
+
+test('both spine skills dispatch product-lens with --model-role product_lens and ux-find with ux_finder (T-13)', () => {
+  for (const rel of SPINE_SKILLS) {
+    const t = readSkill(rel);
+    assert.match(t, /--model-role product_lens/, rel);
+    assert.match(t, /--model-role ux_finder/, rel);
+    assert.match(t, /productText/, rel);
+    assert.match(t, /uxFinder: true/, rel);
+    assert.match(t, /spine:product-lens/, rel);
+    assert.match(t, /spine:ux-finder/, rel);
+  }
+});

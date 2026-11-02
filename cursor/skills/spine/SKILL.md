@@ -107,6 +107,28 @@ It validates each record against the record contract, assigns the next
 the problems and writes nothing; fix the answer and rerun. A record with only
 `unverified` evidence may not be HIGH or CRITICAL; downgrade or verify.
 
+## Product context
+
+`.spine/product.md` is the repo's committed product context: users, goals,
+glossary, invariants, key flows and UX principles. Every stage reads it under
+the usual evidence rules; with the file absent every artifact is byte-identical
+to 0.3.2 apart from one `INFO` record.
+
+- **Citation cap.** Records from `spine:product-lens` and `spine:ux-finder`
+  without a qualifying `doc` citation are capped on write
+  (`write-record.js`): confidence at most 0.5, severity at most MEDIUM, a
+  question starting `assumption to confirm:`. Never raise a capped record by
+  hand. When `node <root>/scripts/run-status.js <run>` prints `cap_line`,
+  add it to DONE as one line.
+- **Decisions log.** When the human answers, at G1, G2 or G3, a question whose
+  record agent is `spine:product-lens` or `spine:ux-finder`, run
+  `node <root>/scripts/product-context.js --run <run> --decide --record <R-id> --answer "<text>"`
+  and name the appended line in DONE. It appends to `.spine/decisions.md` in
+  the main checkout, once per run and record. If it reports a failure, say so
+  in DONE and continue. Answers to any other question are not logged.
+- **Click-through.** The G3 `STATE` carries the reading map's `g3` string,
+  which ends with `click through <n> flows, <m> min` when a key flow is touched.
+
 ## Classification
 
 Run once per run, and again at `review` if the diff changed the file set:
@@ -138,6 +160,18 @@ proof record you write later carries it. If it prints `"disabled": true`, the
 repo set `"risk_tiers": false`; skip every tree, proof, verdict and
 reading-map step below and use the verdict rule exactly as v0.2.0 did. A run
 started before this version has no tree.json and no `spine_version` and is handled the same way; a run that has `spine_version` 0.3.0 or later but no tree.json is `UNPROVEN`, so run tree.js.
+
+Then load the product context (optional; a repo without
+`.spine/product.md` behaves as before and gets one `INFO` record):
+
+```bash
+node <root>/scripts/product-context.js --run <run> --files <same comma-separated files>
+```
+
+It writes `<run>/product.json` and `<run>/product-context.md` (the budgeted
+product text) and the one record the state calls for. Pass the text of
+`product-context.md` as `productText` wherever this file says so. See
+[Product context](#product-context).
 
 Select providers per stage with:
 
@@ -257,6 +291,14 @@ downstream artifact and re-run. The Stop hook enforces this.
   (`test`, `spike` or `question`). Then run `ecc:council` on the two most
   consequential disagreements if the ecc plugin is available in Cursor,
   otherwise the `devils-advocate` subagent.
+- Product lens, only when `<run>/product.json` has state `ok` or `trimmed`:
+  dispatch the `product-lens` subagent (`agents/product-lens.md`) with
+  `<run>/product-context.md` and `intent.md` (role `product_lens`, write its
+  records with `--model-role product_lens`); at size L run it in the same
+  parallel fan-out as the lenses and pass `productText` as its context. Then
+  write `## User impact` in `spec.md` (before and after, flows, invariants,
+  citations) from the lens records. Without product context, skip this and
+  write no `## User impact`.
 - Add one Mermaid component or context diagram and one sequence diagram for
   the main flow under `## Design`.
 - Run `gap-check`. Run the boundary checker `spec-vs-intent`.
@@ -308,6 +350,15 @@ downstream artifact and re-run. The Stop hook enforces this.
    tree.json replaces the one from classification. Record the wall-clock start
    time: `date -u +%s`.
 3. Select providers for `review`.
+   UX check: read `<run>/tree.json`. When any file has `user_facing.value` or
+   `key_flow.value` true, run the UX finder: dispatch the `ux-finder` subagent
+   (`agents/ux-finder.md`) with `<run>/product-context.md` (as `productText`)
+   and the diff (role `ux_finder`, records with `--model-role ux_finder`; at M
+   and L in the same parallel fan-out as the finders, `uxFinder: true`).
+   Otherwise write one `INFO` record, agent `spine:orchestrator`, claim
+   `ux_finder skipped: no user-facing or key-flow file`, and dispatch nothing.
+   A `spine:ux-finder` CRITICAL or HIGH that survives the citation cap is
+   verified by a provider of a different author, like any finder claim.
 4. Size S: run the one selected provider inline (role `finder`) and write its
    records with `--model-role finder`. For
    any CRITICAL or HIGH, write `select-providers.js review M --host cursor`
@@ -440,7 +491,7 @@ downstream artifact and re-run. The Stop hook enforces this.
     proof, not verified). Mention the file in DONE and ask whether to post it as a PR
     comment. Post only after an explicit yes, with
     `gh pr comment <n> --body-file <run>/review-comment.md`; never post on your own. Run `node <root>/scripts/run-status.js <run>`;
-    when it prints `model_mix`, add `model_mix.line` to DONE. Stop. On approval of an
+    when it prints `model_mix`, add `model_mix.line` to DONE. When it prints `cap_line`, add it to DONE as well. Stop. On approval of an
     UNPROVEN review, write a waiver record from `spine:orchestrator`: claim
     `G3 waiver: UNPROVEN accepted`, evidence
     `{ "kind": "doc", "ref": "human message", "note": "<their words, max 200 chars>" }`,
@@ -534,6 +585,25 @@ arguments.
   known. Name the run after the target: `20261022-pr-885`,
   `20261022-branch-<branch>` or `20261022-local-diff`. Spec axis providers get the linked
   issue body if the PR or branch names one; otherwise standards axis only.
+- `product`: draft or extend `.spine/product.md`. Never create a run: no
+  `state.json`, no `active.json`, no records; it edits one file. Read README,
+  CLAUDE.md, the package manifest, route and screen definitions, UI copy, i18n
+  files, docs and recent commits, and draft the six headings (`## Users`,
+  `## Goals`, `## Glossary`, `## Invariants`, `## Key flows`, `## UX principles`).
+  Key flows are `### <name>` blocks with `weight: critical|important|minor`,
+  `paths: <comma-separated globs>` and numbered steps. Mark each drafted line
+  `(unconfirmed, from <file>)`; never invent an entry that has no repo or
+  human source. Warn once, before writing, that the file is committed and must
+  hold no customer data and secrets. Then ask one question per turn, each
+  with a recommended answer so "yes" accepts it, until every section has a
+  confirmed entry or the human says stop; remove the marker from a line when
+  the human confirms it. When a flow's paths match no tracked file, write one
+  `INFO` record only if a run is active; otherwise say so in DONE. Tell the
+  human once to commit `.spine/product.md` and `.spine/decisions.md` and to
+  consider adding `.spine/decisions.md merge=union` to `.gitattributes`; never
+  edit `.gitattributes` yourself. If a run is active, leave it untouched and set
+  `awaiting: "human"` when the turn ends on a question. Invoked as
+  `/spine product`.
 - `status`: read `state.json`, `class.json`, `tickets.json`, the latest
   records, and the output of `node <root>/scripts/run-status.js <run>`;
   render the summary block with the last host and the hooks that fired in

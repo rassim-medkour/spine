@@ -6,7 +6,13 @@ Cursor support is still experimental and the live Cursor smoke test is pending.
 
 ### Added
 
-- [both] Two new routed roles, `product_lens` and `ux_finder`, with dispatch labels `product-lens` and `ux-find`. `--model-role` accepts both.
+- [both] Product context: an optional, committed `.spine/product.md` (users, goals, glossary, invariants, key flows, UX principles) that every stage reads. `/spine:spine product` drafts it from the repo and confirms each entry with you; it never creates a run. Without the file every artifact is byte-identical to 0.3.2 apart from one `INFO` record.
+- [both] Two new routed roles, `product_lens` at spec and `ux_finder` at review, with dispatch labels `product-lens` and `ux-find`. `--model-role` accepts both. `ux_finder` runs only when a changed file is user-facing or on a key flow.
+- [both] Two tree signals, `user_facing` and `key_flow`, written only when product context loaded. A file on a critical key flow is at least trunk, on an important one at least branch.
+- [both] Citation cap: `product_lens` and `ux_finder` records without a `doc` citation are capped on write (confidence 0.5, MEDIUM, `assumption to confirm:`). `run-status.js` prints one `cap_line`.
+- [both] The reading map gains `## Click through yourself` and the G3 line a `click through <n> flows, <m> min` suffix when a key flow is touched; branch and trunk PR bodies gain `## What changes for the user`.
+- [both] `.spine/decisions.md`: an append-only log of human answers to product questions at G1, G2 and G3.
+- [both] `gap-check` question 7, User impact; `## Who this is for`, `## What changes for the user` and `## User impact` are required only when a valid `product.md` existed and the run is 0.4.0 or later.
 
 ### Changed
 
