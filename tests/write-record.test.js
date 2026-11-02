@@ -59,3 +59,15 @@ test('pick-verifier, da-gate and check-cross-author work end to end', () => {
   const gate = JSON.parse(node('da-gate.js', [dir, '--devils-advocate', 'true']).stdout);
   assert.equal(typeof gate.open, 'boolean');
 });
+
+test('--from-text records from spine:ux-finder without a citation are capped on write', () => {
+  const dir = runDir();
+  const t = path.join(dir, 'answer.md');
+  fs.writeFileSync(t, ['```json spine-record', JSON.stringify(rec({ agent: 'spine:ux-finder' })), '```'].join('\n'));
+  const r = node('write-record.js', [dir, '--from-text', t]);
+  assert.equal(r.status, 0, r.stderr);
+  const saved = JSON.parse(fs.readFileSync(path.join(dir, 'records', 'R-0001.json'), 'utf8'));
+  assert.equal(saved.severity, 'MEDIUM');
+  assert.equal(saved.confidence, 0.5);
+  assert.match(saved.resolution.text, /^assumption to confirm: /);
+});

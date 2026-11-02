@@ -7,6 +7,9 @@ const { RUN_ID_RE, readJson } = require('./state');
 const { listRecords } = require('./records');
 const { groupFindings } = require('./cross-author');
 const mp = require('./model-policy');
+const crypto = require('node:crypto');
+const { parseProduct } = require('./product-context');
+const { capProductRecord } = require('./cap-record');
 
 const FLAG_KEYS = Object.freeze({
   '--provider': 'provider', '--author': 'author', '--verifies': 'verifies', '--verifier-note': 'verifier_note', '--host': 'host',
@@ -57,12 +60,33 @@ function modelProblems(r, i) {
   return ['model', 'verifier_model'].filter((k) => r[k] !== undefined).flatMap((k) => mp.validateModelBlock(r[k]).map((e) => `record ${i + 1}: ${k === 'model' ? e : e.replace(/^model\./, 'verifier_model.')}`));
 }
 
+// Citation context for the product cap. product.md sections count only when the file still matches the hash recorded for the run.
+function capContext(runDir) {
+  const artifactsDir = path.dirname(runDir);
+  const root = path.dirname(artifactsDir);
+  let sections = null;
+  try {
+    const buf = fs.readFileSync(path.join(artifactsDir, 'product.md'));
+    const recorded = readJson(path.join(runDir, 'product.json'));
+    if (recorded && recorded.sha256 === crypto.createHash('sha256').update(buf).digest('hex')) sections = parseProduct(buf.toString('utf8')).sections;
+  } catch {
+    sections = null;
+  }
+  const repoHas = (rel) => {
+    const full = path.resolve(root, rel);
+    if (full !== root && !full.startsWith(root + path.sep)) return false;
+    try { return fs.statSync(full).isFile(); } catch { return false; }
+  };
+  return { productSections: sections, repoHas };
+}
+
 function writeRecords(runDir, records, flags = {}) {
   if (!runDir || !RUN_ID_RE.test(path.basename(runDir)) || !fs.existsSync(path.join(runDir, 'state.json'))) {
     throw new Error('first argument must be an existing <artifacts_dir>/<run-id> directory with state.json');
   }
   const ctx = { plan: readJson(path.join(runDir, 'models.json')), records: listRecords(runDir).map((r) => r.record) };
-  const stamped = records.map((r) => stamp(r, flags, ctx));
+  const capCtx = capContext(runDir);
+  const stamped = records.map((r) => capProductRecord(stamp(r, flags, ctx), capCtx));
   const problems = stamped.flatMap((r, i) => [...validateRecord({ ...r, id: 'R-0000' }).map((e) => `record ${i + 1}: ${e}`), ...modelProblems(r, i)]);
   if (problems.length) throw new Error(problems.join('; '));
   fs.mkdirSync(path.join(runDir, 'records'), { recursive: true });
