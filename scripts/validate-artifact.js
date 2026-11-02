@@ -1,4 +1,5 @@
 'use strict';
+const fs = require('node:fs');
 const path = require('node:path');
 const { readGuardedInput, emitContext, appendHookLog } = require('./lib/hook-io');
 const { yieldToCursorCopy } = require('./lib/host/detect');
@@ -29,6 +30,17 @@ function validateProduct(cwd, run, rel) {
   process.stdout.write(emitContext('PostToolUse', sanitizeHookText('spine: ' + rel + ' has ' + errors.length + ' problem(s): ' + errors.join('; ') + '. It is treated as absent until fixed.')));
 }
 
+// Product context for conditional headings: product.json state ok or trimmed, plus the run's spine_version.
+function runContext(run) {
+  let state = null;
+  try {
+    state = JSON.parse(fs.readFileSync(path.join(run.dir, 'product.json'), 'utf8')).state;
+  } catch {
+    state = null;
+  }
+  return { productContext: state === 'ok' || state === 'trimmed', spineVersion: run.state && run.state.spine_version };
+}
+
 function main() {
   const input = readGuardedInput('validate-artifact');
   if (yieldToCursorCopy(process.env, input)) return;
@@ -45,7 +57,7 @@ function main() {
   if (!run) return;
   const rel = path.relative(run.dir, path.resolve(cwd, filePath));
   if (rel.startsWith('..') || path.isAbsolute(rel)) return;
-  const errors = validateArtifactFile(path.resolve(cwd, filePath), rel);
+  const errors = validateArtifactFile(path.resolve(cwd, filePath), rel, runContext(run));
   if (!errors.length) {
     appendHookLog(run, 'PostToolUse', 'ok');
     return;

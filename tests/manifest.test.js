@@ -68,3 +68,49 @@ test('an empty frontmatter list skips the frontmatter error', () => {
   assert.deepEqual(validateMarkdown('## A\n', { frontmatter: [], headings: ['## A'] }), []);
   assert.ok(validateMarkdown('## A\n', { frontmatter: ['id'], headings: ['## A'] }).length > 0);
 });
+
+const INTENT_OLD = '---\nid: x\nstage: intent\nupstream_id: x\nstatus: draft\n---\n\n## Problem\n## Acceptance criteria\n## Constraints\n## Out of scope\n';
+const SPEC_OLD = '---\nid: x\nstage: spec\nupstream_id: x\nstatus: draft\n---\n\n' + ['Summary', 'Requirements', 'Design', 'Error paths', 'Data and migrations', 'Test anchors', 'Assumptions', 'Out of scope'].map((h) => `## ${h}\n`).join('');
+
+function checkIntent(text, ctx) {
+  const { validateMarkdown, loadSchema } = require('../scripts/lib/validate');
+  return validateMarkdown(text, loadSchema('intent'), ctx);
+}
+function checkSpec(text, ctx) {
+  const { validateMarkdown, loadSchema } = require('../scripts/lib/validate');
+  return validateMarkdown(text, loadSchema('spec'), ctx);
+}
+
+test('a 0.3.2 intent fixture under spine_version 0.3.2 has zero heading errors', () => {
+  assert.deepEqual(checkIntent(INTENT_OLD), []);
+  assert.deepEqual(checkIntent(INTENT_OLD, { productContext: true, spineVersion: '0.3.2' }), []);
+});
+
+test('a 0.4.0 run with product context ok reports the two missing intent headings', () => {
+  const errors = checkIntent(INTENT_OLD, { productContext: true, spineVersion: '0.4.0' });
+  assert.deepEqual(errors, ['missing heading "## Who this is for"', 'missing heading "## What changes for the user"']);
+  const full = INTENT_OLD + '## Who this is for\n## What changes for the user\n';
+  assert.deepEqual(checkIntent(full, { productContext: true, spineVersion: '0.10.0' }), []);
+});
+
+test('a 0.4.0 run without product context reports no conditional headings', () => {
+  assert.deepEqual(checkIntent(INTENT_OLD, { productContext: false, spineVersion: '0.4.0' }), []);
+  assert.deepEqual(checkIntent(INTENT_OLD, { spineVersion: '0.4.0' }), []);
+});
+
+test('spec User impact is gated the same way', () => {
+  assert.deepEqual(checkSpec(SPEC_OLD), []);
+  assert.deepEqual(checkSpec(SPEC_OLD, { productContext: true, spineVersion: '0.3.2' }), []);
+  assert.deepEqual(checkSpec(SPEC_OLD, { productContext: true, spineVersion: '0.4.0' }), ['missing heading "## User impact"']);
+  assert.deepEqual(checkSpec(SPEC_OLD + '## User impact\n', { productContext: true, spineVersion: '0.4.0' }), []);
+});
+
+test('validateArtifactFile reads product context from ctx for intent.md', () => {
+  const { validateArtifactFile } = require('../scripts/lib/validate');
+  const os = require('node:os');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'spine-cond-'));
+  const file = path.join(dir, 'intent.md');
+  fs.writeFileSync(file, INTENT_OLD);
+  assert.equal(validateArtifactFile(file, 'intent.md', { productContext: true, spineVersion: '0.4.0' }).length, 2);
+  assert.equal(validateArtifactFile(file, 'intent.md', {}).length, 0);
+});

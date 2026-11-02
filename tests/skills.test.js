@@ -16,9 +16,9 @@ for (const name of SKILLS) {
   });
 }
 
-test('gap-check lists the six absence questions', () => {
+test('gap-check lists the seven absence questions', () => {
   const text = fs.readFileSync(path.join(__dirname, '..', 'skills', 'gap-check', 'SKILL.md'), 'utf8');
-  for (const needle of ['Acceptance criteria', 'Error paths', 'migration', 'Non-functional', 'Test anchors', 'Out of scope']) {
+  for (const needle of ['Acceptance criteria', 'Error paths', 'migration', 'Non-functional', 'Test anchors', 'Out of scope', 'User impact']) {
     assert.match(text, new RegExp(needle));
   }
 });
@@ -38,5 +38,14 @@ test('spine skill calls workflows by registered name, never by a <root> scriptPa
     const metaName = script.match(/name:\s*'([^']+)'/)[1];
     assert.equal(metaName, `spine-internal-${stage}`);
     assert.ok(text.includes(`name: "spine:${metaName}"`), `SKILL.md must call spine:${metaName} by name`);
+  }
+});
+
+test('both gap-check skills list seven questions and name User impact', () => {
+  for (const dir of ['skills', 'cursor/skills']) {
+    const text = fs.readFileSync(path.join(__dirname, '..', dir, 'gap-check', 'SKILL.md'), 'utf8');
+    assert.match(text, /^## The seven absence questions$/m);
+    assert.match(text, /^7\. \*\*User impact\.\*\*/m);
+    assert.doesNotMatch(text, /six/);
   }
 });

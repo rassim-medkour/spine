@@ -57,7 +57,27 @@ function parseFrontmatter(text) {
   return data;
 }
 
-function validateMarkdown(text, schema) {
+const PRODUCT_HEADINGS_SINCE = '0.4.0';
+
+function versionAtLeast(version, min) {
+  const parse = (s) => (/^([0-9]+)[.]([0-9]+)[.]([0-9]+)/.exec(String(s || '')) || []).slice(1).map(Number);
+  const a = parse(version);
+  const b = parse(min);
+  if (a.length !== 3) return false;
+  for (let i = 0; i < 3; i++) if (a[i] !== b[i]) return a[i] > b[i];
+  return true;
+}
+
+// Conditional headings are required only when a valid product.md existed when the artifact was
+// written and the run's spine_version is at or above the release that introduced them.
+function conditionalHeadings(schema, ctx) {
+  const cond = schema.conditional_headings;
+  if (!cond || cond.when !== 'product_context') return [];
+  if (!ctx || ctx.productContext !== true || !versionAtLeast(ctx.spineVersion, PRODUCT_HEADINGS_SINCE)) return [];
+  return cond.headings || [];
+}
+
+function validateMarkdown(text, schema, ctx = {}) {
   const errors = [];
   const fm = parseFrontmatter(text);
   const needsFm = !(Array.isArray(schema.frontmatter) && schema.frontmatter.length === 0);
@@ -66,7 +86,7 @@ function validateMarkdown(text, schema) {
     if (!fm || !(key in fm) || fm[key] === '') errors.push(`missing frontmatter key ${key}`);
   }
   const lines = text.split(/\r?\n/).map((l) => l.trim());
-  for (const heading of schema.headings || []) {
+  for (const heading of [...(schema.headings || []), ...conditionalHeadings(schema, ctx)]) {
     if (!lines.includes(heading)) errors.push(`missing heading "${heading}"`);
   }
   return errors;
@@ -190,7 +210,7 @@ function validateArtifactFile(absPath, relPath = absPath, ctx = {}) {
     return name === 'tree' ? validateTree(parsed) : validateReview(parsed);
   }
   const schema = loadSchema(name);
-  if (schema.kind === 'markdown') return validateMarkdown(text, schema);
+  if (schema.kind === 'markdown') return validateMarkdown(text, schema, ctx);
   try {
     return validateJson(JSON.parse(text), schema);
   } catch {
