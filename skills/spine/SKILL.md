@@ -160,7 +160,11 @@ node <root>/scripts/product-context.js --run <run> --files <same comma-separated
 
 It writes `<run>/product.json` and `<run>/product-context.md` (the budgeted
 product text) and the one record the state calls for. Pass the text of
-`product-context.md` as `productText` wherever this file says so. See
+`product-context.md` as `productText` wherever this file says so. At size M and L,
+also pass `productSections` (`product.json` `sections`), `productPath`
+(`<artifacts_dir>/product.md`) and `repoDocs` (`product.json` `repo_docs`) to the
+spec and review workflows beside `productText`: the workflows check citations
+against them and never re-parse the product text. See
 [Product context](#product-context).
 
 Select providers per stage with:

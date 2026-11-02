@@ -160,6 +160,7 @@ test('userFacing table', () => {
   const rows = [
     ['src/App.tsx', [], true], ['locales/en.json', [], true], ['emails/welcome.html', [], true],
     ['src/api.js', ['  res.json({ ok: true });'], true], ['src/api.js', ['const x = 1;'], false],
+    ['src/user.ts', ['class UserDto {'], true], ['src/order.ts', ['export class OrderDTO'], true], ['src/user.ts', ['class UserSerializer extends Base {'], true], ['src/user.ts', ['const dtoCount = 1;'], false],
     ['tests/x.test.js', ['res.json(1)'], false], ['src/App.test.tsx', [], false], ['scripts/lib/tiers.js', [], false],
   ];
   for (const [p, added, want] of rows) assert.equal(userFacing(p, added).value, want, p);

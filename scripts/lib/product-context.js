@@ -219,7 +219,7 @@ const USER_FACING_PATH_RULES = Object.freeze([
 ]);
 const USER_FACING_LINE_RULES = Object.freeze([
   [/\bres\.(json|send|render)\(/, 'response shape writer'],
-  [/\b(Serializer|Dto|toJSON)\b/, 'serializer or DTO'],
+  [/\w*(Serializer|Dto|DTO)\b|\btoJSON\b/, 'serializer or DTO'],
 ]);
 
 // Test files are never user-facing. Path rules first, then added-line rules.
@@ -298,10 +298,29 @@ function budgetText(lines, parsed, touchedNames, max) {
   return { text: keep.join('\n'), leftOut: [...leftOut, ...unreachableParts(lines, parsed)] };
 }
 
+// Plain, JSON-safe section map: { '## Invariants': { start, end, blank: [lines], headings: [lines] } }.
+// product.json.sections holds this shape; the workflows check citations against it (REQ-13, REQ-23).
+function sectionMapOf(sections) {
+  if (!(sections instanceof Map)) return sections && typeof sections === 'object' ? sections : null;
+  const out = {};
+  for (const [heading, s] of sections) {
+    const lines = Array.isArray(s.lines) ? s.lines : [];
+    const blank = [];
+    const headings = [];
+    lines.forEach((text, i) => {
+      const n = s.start + 1 + i;
+      if (String(text).trim() === '') blank.push(n);
+      else if (/^\s*#/.test(text)) headings.push(n);
+    });
+    out[heading] = { start: s.start, end: s.end, blank, headings };
+  }
+  return out;
+}
+
 function result(extra) {
   return {
     state: 'absent', sha256: null, lines: 0, loadedLines: 0, text: '', flows: [], matched: new Map(), flowsTouched: [],
-    flowIssues: [], leftOut: [], issue: null, decisionsTail: [], ...extra,
+    flowIssues: [], leftOut: [], issue: null, decisionsTail: [], sections: null, ...extra,
   };
 }
 
@@ -423,7 +442,7 @@ function loadProduct(root, config = {}, changedFiles = [], io = defaultIo, opts 
   const { touched, flowIssues, byFile } = touchedFlows(parsed.flows, changedFiles || [], listFiles);
   const dropped = parsed.issues.filter((i) => i.flow).map((i) => ({ flow: i.flow, glob: null, message: i.message, line: i.line }));
   const decisionsTail = readDecisionsTail(path.join(opts.decisionsRoot || root, dir, 'decisions.md'));
-  const base = { sha256, lines: lines.length, flows: parsed.flows, matched: byFile, flowsTouched: touched, flowIssues: [...dropped, ...flowIssues], decisionsTail };
+  const base = { sections: sectionMapOf(parsed.sections), sha256, lines: lines.length, flows: parsed.flows, matched: byFile, flowsTouched: touched, flowIssues: [...dropped, ...flowIssues], decisionsTail };
   if (lines.length <= maxLinesFrom(config)) {
     return result({ ...base, state: 'ok', text: withDecisionsTail(lines.join('\n'), decisionsTail), loadedLines: lines.length + decisionsTail.length });
   }
@@ -462,4 +481,4 @@ function productContextFor(runDir) {
 }
 
 module.exports = {
-  readProductJson, productContextFor, DECISIONS_BLOCK_HEADING, HEADINGS, WEIGHTS, MAX_BYTES, DEFAULT_MAX_LINES, DECISIONS_TAIL, parseProduct, loadProduct, matchFlows, userFacing, productSignals, USER_FACING_PATH_RULES, USER_FACING_LINE_RULES, readDecisionsTail, decodeProduct, defaultIo, DECISIONS_HEADER, DECISION_LINE_RE, formatDecisionLine, appendDecision, defaultDecisionsIo };
+  sectionMapOf, readProductJson, productContextFor, DECISIONS_BLOCK_HEADING, HEADINGS, WEIGHTS, MAX_BYTES, DEFAULT_MAX_LINES, DECISIONS_TAIL, parseProduct, loadProduct, matchFlows, userFacing, productSignals, USER_FACING_PATH_RULES, USER_FACING_LINE_RULES, readDecisionsTail, decodeProduct, defaultIo, DECISIONS_HEADER, DECISION_LINE_RE, formatDecisionLine, appendDecision, defaultDecisionsIo };

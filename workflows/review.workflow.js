@@ -8,7 +8,7 @@ export const meta = {
   ]
 };
 
-// args: { diff, changedFiles, language, providers, devilsAdvocate, runId, stage, tree?, uxFinder?, productText?, repoDocs? }
+// args: { diff, changedFiles, language, providers, devilsAdvocate, runId, stage, tree?, uxFinder?, productText?, productSections?, productPath?, repoDocs? }
 if (!args || typeof args.diff !== 'string' || !args.diff.trim()) throw new Error('spine-internal-review: args.diff is required. This is an internal step of the spine skill; run /spine:spine-review <pr|branch|--diff> instead.');
 if (!Array.isArray(args.providers) || !args.providers.length) throw new Error('spine-internal-review: args.providers is required');
 const changedFiles = Array.isArray(args.changedFiles) ? args.changedFiles : [];
@@ -198,50 +198,42 @@ function finderPrompt(p) {
   return `${how}\nYour strengths: ${p.strengths.join(', ')}.\n${CONTRACT}\nChanged files: ${changedFiles.join(', ')}\nLanguage: ${args.language || 'unknown'}${tierContext()}\n\nDIFF:\n${args.diff}`;
 }
 
-// --- ux_finder (REQ-36); the cap and section parser are self-contained copies of
-// scripts/lib/cap-record.js and scripts/lib/product-context.js, pinned by a parity test (REQ-23) ---
+// --- ux_finder (REQ-36); the citation check and cap are self-contained copies of scripts/lib/cap-record.js,
+// pinned by a parity test (REQ-23). Section map and repo docs arrive from product.json via the orchestrator. ---
 const PRODUCT_CAP_PREFIX = 'assumption to confirm: ';
 const PRODUCT_CAP_CONFIDENCE = 0.5;
 const PRODUCT_DOC_FILE_RE = /(\.(md|markdown|rst|txt)$)|(^|\/)docs\//i;
 const PRODUCT_ISSUE_RE = /^(#\d+|[\w.-]+\/[\w.-]+#\d+)$/;
 const PRODUCT_URL_RE = /^https?:\/\//i;
-const PRODUCT_REF_RE = /^(?:.*\/)?product\.md:(\d+)$/;
+const PRODUCT_LINE_SPEC_RE = /:(\d+)(?:-(\d+))?$/;
 const PRODUCT_SECTION_NOTE_RE = /§\s*(.+?)\s*$/;
-function productSections(text) {
-  const lines = String(text).replace(/^﻿/, '').replace(/\r\n?/g, '\n').split('\n');
-  if (lines.length && lines[lines.length - 1] === '') lines.pop();
-  const sections = new Map();
-  let current = null;
-  lines.forEach((raw, i) => {
-    const m = /^(## [^#].*?)\s*$/.exec(raw);
-    if (m) {
-      if (current) current.end = i;
-      current = { start: i + 1, end: lines.length, lines: [] };
-      if (!sections.has(m[1])) sections.set(m[1], current);
-      return;
-    }
-    if (current) current.lines.push(raw);
-  });
-  return sections;
+const posixPath = (p) => String(p).replaceAll('\\', '/').replace(/^\.\//, '');
+const productFile = posixPath(typeof args.productPath === 'string' && args.productPath ? args.productPath : '.spine/product.md');
+// product.json.sections: { '## Invariants': { start, end, blank: [lines], headings: [lines] } }. Citations are checked against it, never against productText line numbers.
+const productSectionMap = args.productSections && typeof args.productSections === 'object' && !Array.isArray(args.productSections) ? args.productSections : null;
+function productLineQualifies(line, section) {
+  return line > section.start && line <= section.end && !(section.blank || []).includes(line) && !(section.headings || []).includes(line);
 }
-function productLineQualifies(line, note, sections) {
+function productCitationQualifies(spec, note) {
   const m = PRODUCT_SECTION_NOTE_RE.exec(String(note || ''));
-  if (!m) return false;
-  const section = sections.get('## ' + m[1].replace(/^#+\s*/, ''));
-  if (!section || !(line > section.start && line <= section.end)) return false;
-  const t = section.lines[line - section.start - 1];
-  return typeof t === 'string' && t.trim() !== '' && !/^\s*#/.test(t);
+  if (!spec || !m || !productSectionMap) return false;
+  const section = productSectionMap['## ' + m[1].replace(/^#+\s*/, '')];
+  if (!section) return false;
+  const from = Number(spec[1]);
+  const to = spec[2] === undefined ? from : Number(spec[2]);
+  if (!(to >= from) || to - from > 2000) return false;
+  for (let n = from; n <= to; n += 1) if (!productLineQualifies(n, section)) return false;
+  return true;
 }
-function productDocQualifies(ref, note, sections) {
+function productDocQualifies(ref, note) {
   const value = String(ref || '').trim();
-  const product = PRODUCT_REF_RE.exec(value);
-  if (product) return productLineQualifies(Number(product[1]), note, sections);
+  const file = posixPath(value.replace(PRODUCT_LINE_SPEC_RE, ''));
+  if (file === 'product.md' || file === productFile) return productCitationQualifies(PRODUCT_LINE_SPEC_RE.exec(value), note);
   if (PRODUCT_ISSUE_RE.test(value) || PRODUCT_URL_RE.test(value)) return true;
-  const file = value.replace(/:\d+(-\d+)?$/, '').replaceAll('\\', '/').replace(/^\.\//, '');
   return PRODUCT_DOC_FILE_RE.test(file) && repoDocs.includes(file);
 }
-function capProductRecord(record, sections) {
-  const cited = (Array.isArray(record.evidence) ? record.evidence : []).some((e) => e && e.kind === 'doc' && productDocQualifies(e.ref, e.note, sections));
+function capProductRecord(record) {
+  const cited = (Array.isArray(record.evidence) ? record.evidence : []).some((e) => e && e.kind === 'doc' && productDocQualifies(e.ref, e.note));
   if (cited) return record;
   const resolution = record.resolution || null;
   const keep = resolution && resolution.kind === 'question' && typeof resolution.text === 'string' ? resolution.text : record.claim;
@@ -295,22 +287,21 @@ const raw = await parallel(args.providers.map((p) => () =>
 // The cap runs here, before the merge and before any verifier is picked, so only cited CRITICAL/HIGH reach a verifier (REQ-31).
 let uxFindings = [];
 if (uxFinder) {
-  const sectionMap = productSections(productText);
   const ux = await routed('ux_finder', uxFinderPrompt(), { label: 'ux-find', phase: 'Find', schema: FINDINGS, agentType: 'spine:ux-finder' })
     .catch((e) => {
       markNotRun('ux-find');
+      failedProviders.push('ux-find');
       log(`ux-find failed: ${e && e.message}`);
       return null;
     });
-  uxFindings = ux && Array.isArray(ux.findings)
-    ? ux.findings.map((f) => ({ ...capProductRecord({ ...f, agent: 'spine:ux-finder' }, sectionMap), providers: ['spine:ux-finder'], authors: ['spine'], corroboration: 1 }))
-      .map(({ agent: _agent, ...f }) => ({ ...f, provider: 'spine:ux-finder', author: 'spine' }))
-    : [];
+  uxFindings = ux && Array.isArray(ux.findings) ? ux.findings.map((f) => ({ ...capProductRecord(f), provider: 'spine:ux-finder', author: 'spine' })) : [];
 }
 
+// A capped record is never merged with an uncapped one: the key and the grouping both keep them apart.
+const isCappedFinding = (f) => Boolean(f.resolution) && typeof f.resolution.text === 'string' && f.resolution.text.startsWith(PRODUCT_CAP_PREFIX);
 const merged = new Map();
-for (const f of raw.filter(Boolean).flat()) {
-  const key = evidenceKey(f);
+for (const f of [...raw.filter(Boolean).flat(), ...uxFindings]) {
+  const key = (isCappedFinding(f) ? 'capped|' : '') + evidenceKey(f);
   const seen = merged.get(key);
   if (!seen) {
     merged.set(key, { ...f, providers: [f.provider], authors: [f.author], corroboration: 1 });
@@ -374,13 +365,13 @@ async function mergeSameClaims(list) {
   if (!reply || !validGroups(reply.groups, list.length)) return list;
   // Two CRITICAL/HIGH claims are never folded together: each must reach its own verifier.
   const strongCount = (g) => g.filter((i) => list[i].severity === 'CRITICAL' || list[i].severity === 'HIGH').length;
-  const groups = reply.groups.filter((g) => strongCount(g) <= 1);
+  const groups = reply.groups.filter((g) => strongCount(g) <= 1 && new Set(g.map((i) => isCappedFinding(list[i]))).size === 1);
   const grouped = new Set(groups.flat());
   return [...list.filter((_, i) => !grouped.has(i)), ...groups.map((g) => mergeGroup(g.map((i) => list[i])))];
 }
 
-const findings = [...await mergeSameClaims([...merged.values()]), ...uxFindings];
-log(`spine-internal-review: ${raw.filter(Boolean).flat().length} raw findings, ${findings.length} unique`);
+const findings = await mergeSameClaims([...merged.values()]);
+log(`spine-internal-review: ${raw.filter(Boolean).flat().length + uxFindings.length} raw findings, ${findings.length} unique`);
 
 const strong = findings.filter((f) => f.severity === 'CRITICAL' || f.severity === 'HIGH');
 const advisory = findings.filter((f) => !strong.includes(f));
@@ -511,5 +502,5 @@ return {
   findings: checked.concat(advisory),
   dissent,
   failed_providers: failedProviders,
-  ...(failedProviders.length ? { verdict_note: `${failedProviders.length} of ${args.providers.length} providers failed` } : {})
+  ...(failedProviders.length ? { verdict_note: `${failedProviders.length} of ${args.providers.length + (uxFinder ? 1 : 0)} providers failed` } : {})
 };

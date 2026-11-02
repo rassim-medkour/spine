@@ -261,3 +261,62 @@ test('limitations list the host-independent ids for claude-code', (t) => {
   const r = makeRun(t, { size: 'L' });
   assert.deepEqual(run(['--run', r.dir, '--stage', 'review'], r).out.limitations.map((l) => l.id), ['not-routed', 'inline-skill']);
 });
+
+const LEGACY_ROLES = ['implementer', 'finder', 'verifier', 'devils_advocate', 'spec_lens', 'synthesis', 'boundary_checker'];
+const SIX_HEADINGS = ['## Users', 'x', '## Goals', 'x', '## Glossary', 'x', '## Invariants', 'x', '## Key flows', '## UX principles', 'x'].join('\n') + '\n';
+
+test('a seven-role models.json is reused; the two new roles are planned and appended without rewriting old entries (REQ-18)', (t) => {
+  const r = makeRun(t, { size: 'L' });
+  const first = run(['--run', r.dir, '--stage', 'implement'], r);
+  const file = path.join(r.dir, 'models.json');
+  const legacy = JSON.parse(fs.readFileSync(file, 'utf8'));
+  const stage = legacy.stages.implement;
+  for (const role of ['product_lens', 'ux_finder']) { delete stage.roles[role]; delete stage.workflow_args.roles[role]; }
+  stage.roles.finder = { ...stage.roles.finder, reason: 'kept as written' };
+  fs.writeFileSync(file, JSON.stringify(legacy, null, 2));
+  const again = run(['--run', r.dir, '--stage', 'implement'], r);
+  assert.equal(again.out.roles.finder.reason, 'kept as written');
+  assert.deepEqual(Object.keys(again.out.roles), mp.ROLES);
+  assert.deepEqual(again.out.roles.ux_finder, first.out.roles.ux_finder);
+  assert.deepEqual(Object.keys(again.out.workflow_args.roles), mp.ROLES);
+  const written = JSON.parse(fs.readFileSync(file, 'utf8')).stages.implement;
+  assert.equal(written.roles.finder.reason, 'kept as written');
+  assert.equal(written.roles.ux_finder.source, 'requested');
+  for (const role of LEGACY_ROLES) assert.deepEqual(written.roles[role], again.out.roles[role]);
+});
+
+test('--model-role ux_finder against a seven-role plan stamps requested after select-model ran, not fallback-error (REQ-18)', (t) => {
+  const { stamp } = require('../scripts/lib/record-writer');
+  const r = makeRun(t, { size: 'L' });
+  run(['--run', r.dir, '--stage', 'review'], r);
+  const file = path.join(r.dir, 'models.json');
+  const legacy = JSON.parse(fs.readFileSync(file, 'utf8'));
+  for (const role of ['product_lens', 'ux_finder']) { delete legacy.stages.review.roles[role]; delete legacy.stages.review.workflow_args.roles[role]; }
+  fs.writeFileSync(file, JSON.stringify(legacy, null, 2));
+  run(['--run', r.dir, '--stage', 'review'], r);
+  const plan = JSON.parse(fs.readFileSync(file, 'utf8'));
+  const rec = { stage: 'review', agent: 'spine:ux-finder', claim: 'c', evidence: [], confidence: 1, severity: 'LOW' };
+  const out = stamp(rec, { '--model-role': 'ux_finder' }, { plan, records: [] });
+  assert.equal(out.model.source, 'requested');
+});
+
+test('tree.json is stale when inputs.product_sha256 differs from the current product.md hash, present on one side only included (REQ-27)', (t) => {
+  const crypto = require('node:crypto');
+  const r = makeRun(t, { size: 'M', tree: true });
+  const fresh = run(['--run', r.dir, '--stage', 'review'], r);
+  assert.equal(fresh.out.tier_source, 'tree');
+  fs.writeFileSync(path.join(r.root, '.spine', 'product.md'), SIX_HEADINGS);
+  fs.rmSync(path.join(r.dir, 'models.json'));
+  const stale = run(['--run', r.dir, '--stage', 'review'], r);
+  assert.equal(stale.out.tier_source, 'size');
+  assert.equal(stale.out.tier_reason, 'tree.json stale: product.md changed');
+  const treeFile = path.join(r.dir, 'tree.json');
+  const tree = JSON.parse(fs.readFileSync(treeFile, 'utf8'));
+  tree.inputs.product_sha256 = crypto.createHash('sha256').update(SIX_HEADINGS).digest('hex');
+  fs.writeFileSync(treeFile, JSON.stringify(tree, null, 2));
+  fs.rmSync(path.join(r.dir, 'models.json'));
+  assert.equal(run(['--run', r.dir, '--stage', 'review'], r).out.tier_source, 'tree');
+  fs.rmSync(path.join(r.root, '.spine', 'product.md'));
+  fs.rmSync(path.join(r.dir, 'models.json'));
+  assert.equal(run(['--run', r.dir, '--stage', 'review'], r).out.tier_reason, 'tree.json stale: product.md changed');
+});

@@ -3,13 +3,13 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { validateRecord } = require('./validate');
 const { nextRecordId } = require('./records');
-const { RUN_ID_RE, readJson } = require('./state');
+const { RUN_ID_RE, readJson, loadConfig } = require('./state');
 const { listRecords } = require('./records');
 const { groupFindings } = require('./cross-author');
 const mp = require('./model-policy');
 const crypto = require('node:crypto');
 const { parseProduct } = require('./product-context');
-const { capProductRecord } = require('./cap-record');
+const { capProductRecord, sectionMapOf } = require('./cap-record');
 
 const FLAG_KEYS = Object.freeze({
   '--provider': 'provider', '--author': 'author', '--verifies': 'verifies', '--verifier-note': 'verifier_note', '--host': 'host',
@@ -61,14 +61,16 @@ function modelProblems(r, i) {
 }
 
 // Citation context for the product cap. product.md sections count only when the file still matches the hash recorded for the run.
+// The repo root is the run dir with artifacts_dir (one or more segments) and the run id stripped.
 function capContext(runDir) {
-  const artifactsDir = path.dirname(runDir);
-  const root = path.dirname(artifactsDir);
+  const artifactsRel = String(loadConfig(runDir).artifacts_dir).replaceAll('\\', '/').replace(/^\.\//, '');
+  const depth = artifactsRel.split('/').filter(Boolean).length;
+  const root = path.resolve(runDir, ...Array(depth + 1).fill('..'));
   let sections = null;
   try {
-    const buf = fs.readFileSync(path.join(artifactsDir, 'product.md'));
+    const buf = fs.readFileSync(path.join(root, artifactsRel, 'product.md'));
     const recorded = readJson(path.join(runDir, 'product.json'));
-    if (recorded && recorded.sha256 === crypto.createHash('sha256').update(buf).digest('hex')) sections = parseProduct(buf.toString('utf8')).sections;
+    if (recorded && recorded.sha256 === crypto.createHash('sha256').update(buf).digest('hex')) sections = sectionMapOf(parseProduct(buf.toString('utf8')).sections);
   } catch {
     sections = null;
   }
@@ -77,7 +79,7 @@ function capContext(runDir) {
     if (full !== root && !full.startsWith(root + path.sep)) return false;
     try { return fs.statSync(full).isFile(); } catch { return false; }
   };
-  return { productSections: sections, repoHas };
+  return { productSections: sections, productPath: artifactsRel + '/product.md', repoHas };
 }
 
 function writeRecords(runDir, records, flags = {}) {

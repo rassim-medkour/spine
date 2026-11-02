@@ -7,7 +7,7 @@ export const meta = {
   ]
 };
 
-// args: { intentText, lenses, providers, runId, productText?, repoDocs? }
+// args: { intentText, lenses, providers, runId, productText?, productSections?, productPath?, repoDocs? }
 if (!args || typeof args.intentText !== 'string' || !args.intentText.trim()) throw new Error('spine-internal-spec: args.intentText is required. This is an internal step of the spine skill; run /spine:spine-spec "<request>" instead.');
 const lenses = Array.isArray(args.lenses) && args.lenses.length ? args.lenses : ['domain', 'architecture', 'data', 'security', 'ops', 'testability'];
 const providers = Array.isArray(args.providers) ? args.providers : [];
@@ -170,50 +170,42 @@ INTENT:
 ${args.intentText}`;
 }
 
-// --- product lens (REQ-35); the cap and section parser are self-contained copies of
-// scripts/lib/cap-record.js and scripts/lib/product-context.js, pinned by a parity test (REQ-23) ---
+// --- product lens (REQ-35); the citation check and cap are self-contained copies of scripts/lib/cap-record.js,
+// pinned by a parity test (REQ-23). Section map and repo docs arrive from product.json via the orchestrator. ---
 const PRODUCT_CAP_PREFIX = 'assumption to confirm: ';
 const PRODUCT_CAP_CONFIDENCE = 0.5;
 const PRODUCT_DOC_FILE_RE = /(\.(md|markdown|rst|txt)$)|(^|\/)docs\//i;
 const PRODUCT_ISSUE_RE = /^(#\d+|[\w.-]+\/[\w.-]+#\d+)$/;
 const PRODUCT_URL_RE = /^https?:\/\//i;
-const PRODUCT_REF_RE = /^(?:.*\/)?product\.md:(\d+)$/;
+const PRODUCT_LINE_SPEC_RE = /:(\d+)(?:-(\d+))?$/;
 const PRODUCT_SECTION_NOTE_RE = /§\s*(.+?)\s*$/;
-function productSections(text) {
-  const lines = String(text).replace(/^﻿/, '').replace(/\r\n?/g, '\n').split('\n');
-  if (lines.length && lines[lines.length - 1] === '') lines.pop();
-  const sections = new Map();
-  let current = null;
-  lines.forEach((raw, i) => {
-    const m = /^(## [^#].*?)\s*$/.exec(raw);
-    if (m) {
-      if (current) current.end = i;
-      current = { start: i + 1, end: lines.length, lines: [] };
-      if (!sections.has(m[1])) sections.set(m[1], current);
-      return;
-    }
-    if (current) current.lines.push(raw);
-  });
-  return sections;
+const posixPath = (p) => String(p).replaceAll('\\', '/').replace(/^\.\//, '');
+const productFile = posixPath(typeof args.productPath === 'string' && args.productPath ? args.productPath : '.spine/product.md');
+// product.json.sections: { '## Invariants': { start, end, blank: [lines], headings: [lines] } }. Citations are checked against it, never against productText line numbers.
+const productSectionMap = args.productSections && typeof args.productSections === 'object' && !Array.isArray(args.productSections) ? args.productSections : null;
+function productLineQualifies(line, section) {
+  return line > section.start && line <= section.end && !(section.blank || []).includes(line) && !(section.headings || []).includes(line);
 }
-function productLineQualifies(line, note, sections) {
+function productCitationQualifies(spec, note) {
   const m = PRODUCT_SECTION_NOTE_RE.exec(String(note || ''));
-  if (!m) return false;
-  const section = sections.get('## ' + m[1].replace(/^#+\s*/, ''));
-  if (!section || !(line > section.start && line <= section.end)) return false;
-  const t = section.lines[line - section.start - 1];
-  return typeof t === 'string' && t.trim() !== '' && !/^\s*#/.test(t);
+  if (!spec || !m || !productSectionMap) return false;
+  const section = productSectionMap['## ' + m[1].replace(/^#+\s*/, '')];
+  if (!section) return false;
+  const from = Number(spec[1]);
+  const to = spec[2] === undefined ? from : Number(spec[2]);
+  if (!(to >= from) || to - from > 2000) return false;
+  for (let n = from; n <= to; n += 1) if (!productLineQualifies(n, section)) return false;
+  return true;
 }
-function productDocQualifies(ref, note, sections) {
+function productDocQualifies(ref, note) {
   const value = String(ref || '').trim();
-  const product = PRODUCT_REF_RE.exec(value);
-  if (product) return productLineQualifies(Number(product[1]), note, sections);
+  const file = posixPath(value.replace(PRODUCT_LINE_SPEC_RE, ''));
+  if (file === 'product.md' || file === productFile) return productCitationQualifies(PRODUCT_LINE_SPEC_RE.exec(value), note);
   if (PRODUCT_ISSUE_RE.test(value) || PRODUCT_URL_RE.test(value)) return true;
-  const file = value.replace(/:\d+(-\d+)?$/, '').replaceAll('\\', '/').replace(/^\.\//, '');
   return PRODUCT_DOC_FILE_RE.test(file) && repoDocs.includes(file);
 }
-function capProductRecord(record, sections) {
-  const cited = (Array.isArray(record.evidence) ? record.evidence : []).some((e) => e && e.kind === 'doc' && productDocQualifies(e.ref, e.note, sections));
+function capProductRecord(record) {
+  const cited = (Array.isArray(record.evidence) ? record.evidence : []).some((e) => e && e.kind === 'doc' && productDocQualifies(e.ref, e.note));
   if (cited) return record;
   const resolution = record.resolution || null;
   const keep = resolution && resolution.kind === 'question' && typeof resolution.text === 'string' ? resolution.text : record.claim;
@@ -341,7 +333,6 @@ const synthesisRecords = modelArgs && merged ? [{
   model: modelBlocks.synthesis
 }] : [];
 const productStart = records.length + synthesisRecords.length;
-const sectionMap = productResult ? productSections(productText) : null;
 const productRecords = productResult && Array.isArray(productResult.records) ? productResult.records.map((r, i) => capProductRecord({
   id: `R-${String(productStart + i + 1).padStart(4, '0')}`,
   stage: 'spec',
@@ -355,7 +346,7 @@ const productRecords = productResult && Array.isArray(productResult.records) ? p
   resolution: r.resolution || null,
   alternatives: [],
   ...(modelArgs ? { model: modelBlocks['product-lens'] || null } : {})
-}, sectionMap)) : [];
+})) : [];
 const agentFor = (label) => (label === 'synthesis' ? 'spine:synthesis' : label === 'product-lens' ? 'spine:product-lens' : 'spine:lens');
 const allRecords = [
   ...records,

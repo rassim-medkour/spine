@@ -62,6 +62,20 @@ function runScript(spineRoot, repoDir, name, args) {
   return r.stdout;
 }
 
+// Sorted POSIX paths of everything under the run folder, files and directories alike.
+function listFolder(runDir) {
+  const out = [];
+  const walk = (rel) => {
+    for (const e of fs.readdirSync(path.join(runDir, rel), { withFileTypes: true })) {
+      const child = rel ? `${rel}/${e.name}` : e.name;
+      out.push(child);
+      if (e.isDirectory()) walk(child);
+    }
+  };
+  walk('');
+  return out.sort();
+}
+
 function capture({ spineRoot, out, productContext = false }) {
   const { dir, git, headSha } = makeRepo(spineRoot);
   const runRel = path.join('.spine', RUN_ID);
@@ -84,7 +98,8 @@ function capture({ spineRoot, out, productContext = false }) {
   for (const name of copied) fs.copyFileSync(path.join(runDir, name), path.join(out, name));
   const records = fs.existsSync(path.join(runDir, 'records')) ? fs.readdirSync(path.join(runDir, 'records')).sort() : [];
   const recordBodies = records.map((f) => JSON.parse(fs.readFileSync(path.join(runDir, 'records', f), 'utf8')));
-  const manifest = { head_sha: headSha, files: FILES, artifacts: copied, records, outputs: { tree: JSON.parse(tree), reading_map: JSON.parse(readingMap), pr_body: JSON.parse(prBody) } };
+  const runStatus = JSON.parse(runScript(spineRoot, dir, 'run-status.js', [runRel]));
+  const manifest = { head_sha: headSha, files: FILES, artifacts: copied, records, run_status: runStatus, run_folder: listFolder(runDir), outputs: { tree: JSON.parse(tree), reading_map: JSON.parse(readingMap), pr_body: JSON.parse(prBody) } };
   fs.writeFileSync(path.join(out, 'manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`);
   fs.rmSync(dir, { recursive: true, force: true });
   return { ...manifest, record_bodies: recordBodies };

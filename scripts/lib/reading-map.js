@@ -139,12 +139,17 @@ function withinBudget(ranked, tc) {
   return { read, later };
 }
 
-// A flow counts as driven when a live-verification record (one carrying a revision and
-// payloads) names it in its claim or in an evidence note, case-insensitively.
+// A flow counts as driven when a live-verification record names it: agent spine:live-verify or proof_kind live_verify,
+// severity INFO, a revision and payloads. The name is matched on word boundaries, case-insensitively, and literally.
+const WORD = '[\\p{L}\\p{N}_]';
+const escapeRegExp = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const isLiveVerification = (r) => Boolean(r) && (r.agent === 'spine:live-verify' || r.proof_kind === 'live_verify') && r.severity === 'INFO'
+  && r.revision !== undefined && Array.isArray(r.payloads) && r.payloads.length > 0;
+
 function drivenBy(name, records) {
-  const needle = String(name).toLowerCase();
-  const hit = records.find((r) => r && r.revision !== undefined && Array.isArray(r.payloads) && r.payloads.length
-    && [r.claim, ...(Array.isArray(r.evidence) ? r.evidence.map((e) => e && e.note) : [])].some((t) => typeof t === 'string' && t.toLowerCase().includes(needle)));
+  const needle = new RegExp(`(?<!${WORD})${escapeRegExp(String(name))}(?!${WORD})`, 'iu');
+  const hit = records.find((r) => isLiveVerification(r)
+    && [r.claim, ...(Array.isArray(r.evidence) ? r.evidence.map((e) => e && e.note) : [])].some((t) => typeof t === 'string' && needle.test(t)));
   return hit ? hit.id : null;
 }
 
@@ -183,7 +188,8 @@ function readLine(e, i) {
 }
 
 function clickLines(e, i) {
-  return [`${i + 1}. **${clean(e.name)}** (${clean(e.weight)}) · ${e.evidence || 'not driven'}`, ...e.steps.map((st, j) => `   ${j + 1}. ${clean(st)}`)];
+  const steps = e.steps.length ? e.steps.map((st, j) => `   ${j + 1}. ${clean(st)}`) : ['   steps unavailable'];
+  return [`${i + 1}. **${clean(e.name)}** (${clean(e.weight)}) · ${e.evidence || 'not driven'}`, ...steps];
 }
 
 function renderReadingMap(map, meta) {

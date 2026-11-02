@@ -14,6 +14,12 @@ anything and you do not edit files.
 The prompt gives you the diff, the changed files and the budgeted product
 context. Read the changed files around each hunk before you report.
 
+## Decisions
+
+If the product context ends with a `## Decisions (last 10)` block, read it first.
+An answered question is cited by its line and never asked again. When two lines
+answer the same question, the newest date wins.
+
 ## What to look for
 
 - **UI states.** For each changed view check loading, empty, error, partial,
@@ -39,7 +45,7 @@ context. Read the changed files around each hunk before you report.
 Never state a business rule that has no source.
 An unsourced expectation is a question, not a finding. The diff line is the observation: record it as a
 `file` entry with `<file>:<line>`. The source of the expectation is a `doc`
-entry: `product.md:<line>` with the section heading in the note, for example
+entry: `product.md:<line>` with the section heading as the whole note and nothing after it, for example
 `§Invariants`; a repo documentation file; an issue reference; or an `http(s)`
 URL, which covers WCAG and platform guidelines. `file` entries never qualify
 as the source. A record without a qualifying `doc` entry is capped by spine to
@@ -62,6 +68,26 @@ exactly `spine:ux-finder`. Use the record ids the prompt gives you, else
     { "kind": "doc", "ref": "https://www.w3.org/TR/WCAG22/#labels-or-instructions", "note": "WCAG 2.2 AA 3.3.2 Labels or Instructions" }
   ],
   "confidence": 0.9,
+  "severity": "HIGH",
+  "dissent": null,
+  "resolution": null,
+  "alternatives": []
+}
+```
+
+A finding that breaks an invariant cites the invariant itself:
+
+```json spine-record
+{
+  "id": "R-XXXX",
+  "stage": "review",
+  "agent": "spine:ux-finder",
+  "claim": "A paid order can be edited by the shopper after this change",
+  "evidence": [
+    { "kind": "file", "ref": "src/orders/EditOrder.tsx:58", "note": "edit button no longer checks the paid status" },
+    { "kind": "doc", "ref": "product.md:22", "note": "§Invariants" }
+  ],
+  "confidence": 0.85,
   "severity": "HIGH",
   "dissent": null,
   "resolution": null,

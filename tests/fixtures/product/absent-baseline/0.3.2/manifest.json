@@ -13,6 +13,26 @@
     "pr-body.md"
   ],
   "records": [],
+  "run_status": {
+    "host": "claude-code",
+    "hooks": {},
+    "cap_reached": false,
+    "last_hook": null
+  },
+  "run_folder": [
+    "classify.json",
+    "classify.log",
+    "diagnostics.json",
+    "diff.patch",
+    "pr-body.md",
+    "pr-written.md",
+    "reading-map.json",
+    "reading-map.md",
+    "review.json",
+    "spec.md",
+    "state.json",
+    "tree.json"
+  ],
   "outputs": {
     "tree": {
       "ok": true,

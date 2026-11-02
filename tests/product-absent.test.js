@@ -156,6 +156,7 @@ test('every baseline artifact is byte-equal with the new code and no product.md'
   const out = tmpDir('spine-absent-now-', t);
   const manifest = capture({ spineRoot: ROOT, out });
   assert.deepEqual(manifest.artifacts, ARTIFACTS);
+  assert.ok(!manifest.run_folder.includes('product.json') && !manifest.run_folder.includes('records'));
   for (const name of ['manifest.json', ...ARTIFACTS]) {
     const now = stripVolatile(name, fs.readFileSync(path.join(out, name)));
     const then = stripVolatile(name, fs.readFileSync(path.join(BASELINE, name)));
@@ -176,6 +177,14 @@ test('the bootstrap step adds exactly one INFO record and changes no artifact', 
     const then = stripVolatile(name, fs.readFileSync(path.join(BASELINE, name)));
     assert.ok(now.equals(then), `${name} differs from the 0.3.2 baseline`);
   }
+  // run-status output and the run folder layout also match (R-0183 to R-0190). models.json is not produced by this flow:
+  // REQ-18 changes the policy hash by design, so it is excluded from byte-identity; product.json is the REQ-2 marker.
+  const baseline = JSON.parse(fs.readFileSync(path.join(BASELINE, 'manifest.json'), 'utf8'));
+  assert.ok(baseline.run_status && Array.isArray(baseline.run_folder), 'baseline manifest holds run_status and run_folder');
+  assert.deepEqual(manifest.run_status, baseline.run_status);
+  const allowed = new Set(['product.json', 'records', 'records/' + manifest.records[0]]);
+  assert.deepEqual(manifest.run_folder.filter((p) => !allowed.has(p)), baseline.run_folder);
+  assert.deepEqual(manifest.run_folder.filter((p) => allowed.has(p)), ['product.json', 'records', 'records/' + manifest.records[0]]);
 });
 
 // T-15a
@@ -229,4 +238,28 @@ test('T-15a: a corrupt product.json is a defect: no new record and ok false', (t
   assert.deepEqual([out.ok, out.error], [false, 'product.json unreadable']);
   assert.deepEqual(records(r.runDir), []);
   assert.equal(fs.readFileSync(path.join(r.runDir, 'product.json'), 'utf8'), '{nope');
+});
+
+test('product.json carries the section map of the full product.md and the tracked doc list (R-0129, R-0124)', (t) => {
+  const text = doc();
+  const r = setup(t, text);
+  fs.writeFileSync(path.join(r.root, 'README.md'), '# r\n');
+  fs.mkdirSync(path.join(r.root, 'docs'), { recursive: true });
+  fs.writeFileSync(path.join(r.root, 'docs', 'guide.md'), 'g\n');
+  call(r);
+  const pj = productJson(r.runDir);
+  const { sectionMapOf } = require('../scripts/lib/cap-record');
+  const { parseProduct } = require('../scripts/lib/product-context');
+  assert.deepEqual(pj.sections, JSON.parse(JSON.stringify(sectionMapOf(parseProduct(text).sections))));
+  assert.deepEqual(Object.keys(pj.sections['## Invariants']).sort(), ['blank', 'end', 'headings', 'start']);
+  assert.ok(pj.repo_docs.includes('README.md') && pj.repo_docs.includes('docs/guide.md'));
+  assert.ok(pj.repo_docs.every((f) => /(\.(md|markdown|rst|txt)$)|(^|\/)docs\//i.test(f)));
+});
+
+test('an absent product.md leaves sections null and repo_docs empty', (t) => {
+  const r = setup(t);
+  call(r);
+  const pj = productJson(r.runDir);
+  assert.equal(pj.sections, null);
+  assert.deepEqual(pj.repo_docs, []);
 });

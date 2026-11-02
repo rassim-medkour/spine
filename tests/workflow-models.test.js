@@ -260,6 +260,7 @@ test('implement: parallel true overlaps tickets in isolated worktrees', async ()
 
 // --- T-8: product lens in the spec workflow (REQ-35) ---
 const PRODUCT_TEXT = fs.readFileSync(path.join(__dirname, 'fixtures', 'product', 'product.md'), 'utf8');
+const SECTIONS = JSON.parse(JSON.stringify(require('../scripts/lib/cap-record').sectionMapOf(require('../scripts/lib/product-context').parseProduct(PRODUCT_TEXT).sections)));
 const productAnswer = (opts) => (opts.label === 'product-lens'
   ? { invariants_touched: ['An order total is never negative.'], flows_touched: [{ name: 'Checkout', weight: 'critical' }], states_missing: ['empty cart'], conflicts: [],
     user_impact: { before: 'b', after: 'a' },
@@ -293,7 +294,7 @@ test('spec: uncited product-lens records come back capped, cited ones pass (REQ-
   const heading = { claim: 'x', severity: 'HIGH', confidence: 0.9, evidence: [{ kind: 'doc', ref: 'product.md:18', note: '§Invariants' }] };
   const base = productAnswer({ label: 'product-lens' });
   const a = recorder((opts) => (opts.label === 'product-lens' ? { ...base, records: [...base.records, cited, heading] } : specAnswer(opts)));
-  const out = await load('spec')(a.agent, parallel, pipeline, noop, noop, { intentText: 'i', lenses: ['domain'], productText: PRODUCT_TEXT });
+  const out = await load('spec')(a.agent, parallel, pipeline, noop, noop, { intentText: 'i', lenses: ['domain'], productText: PRODUCT_TEXT, productSections: SECTIONS });
   const [uncited, ok, onHeading] = out.records.filter((r) => r.agent === 'spine:product-lens');
   assert.equal(uncited.severity, 'MEDIUM');
   assert.equal(uncited.confidence, 0.5);
@@ -313,9 +314,8 @@ test('spec: a product-lens that returns nothing under a requested model yields a
 
 test('spec: the workflow copy of capProductRecord equals scripts/lib/cap-record.js on the shared fixture (REQ-23)', async () => {
   const { capProductRecord } = require('../scripts/lib/cap-record');
-  const { parseProduct } = require('../scripts/lib/product-context');
   const repoDocs = ['README.md', 'docs/x.md'];
-  const ctx = { productSections: parseProduct(PRODUCT_TEXT).sections, repoHas: (p) => repoDocs.includes(p) };
+  const ctx = { productSections: SECTIONS, repoHas: (p) => repoDocs.includes(p) };
   const ev = (kind, ref, note) => [{ kind, ref, ...(note ? { note } : {}) }];
   const inputs = [
     ev('file', 'a.js:1'), ev('doc', 'README.md'), ev('doc', 'docs/x.md:4'), ev('doc', 'missing.md'), ev('doc', '#12'), ev('doc', 'o/r#3'),
@@ -324,7 +324,7 @@ test('spec: the workflow copy of capProductRecord equals scripts/lib/cap-record.
   ];
   const mk = (evidence, severity = 'HIGH') => ({ claim: 'c', severity, confidence: 0.9, evidence });
   const a = recorder((opts) => (opts.label === 'product-lens' ? { ...productAnswer(opts), records: inputs.map((e) => mk(e)).concat([mk(ev('file', 'a.js:1'), 'LOW')]) } : specAnswer(opts)));
-  const out = await load('spec')(a.agent, parallel, pipeline, noop, noop, { intentText: 'i', lenses: ['domain'], productText: PRODUCT_TEXT, repoDocs });
+  const out = await load('spec')(a.agent, parallel, pipeline, noop, noop, { intentText: 'i', lenses: ['domain'], productText: PRODUCT_TEXT, productSections: SECTIONS, repoDocs });
   const got = out.records.filter((r) => r.agent === 'spine:product-lens');
   const want = inputs.map((e) => mk(e)).concat([mk(ev('file', 'a.js:1'), 'LOW')]).map((r) => capProductRecord({ ...r, agent: 'spine:product-lens' }, ctx));
   assert.deepEqual(got.map((r) => [r.severity, r.confidence, r.resolution]), want.map((r) => [r.severity, r.confidence, r.resolution || null]));

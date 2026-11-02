@@ -19,7 +19,7 @@ git worktree remove /tmp/spine-0.3.2
 3. `scripts/reading-map.js --run <run>` into `reading-map.md` and `reading-map.json`
 4. `scripts/pr-body.js --run <run>` into `pr-body.md` (state `done`, a `PASS` `review.json`, a three-section `pr-written.md` and a one-assumption `spec.md` are written first)
 
-`manifest.json` records the head sha, the changed files, the artifact list, the `records/` directory listing and each CLI's JSON output.
+`manifest.json` records the head sha, the changed files, the artifact list, the `records/` directory listing, each CLI's JSON output, the `run-status.js` output (`run_status`) and the sorted run folder listing (`run_folder`). `models.json` is not part of the proof: REQ-18 changes the policy hash by design. The run folder may differ from the baseline only by `product.json` (REQ-2) and the one `INFO` record under `records/`.
 
 ## Comparing against a newer version
 

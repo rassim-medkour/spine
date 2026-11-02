@@ -29,17 +29,24 @@ function withRollbackAnswer(tree, proof, records) {
 // <run>/product.json names the flows the change touched; their steps live in product.md.
 // Any failure here means no click-through group, never a failed reading map.
 function touchedFlows({ runDir, root }) {
+  let touched;
   try {
     const product = readJson(path.join(runDir, 'product.json'));
-    const touched = product && Array.isArray(product.flows_touched) ? product.flows_touched : [];
-    if (!touched.length) return null;
-    const dir = (loadConfig(root) || {}).artifacts_dir || '.spine';
-    const { text } = decodeProduct(fs.readFileSync(path.join(root, dir, 'product.md')), null);
-    const steps = new Map(parseProduct(text).flows.map((fl) => [fl.name, fl.steps]));
-    return { flows_touched: touched.map((t) => ({ name: t.name, weight: t.weight, steps: steps.get(t.name) || [] })) };
+    touched = product && Array.isArray(product.flows_touched) ? product.flows_touched.filter((t) => t && typeof t.name === 'string') : [];
   } catch {
     return null;
   }
+  if (!touched.length) return null;
+  // The flows stay on the map even when product.md cannot be read; only their steps are then missing.
+  let steps = new Map();
+  try {
+    const dir = (loadConfig(root) || {}).artifacts_dir || '.spine';
+    const { text } = decodeProduct(fs.readFileSync(path.join(root, dir, 'product.md')), null);
+    steps = new Map(parseProduct(text).flows.map((fl) => [fl.name, fl.steps]));
+  } catch {
+    steps = new Map();
+  }
+  return { flows_touched: touched.map((t) => ({ name: t.name, weight: t.weight, steps: steps.get(t.name) || [] })) };
 }
 
 function readingMap({ runDir, root, tc }) {

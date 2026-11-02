@@ -141,3 +141,29 @@ test('click-through: tiers.click_through_minutes changes the minutes', () => {
   assert.deepEqual(map.totals.click_through, { flows: 2, minutes: 10 });
   assert.match(summarize(map, META).g3, /click through 2 flows, 10 min$/);
 });
+
+test('click-through: only live-verification records drive a flow, matched on whole words (R-0154, R-0159)', () => {
+  const base = { id: 'R-0050', stage: 'review', agent: 'spine:live-verify', claim: 'driven: refund works', evidence: [{ kind: 'command', ref: 'x' }], confidence: 0.9, severity: 'INFO', revision: 'rev1', payloads: [{ path: 'e.png' }] };
+  const drive = (rec, flows = FLOWS) => buildReadingMap({ ...mapInput({}, [FINDING, rec]), product: { flows_touched: flows } }).groups.click_through.map((e) => e.evidence);
+  assert.deepEqual(drive(base), [null, 'R-0050']);
+  assert.deepEqual(drive({ ...base, agent: 'spine:regression', proof_kind: 'regression' }), [null, null], 'a regression proof record does not drive');
+  assert.deepEqual(drive({ ...base, agent: 'spine:other' }), [null, null], 'agent and proof_kind both wrong');
+  assert.deepEqual(drive({ ...base, agent: 'spine:other', proof_kind: 'live_verify' }), [null, 'R-0050'], 'proof_kind live_verify drives');
+  assert.deepEqual(drive({ ...base, severity: 'MEDIUM' }), [null, null], 'only INFO records drive');
+  const pay = [{ name: 'Pay', weight: 'critical', steps: ['a'] }];
+  assert.deepEqual(drive({ ...base, claim: 'the payment page loads' }, pay), [null], 'Pay is not driven by payment');
+  assert.deepEqual(drive({ ...base, claim: 'driven: Pay, then receipt' }, pay), ['R-0050']);
+  assert.deepEqual(drive({ ...base, claim: 'driven: (pay)' }, pay), ['R-0050'], 'punctuation is a boundary');
+});
+
+test('click-through: a flow name with regex characters matches literally', () => {
+  const base = { id: 'R-0051', stage: 'review', agent: 'spine:live-verify', claim: 'driven: Sign up (new) ok', evidence: [{ kind: 'command', ref: 'x' }], confidence: 0.9, severity: 'INFO', revision: 'r', payloads: [{ path: 'e.png' }] };
+  const flows = [{ name: 'Sign up (new)', weight: 'minor', steps: ['a'] }];
+  assert.deepEqual(buildReadingMap({ ...mapInput({}, [FINDING, base]), product: { flows_touched: flows } }).groups.click_through.map((e) => e.evidence), ['R-0051']);
+});
+
+test('click-through: a flow without steps reads steps unavailable (R-0158)', () => {
+  const map = buildReadingMap({ ...mapInput(), product: { flows_touched: [{ name: 'Checkout', weight: 'critical', steps: [] }] } });
+  assert.deepEqual(map.groups.click_through[0].steps, []);
+  assert.match(renderReadingMap(map, META), /## Click through yourself\n\n1\. \*\*Checkout\*\* \(critical\) · not driven\n   steps unavailable\n/);
+});

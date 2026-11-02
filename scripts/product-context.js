@@ -5,9 +5,9 @@
 // A present but unparsable product.json is a defect: no record is written and the call reports ok false.
 const fs = require('node:fs');
 const path = require('node:path');
-const { loadProduct, appendDecision, readProductJson, readDecisionsTail } = require('./lib/product-context');
+const { loadProduct, appendDecision, readProductJson, readDecisionsTail, defaultIo } = require('./lib/product-context');
 const { listRecords } = require('./lib/records');
-const { PRODUCT_AGENTS } = require('./lib/cap-record');
+const { PRODUCT_AGENTS, DOC_FILE_RE } = require('./lib/cap-record');
 const { writeRecords } = require('./lib/record-writer');
 const { loadConfig, readJson } = require('./lib/state');
 
@@ -43,6 +43,7 @@ function parseArgs(argv) {
 const emptyState = () => ({
   state: 'absent', sha256: null, lines: 0, loaded_lines: 0, flows_touched: [], left_out: [], flow_issues: [],
   absent_record: null, defect_record: null, trim_record: null, flow_record: null, resume_record: null, decisions: [],
+  sections: null, repo_docs: [],
 });
 
 const infoRecord = (stage, severity, claim, evidence) => ({
@@ -74,6 +75,17 @@ function plannedRecords(prev, loaded, flowIssues, rel) {
     out.push(['flow_record', 'INFO', parts.join('; '), flowIssues.map((i) => ({ kind: 'doc', ref: ref(i.line), note: `${i.flow}: ${i.message}` }))]);
   }
   return out;
+}
+
+const REPO_DOCS_MAX = 5000;
+
+// Tracked documentation files (REQ-11): the workflows check doc citations against this list instead of the file system.
+function repoDocsOf(root) {
+  try {
+    return defaultIo.listFiles(root).map((f) => f.replaceAll('\\', '/')).filter((f) => DOC_FILE_RE.test(f)).sort().slice(0, REPO_DOCS_MAX);
+  } catch {
+    return [];
+  }
 }
 
 function mergeDiagnostics(runDir, product) {
@@ -163,9 +175,11 @@ function main(argv, root = process.cwd(), decisionsIo) {
   const ids = plan.length ? writeRecords(runDir, plan.map(([, sev, claim, ev]) => infoRecord(stage, sev, claim, ev)), {}) : [];
   const written = Object.fromEntries(plan.map(([key], i) => [key, ids[i]]));
 
+  const usable = loaded.state === 'ok' || loaded.state === 'trimmed';
   const fresh = changed ? prev : {
     ...prev, state: loaded.state, sha256: loaded.sha256, lines: loaded.lines, loaded_lines: loaded.loadedLines,
     flows_touched: loaded.flowsTouched, left_out: loaded.leftOut, flow_issues: flowIssues.map(({ flow, glob, message, line }) => ({ flow, glob, message, line })),
+    sections: usable ? loaded.sections : null, repo_docs: usable ? repoDocsOf(root) : [],
   };
   const next = { ...fresh, ...written };
   writeJson(productJsonPath(runDir), next);

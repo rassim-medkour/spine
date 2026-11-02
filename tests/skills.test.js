@@ -88,3 +88,12 @@ test('both spine skills write the ux_finder skip INFO only when product context 
     assert.ok(t.includes('write no skip record'), `${rel} absent case`);
   }
 });
+
+test('both spine skills pass productSections, productPath and repoDocs from product.json to the workflows (R-0129)', () => {
+  for (const rel of SPINE_SKILLS) {
+    const text = readSkill(rel).replace(/\s+/g, ' ');
+    for (const needle of ['`productSections` (`product.json` `sections`)', '`productPath`', '`repoDocs` (`product.json` `repo_docs`)', 'never re-parse the product text']) {
+      assert.ok(text.includes(needle), rel + ' ' + needle);
+    }
+  }
+});

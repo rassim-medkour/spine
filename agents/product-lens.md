@@ -15,6 +15,12 @@ The prompt gives you the budgeted product context (`product-context.md`) and
 `intent.md`. Read both fully. Use Read, Grep and Glob on the repo only to find
 a documentation source for a claim.
 
+## Decisions
+
+If the product context ends with a `## Decisions (last 10)` block, read it first.
+An answered question is cited by its line and never asked again. When two lines
+answer the same question, the newest date wins.
+
 ## Method
 
 1. Extract the constraints the product context states: business rules,
@@ -34,7 +40,7 @@ a documentation source for a claim.
 
 Never state a business rule that has no source.
 An unsourced expectation is a question, not a finding. The source of an
-expectation is a `doc` evidence entry: `product.md:<line>` with the section heading in the note, for example
+expectation is a `doc` evidence entry: `product.md:<line>` with the section heading as the whole note and nothing after it, for example
 `§Invariants`; a repo documentation file (`.md`, `.rst`, `.txt`, or under
 `docs/`) with an optional line; an issue reference; or an `http(s)` URL. `file` entries only record where something is. They are never the source
 of an expectation. A record without a qualifying `doc` entry is capped by spine to
@@ -54,7 +60,7 @@ Then one record block per finding. The `agent` is exactly
   "agent": "spine:product-lens",
   "claim": "The intent omits the empty state of the order list",
   "evidence": [
-    { "kind": "doc", "ref": "product.md:42", "note": "§Invariants: a user always sees why a list is empty" },
+    { "kind": "doc", "ref": "product.md:42", "note": "§Invariants" },
     { "kind": "file", "ref": "intent.md:17", "note": "criterion covers only a non-empty list" }
   ],
   "confidence": 0.8,

@@ -83,3 +83,12 @@ test('run-status adds model_mix only when records carry models', (t) => {
   assert.equal(s.model_mix.by_class.top, 1);
   assert.match(s.model_mix.line, /^Models \(requested\): 1 top/);
 });
+
+test('a record stamped --model-role ux_finder is counted by computeMix (R-0175)', () => {
+  const block = { role: 'ux_finder', tier: 'trunk', tier_source: 'tree', class: 'mid', requested: 'sonnet', source: 'requested' };
+  const mix = computeMix([rec(block, { agent: 'spine:ux-finder' })]);
+  assert.ok(mix);
+  assert.equal(mix.agents, 1);
+  assert.equal(mix.by_class.mid, 1);
+  assert.equal(mix.by_model.sonnet, 1);
+});

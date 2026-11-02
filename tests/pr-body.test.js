@@ -173,7 +173,8 @@ test('CLI reads ## User impact from spec.md', () => {
   const root = tmpDir('spine-pr-ui-');
   const runDir = path.join(root, '.spine', '20261015-pr');
   fs.mkdirSync(runDir, { recursive: true });
-  fs.writeFileSync(path.join(runDir, 'state.json'), JSON.stringify({ stage: 'done' }));
+  fs.writeFileSync(path.join(runDir, 'state.json'), JSON.stringify({ stage: 'done', spine_version: '0.4.0' }));
+  fs.writeFileSync(path.join(runDir, 'product.json'), JSON.stringify({ state: 'ok' }));
   fs.writeFileSync(path.join(runDir, 'review.json'), JSON.stringify({ id: 'x', upstream_id: 'none', verdict: 'PASS', providers: [], findings: [], dissent: [] }));
   fs.writeFileSync(path.join(runDir, 'diff.patch'), DIFF);
   fs.writeFileSync(path.join(runDir, 'pr-written.md'), WRITTEN);
@@ -181,4 +182,47 @@ test('CLI reads ## User impact from spec.md', () => {
   const out = JSON.parse(spawnSync(process.execPath, [path.join(ROOT, 'scripts', 'pr-body.js'), '--run', runDir], { cwd: root, encoding: 'utf8', env: cleanEnv({ SPINE_HOME: root }) }).stdout);
   assert.equal(out.ok, true, JSON.stringify(out.errors));
   assert.match(fs.readFileSync(path.join(runDir, 'pr-body.md'), 'utf8'), /## What changes for the user\n\nWho: shoppers\.\n- Tax line shows before payment\./);
+});
+
+function cliRun(t, { productJson, stateExtra = {}, specText }) {
+  const root = tmpDir('spine-pr-gate-', t);
+  const runDir = path.join(root, '.spine', '20261015-pr');
+  fs.mkdirSync(runDir, { recursive: true });
+  fs.writeFileSync(path.join(runDir, 'state.json'), JSON.stringify({ stage: 'done', ...stateExtra }));
+  fs.writeFileSync(path.join(runDir, 'review.json'), JSON.stringify({ id: 'x', upstream_id: 'none', verdict: 'PASS', providers: [], findings: [], dissent: [] }));
+  fs.writeFileSync(path.join(runDir, 'diff.patch'), DIFF);
+  fs.writeFileSync(path.join(runDir, 'pr-written.md'), WRITTEN);
+  fs.writeFileSync(path.join(runDir, 'spec.md'), specText);
+  if (productJson !== undefined) fs.writeFileSync(path.join(runDir, 'product.json'), typeof productJson === 'string' ? productJson : JSON.stringify(productJson));
+  const out = JSON.parse(spawnSync(process.execPath, [path.join(ROOT, 'scripts', 'pr-body.js'), '--run', runDir], { cwd: root, encoding: 'utf8', env: cleanEnv({ SPINE_HOME: root }) }).stdout);
+  assert.equal(out.ok, true, JSON.stringify(out.errors));
+  return fs.readFileSync(path.join(runDir, 'pr-body.md'), 'utf8');
+}
+
+const SPEC_WITH = '## Summary\n\nx\n\n## User impact\n\nWho: shoppers.\n- Tax line shows before payment.\n\n## Design\n\ny\n';
+const SPEC_WITHOUT = '## Summary\n\nx\n\n## Design\n\ny\n';
+
+test('CLI: absent product context with a User impact spec gives the bytes of a spec without it (R-0163, R-0164)', (t) => {
+  const without = cliRun(t, { specText: SPEC_WITHOUT, stateExtra: { spine_version: '0.4.0' } });
+  for (const productJson of [undefined, { state: 'absent' }, { state: 'malformed' }, 'not json']) {
+    const body = cliRun(t, { specText: SPEC_WITH, productJson, stateExtra: { spine_version: '0.4.0' } });
+    assert.equal(body, without, JSON.stringify(productJson));
+    assert.ok(!body.includes('What changes for the user'));
+  }
+});
+
+test('CLI: a pre-0.4.0 run, or one with no spine_version, never gets the section even with product context (R-0165, R-0167)', (t) => {
+  const without = cliRun(t, { specText: SPEC_WITHOUT, productJson: { state: 'ok' }, stateExtra: { spine_version: '0.3.2' } });
+  for (const stateExtra of [{ spine_version: '0.3.2' }, { spine_version: '0.3.9' }, {}]) {
+    const body = cliRun(t, { specText: SPEC_WITH, productJson: { state: 'ok' }, stateExtra });
+    assert.equal(body, without, JSON.stringify(stateExtra));
+  }
+});
+
+test('CLI: product context ok or trimmed on a 0.4.0 run keeps the section after TL;DR', (t) => {
+  for (const state of ['ok', 'trimmed']) {
+    const body = cliRun(t, { specText: SPEC_WITH, productJson: { state }, stateExtra: { spine_version: '0.4.0' } });
+    assert.match(body, /## What changes for the user\n\nWho: shoppers\./);
+    assert.ok(body.indexOf('## What changes for the user') > body.indexOf('## TL;DR'));
+  }
 });

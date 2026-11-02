@@ -6,15 +6,22 @@ const NO_AUTHOR_NOTE = 'no independent author available';
 // Kept as a literal so this module stays dependency-free; tests/workflow-model-parity.test.js pins it to model-policy.js.
 const WEAK_VERIFIER_NOTE = 'verifier below finder strength';
 
-// Same rule as workflows/review.workflow.js evidenceKey.
+// Spine agents whose records are review findings and so need a cross-author verifier (REQ-15).
+const SPINE_FINDERS = Object.freeze(['spine:ux-finder']);
+// Kept as a literal like WEAK_VERIFIER_NOTE; tests/cross-author-parity.test.js pins it to cap-record.js.
+const CAP_PREFIX = 'assumption to confirm: ';
+
+const isCappedRecord = (f) => Boolean(f.resolution) && typeof f.resolution.text === 'string' && f.resolution.text.startsWith(CAP_PREFIX);
+
+// Same rule as workflows/review.workflow.js evidenceKey: a capped record never shares a group with an uncapped one.
 function evidenceKey(f) {
   const first = (Array.isArray(f.evidence) && f.evidence[0]) || { ref: f.claim };
   const m = /^([^:]+):(\d+)/.exec(first.ref);
-  return m ? `${m[1]}:${m[2]}` : String(first.ref).toLowerCase();
+  return (isCappedRecord(f) ? 'capped|' : '') + (m ? `${m[1]}:${m[2]}` : String(first.ref).toLowerCase());
 }
 
 function isFinding(r) {
-  return r && r.stage === 'review' && !r.verifies && typeof r.agent === 'string' && !r.agent.startsWith('spine:');
+  return r && r.stage === 'review' && !r.verifies && typeof r.agent === 'string' && (!r.agent.startsWith('spine:') || SPINE_FINDERS.includes(r.agent));
 }
 
 function authorsOf(r, authorOf) {
@@ -107,4 +114,4 @@ function authorIndex(registries) {
   };
 }
 
-module.exports = { NO_AUTHOR_NOTE, WEAK_VERIFIER_NOTE, evidenceKey, isFinding, groupFindings, pickVerifier, verifierPlan, daGateOpen, checkCrossAuthor, authorIndex, latestVerification };
+module.exports = { SPINE_FINDERS, CAP_PREFIX, NO_AUTHOR_NOTE, WEAK_VERIFIER_NOTE, evidenceKey, isFinding, groupFindings, pickVerifier, verifierPlan, daGateOpen, checkCrossAuthor, authorIndex, latestVerification };

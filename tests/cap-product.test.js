@@ -152,3 +152,49 @@ test('cap_line and cap_fired are omitted when no product record exists', () => {
   const s = runStatus(dir);
   assert.equal('cap_line' in s, false, 'key omitted so absent-product output stays 0.3.2');
 });
+
+test('a bare product.md ref never qualifies, with or without the artifacts path (R-0071)', () => {
+  for (const ref of ['product.md', '.spine/product.md']) {
+    const r = rec([FILE, { kind: 'doc', ref, note: '§Invariants' }]);
+    assert.equal(cap.isCapped(cap.capProductRecord(r, { ...ctx(), repoHas: () => true })), true, ref);
+  }
+});
+
+test('a product.md range qualifies only when every line is a body line inside the named section (R-0075)', () => {
+  const text = ['## Users', 'u', '', '## Invariants', 'one', 'two', '', 'three', '## Goals', 'g'].join('\n');
+  const one = lineOf(text, 'one');
+  const two = lineOf(text, 'two');
+  const three = lineOf(text, 'three');
+  const cite = (ref, note = '§Invariants') => rec([FILE, { kind: 'doc', ref, note }]);
+  const inside = cite(`product.md:${one}-${two}`);
+  assert.equal(cap.capProductRecord(inside, ctx(text)), inside);
+  assert.equal(cap.isCapped(cap.capProductRecord(cite(`product.md:${two}-${three}`), ctx(text))), true, 'range crossing a blank line');
+  assert.equal(cap.isCapped(cap.capProductRecord(cite(`product.md:${lineOf(text, '## Invariants')}-${one}`), ctx(text))), true, 'range starting on the heading');
+  assert.equal(cap.isCapped(cap.capProductRecord(cite(`product.md:${three}-${lineOf(text, 'g')}`), ctx(text))), true, 'range crossing into Goals');
+});
+
+test('a plain section object from product.json gives the same verdicts as the parsed Map (R-0129)', () => {
+  const body = lineOf(PRODUCT, 'A paid order');
+  const plain = { ...ctx(), productSections: JSON.parse(JSON.stringify(cap.sectionMapOf(sectionsOf(PRODUCT)))) };
+  for (const line of [body, body + 1, lineOf(PRODUCT, '## Invariants'), 9999]) {
+    const r = rec([FILE, { kind: 'doc', ref: `product.md:${line}`, note: '§Invariants' }]);
+    assert.deepEqual(cap.capProductRecord(r, plain), cap.capProductRecord(r, ctx()), String(line));
+  }
+});
+
+test('writeRecords finds product.md under a multi-segment artifacts_dir (R-0077)', (t) => {
+  const home = tmpDir('spine-cap-home-', t);
+  fs.mkdirSync(path.join(home, '.spine'), { recursive: true });
+  fs.writeFileSync(path.join(home, '.spine', 'config.json'), JSON.stringify({ artifacts_dir: 'build/.spine' }));
+  const prevHome = process.env.SPINE_HOME;
+  process.env.SPINE_HOME = home;
+  t.after(() => { if (prevHome === undefined) delete process.env.SPINE_HOME; else process.env.SPINE_HOME = prevHome; });
+  const root = tmpDir('spine-cap-deep-', t);
+  const dir = path.join(root, 'build', '.spine', '20260920-demo');
+  writeState(dir, { id: '20260920-demo', stage: 'review', status: 'active', awaiting: null });
+  fs.writeFileSync(path.join(root, 'build', '.spine', 'product.md'), PRODUCT);
+  fs.writeFileSync(path.join(dir, 'product.json'), JSON.stringify({ state: 'ok', sha256: crypto.createHash('sha256').update(PRODUCT).digest('hex') }));
+  const body = lineOf(PRODUCT, 'A paid order');
+  const [id] = writeRecords(dir, [rec([FILE, { kind: 'doc', ref: `build/.spine/product.md:${body}`, note: '§Invariants' }])]);
+  assert.equal(readRec(dir, id).severity, 'HIGH');
+});

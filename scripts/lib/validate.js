@@ -218,4 +218,4 @@ function validateArtifactFile(absPath, relPath = absPath, ctx = {}) {
   }
 }
 
-module.exports = { loadSchema, validateJson, validateMarkdown, validateRecord, validateTree, validateReview, validateArtifactFile, schemaFor, parseFrontmatter };
+module.exports = { versionAtLeast, PRODUCT_HEADINGS_SINCE, loadSchema, validateJson, validateMarkdown, validateRecord, validateTree, validateReview, validateArtifactFile, schemaFor, parseFrontmatter };
